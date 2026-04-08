@@ -1,0 +1,22 @@
+# Bỏ qua thư mục chứa thư viện
+node_modules/
+
+# Bỏ qua các file cấu hình chứa biến môi trường, mật khẩu
+.env
+.env.*
+!.env.example
+
+# Bỏ qua các file log hệ thống (sau này Winston/Pino sẽ sinh ra)
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Bỏ qua các file do hệ điều hành tự sinh ra
+.DS_Store
+Thumbs.db
+
+# Bỏ qua các file cấu hình của trình soạn thảo code (VS Code)
+.vscode/
+.idea/

@@ -1,0 +1,20 @@
+version: '3.8'
+services:
+  # 1. Cấu hình cho MongoDB
+  mongodb:
+    image: mongo:latest
+    container_name: meeting_mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db # Giữ lại dữ liệu kể cả khi tắt Docker
+
+  # 2. Cấu hình cho Redis
+  redis:
+    image: redis:latest
+    container_name: meeting_redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  mongo_data:
