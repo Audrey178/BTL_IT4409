@@ -2,6 +2,7 @@ import { useState } from "react";
 import { DashboardScreen } from "./screens/DashboardScreen";
 import { LobbyScreen } from "./screens/LobbyScreen";
 import { MeetingScreen } from "./screens/MeetingScreen";
+import { AdminDashboardScreen } from "./screens/AdminDashboardScreen";
 import { SignupScreen } from "./screens/auth/SignupScreen";
 import { BrowserRouter, Routes, Route } from "react-router";
 import { Toaster } from "sonner";
@@ -17,6 +18,7 @@ export default function App() {
           <Route path="signin" element={<LoginScreen />} />
 
           <Route path="/" element={<DashboardScreen />} />
+          <Route path="/admin" element={<AdminDashboardScreen />} />
           <Route path="/lobby" element={<LobbyScreen />} />
           <Route path="meeting" element={<MeetingScreen />} />
         </Routes>
