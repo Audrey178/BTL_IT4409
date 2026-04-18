@@ -3,13 +3,14 @@ const cors = require('cors');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 const authRoutes = require('./routes/v1/auth.route');
-
+const roomRoutes = require('./routes/v1/room.route');
 const app = express();
 
 // Middleware cơ bản
 app.use(cors());
 app.use(express.json());
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/rooms', roomRoutes);
 
 const swaggerOptions = {
     definition: {
