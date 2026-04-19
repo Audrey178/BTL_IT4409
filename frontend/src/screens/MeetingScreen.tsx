@@ -1,4 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useParams } from "react-router-dom";
+import { useSocket } from "@/hooks/useSocket";
+import { useWebRTC } from "@/hooks/useWebRTC";
+import { useMediaStore } from "@/stores/mediaStore";
+import { useMeetingStore } from "@/stores/meetingStore";
+import { useAuthStore } from "@/stores/useAuthStore";
+import { ROOM_EVENTS } from "@/socket/events";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Mic,
@@ -25,10 +32,28 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 
 export function MeetingScreen() {
-  const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
+  const { id: roomCode } = useParams<{ id: string }>();
+  const socket = useSocket();
+  const authUser = useAuthStore(state => state.user);
+  
+  // Signaling
+  useWebRTC(roomCode || null);
+  
+  const { localStream, isAudioMuted, isVideoMuted, toggleAudio, toggleVideo } = useMediaStore();
+  const { participants, messages } = useMeetingStore();
+
   const [showChat, setShowChat] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
+
+  useEffect(() => {
+    if (socket && roomCode && authUser) {
+      socket.emit(ROOM_EVENTS.JOIN, { 
+        roomCode, 
+        userId: authUser._id, 
+        user: authUser 
+      });
+    }
+  }, [socket, roomCode, authUser]);
 
   return (
     <div className="h-screen flex flex-col bg-surface overflow-hidden">
@@ -79,35 +104,25 @@ export function MeetingScreen() {
         <div
           className={`flex-1 grid grid-cols-2 grid-rows-2 gap-4 transition-all duration-500 ${showChat ? "mr-0" : ""}`}
         >
+          {/* Local User */}
           <VideoTile
-            name="Marcus Chen (Host)"
-            isHost
-            src="https://picsum.photos/seed/host/800/600"
+            name={authUser?.fullName || "You"}
+            stream={localStream}
+            isMuted={isAudioMuted}
+            isVideoOff={isVideoMuted}
+            isLocal={true}
           />
-          <VideoTile
-            name="Sarah Jenkins"
-            src="https://picsum.photos/seed/sarah/800/600"
-          />
-          <VideoTile
-            name="David Miller"
-            isMuted
-            src="https://picsum.photos/seed/david/800/600"
-          />
-          <div className="relative rounded-3xl overflow-hidden bg-stone-900 shadow-sm flex items-center justify-center">
-            <div className="absolute inset-0 opacity-50 bg-gradient-to-br from-orange-900 to-stone-900 flex flex-col items-center justify-center text-center p-8">
-              <ScreenShare size={64} className="text-orange-200 mb-4" />
-              <h3 className="text-orange-50 font-bold text-xl">
-                Presentation in Progress
-              </h3>
-              <p className="text-orange-200/70 text-sm mt-2">
-                Sarah is sharing her screen
-              </p>
-            </div>
-            <div className="absolute bottom-4 left-4 flex items-center gap-2 px-3 py-1.5 bg-black/40 backdrop-blur-md rounded-full text-white text-xs">
-              <ScreenShare size={14} />
-              <span className="font-medium">Sarah's Screen</span>
-            </div>
-          </div>
+          
+          {/* Remote Users */}
+          {participants.map(p => (
+            <VideoTile
+              key={p.id}
+              name={p.fullName}
+              stream={p.stream}
+              isMuted={p.isAudioMuted}
+              isVideoOff={p.isVideoMuted}
+            />
+          ))}
         </div>
 
         {/* Chat Sidebar */}
@@ -250,14 +265,14 @@ export function MeetingScreen() {
       <div className="h-24 bg-surface-container-low/30 flex items-center justify-center px-8 relative z-50">
         <div className="flex items-center gap-4 bg-white/80 backdrop-blur-2xl px-8 py-4 rounded-full shadow-2xl border border-white/40">
           <ControlButton
-            icon={isMuted ? <MicOff size={24} /> : <Mic size={24} />}
-            onClick={() => setIsMuted(!isMuted)}
-            active={isMuted}
+            icon={isAudioMuted ? <MicOff size={24} /> : <Mic size={24} />}
+            onClick={toggleAudio}
+            active={isAudioMuted}
           />
           <ControlButton
-            icon={isVideoOff ? <VideoOff size={24} /> : <Video size={24} />}
-            onClick={() => setIsVideoOff(!isVideoOff)}
-            active={isVideoOff}
+            icon={isVideoMuted ? <VideoOff size={24} /> : <Video size={24} />}
+            onClick={toggleVideo}
+            active={isVideoMuted}
           />
           <div className="w-px h-10 bg-outline-variant/30 mx-2" />
           <ControlButton
@@ -301,17 +316,32 @@ export function MeetingScreen() {
   );
 }
 
-function VideoTile({ name, src, isMuted = false, isHost = false }: any) {
+function VideoTile({ name, stream, isMuted = false, isVideoOff = false, isHost = false, isLocal = false }: any) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
+
   return (
     <div
-      className={`relative rounded-[2.5rem] overflow-hidden bg-surface-container shadow-sm group transition-all duration-500 ${isHost ? "scale-[1.02] border-2 border-primary/20" : ""}`}
+      className={`relative rounded-[2.5rem] overflow-hidden bg-stone-900 shadow-sm group transition-all duration-500 flex flex-col justify-center items-center ${isHost ? "scale-[1.02] border-2 border-primary/20" : ""}`}
     >
-      <img
-        src={src}
-        alt={name}
-        className="w-full h-full object-cover"
-        referrerPolicy="no-referrer"
-      />
+      {stream && !isVideoOff ? (
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted={isLocal}
+          className="w-full h-full object-cover -scale-x-100"
+        />
+      ) : (
+        <Avatar className="w-24 h-24">
+          <AvatarFallback className="bg-surface-container-highest text-on-surface-variant text-4xl">{name?.[0]}</AvatarFallback>
+        </Avatar>
+      )}
       <div className="absolute bottom-6 left-6 flex items-center gap-3 px-4 py-2 bg-black/40 backdrop-blur-md rounded-full text-white text-sm border border-white/10">
         {isMuted ? (
           <MicOff size={14} className="text-error" />

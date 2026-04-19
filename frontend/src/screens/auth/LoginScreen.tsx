@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, Apple } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router";
+import { useAuthStore } from "@/stores/useAuthStore";
 import z from "zod";
 
 const signInSchema = z.object({
@@ -22,6 +23,17 @@ export function LoginScreen() {
     formState: { errors, isSubmitting },
   } = useForm<SignInFormValue>({ resolver: zodResolver(signInSchema) });
 
+  const { signIn } = useAuthStore();
+  
+  const onSubmit = async (data: SignInFormValue) => {
+    const { email, password } = data;
+    await signIn(email, password);
+    const token = useAuthStore.getState().accessToken;
+    if (token) {
+      navigate("/"); // or "/dashboard"
+    }
+  };
+
   return (
     <AuthLayout
       title="Welcome back."
@@ -29,9 +41,7 @@ export function LoginScreen() {
     >
       <form
         className="space-y-6"
-        onSubmit={(e) => {
-          e.preventDefault();
-        }}
+        onSubmit={handleSubmit(onSubmit)}
       >
         <div className="space-y-2">
           <label

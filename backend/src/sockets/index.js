@@ -45,7 +45,7 @@ export const initializeSocket = (io, redisClient) => {
     // =========================================================================
     // QUẢN LÝ PHÒNG HỌP
     // =========================================================================
-    
+
     /**
      * Sự kiện: Người dùng yêu cầu vào phòng
      * Dữ liệu: { userId, roomCode }
@@ -73,7 +73,7 @@ export const initializeSocket = (io, redisClient) => {
     // =========================================================================
     // WEBRTC SIGNALING
     // =========================================================================
-    
+
     /**
      * Sự kiện: WebRTC Offer (Peer A gửi)
      * Dữ liệu: { roomCode, targetUserId, offer (SDP) }
@@ -101,7 +101,7 @@ export const initializeSocket = (io, redisClient) => {
     // =========================================================================
     // CHAT REALTIME
     // =========================================================================
-    
+
     /**
      * Sự kiện: Gửi tin nhắn
      * Dữ liệu: { roomCode, content, type, senderName, senderAvatar }
@@ -121,7 +121,7 @@ export const initializeSocket = (io, redisClient) => {
     // =========================================================================
     // QUẢN LÝ KỾT NỐI
     // =========================================================================
-    
+
     /**
      * Sự kiện: Người dùng ngắt kết nối
      * Cleanup: Xóa Redis keys, cập nhật database
@@ -129,22 +129,22 @@ export const initializeSocket = (io, redisClient) => {
     socket.on(SOCKET_EVENTS.DISCONNECT, async () => {
       try {
         const redis = getRedisClient();
-        
+
         // Xóa mapping socket -> user
         const socketData = await redis.get(`socket:${socket.id}`);
         if (socketData) {
           const { roomCode, userId } = JSON.parse(socketData);
-          
+
           // Xóa từ Redis
           await redis.del(`socket:${socket.id}`);
           await redis.sRem(`room:${roomCode}:members`, userId);
-          
+
           // Thông báo tới những người còn lại
           socket.to(roomCode).emit(SOCKET_EVENTS.ROOM_USER_LEFT, {
             userId,
             message: 'Một người dùng đã rời khỏi phòng',
           });
-          
+
           logger.info(`👋 Người dùng ${userId} rời khỏi phòng ${roomCode}`);
         }
       } catch (error) {

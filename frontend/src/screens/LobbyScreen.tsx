@@ -1,4 +1,9 @@
 import { motion } from "motion/react";
+import { useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { useMedia } from "@/hooks/useMedia";
+import { useMediaStore } from "@/stores/mediaStore";
+import { getSocket } from "@/socket/socket";
 import {
   Mic,
   Video,
@@ -12,6 +17,24 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 export function LobbyScreen() {
+  const { requestMedia } = useMedia();
+  const { localStream, isAudioMuted, isVideoMuted, toggleAudio, toggleVideo } = useMediaStore();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    requestMedia();
+  }, [requestMedia]);
+
+  useEffect(() => {
+    if (videoRef.current && localStream) {
+      videoRef.current.srcObject = localStream;
+    }
+  }, [localStream]);
+
+  const handleJoin = () => {
+    navigate("/meeting/HEARTH-2024-STUDIO");
+  };
   return (
     <div className="min-h-screen flex flex-col bg-surface">
       {/* Top Nav */}
@@ -92,7 +115,7 @@ export function LobbyScreen() {
               </div>
               <div className="pt-4">
                 <Button
-                  onClick={() => {}}
+                  onClick={handleJoin}
                   className="w-full h-16 bg-gradient-to-r from-primary to-primary-container text-white rounded-full font-bold text-xl shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
                 >
                   Join Meeting
@@ -109,14 +132,22 @@ export function LobbyScreen() {
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="relative aspect-video bg-surface-container-highest rounded-[2.5rem] overflow-hidden shadow-2xl border border-outline-variant/10"
+              className="relative aspect-video bg-surface-container-highest rounded-[2.5rem] overflow-hidden shadow-2xl border border-outline-variant/10 flex justify-center items-center"
             >
-              <img
-                src="https://picsum.photos/seed/lobby/1200/800"
-                alt="Video Preview"
-                className="w-full h-full object-cover"
-                referrerPolicy="no-referrer"
-              />
+              {localStream && !isVideoMuted ? (
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover -scale-x-100"
+                />
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-stone-900 text-stone-500">
+                  <Video size={64} className="mb-4 opacity-50" />
+                  <span>Camera is off</span>
+                </div>
+              )}
 
               {/* Overlay */}
               <div className="absolute top-6 left-6 bg-surface-bright/80 backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-2 border border-outline-variant/20">
@@ -128,14 +159,20 @@ export function LobbyScreen() {
 
               {/* Controls */}
               <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6 px-8 py-4 bg-surface-bright/90 backdrop-blur-xl rounded-full border border-outline-variant/20 shadow-2xl">
-                <LobbyControl icon={<Mic size={24} />} label="Mute" active />
+                <LobbyControl 
+                  icon={<Mic size={24} />} 
+                  label={isAudioMuted ? "Unmute" : "Mute"} 
+                  active={!isAudioMuted} 
+                  onClick={toggleAudio}
+                />
                 <LobbyControl
                   icon={<Video size={24} />}
-                  label="Stop Video"
-                  active
+                  label={isVideoMuted ? "Start Video" : "Stop Video"}
+                  active={!isVideoMuted}
+                  onClick={toggleVideo}
                 />
                 <div className="w-px h-10 bg-outline-variant/30 mx-2" />
-                <LobbyControl icon={<Settings size={24} />} label="Setup" />
+                <LobbyControl icon={<Settings size={24} />} label="Setup" onClick={() => {}} />
               </div>
             </motion.div>
 

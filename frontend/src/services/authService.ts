@@ -1,17 +1,14 @@
 import api from "@/lib/axios";
-import { sign } from "crypto";
-import { email } from "zod";
 
 export const authService = {
-  signUp: async (fullname: string, email: string, password: string) => {
+  signUp: async (full_name: string, email: string, password: string) => {
     const res = await api.post(
-      "/auth/signup",
+      "/auth/register",
       {
-        fullname,
+        full_name,
         email,
         password,
-      },
-      { withCredentials: true },
+      }
     );
 
     return res.data;
@@ -19,12 +16,11 @@ export const authService = {
 
   signIn: async (email: string, password: string) => {
     const res = await api.post(
-      "/auth/signin",
+      "/auth/login",
       {
         email,
         password,
-      },
-      { withCredentials: true },
+      }
     );
 
     return res.data;

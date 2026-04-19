@@ -20,7 +20,7 @@ export default function App() {
           <Route path="/" element={<DashboardScreen />} />
           <Route path="/admin" element={<AdminDashboardScreen />} />
           <Route path="/lobby" element={<LobbyScreen />} />
-          <Route path="meeting" element={<MeetingScreen />} />
+          <Route path="/meeting/:id" element={<MeetingScreen />} />
         </Routes>
       </BrowserRouter>
     </>

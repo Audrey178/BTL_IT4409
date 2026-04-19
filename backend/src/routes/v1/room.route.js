@@ -201,10 +201,3 @@ router.put('/:roomCode/end', roomController.endRoom.bind(roomController));
 router.get('/:roomCode/participants', roomController.getRoomParticipants.bind(roomController));
 
 export default router;
- *           type: string
- *     responses:
- *       200:
- *         description: Room information
- */
-
-export default router;
