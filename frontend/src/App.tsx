@@ -7,6 +7,7 @@ import { SignupScreen } from "./screens/auth/SignupScreen";
 import { BrowserRouter, Routes, Route } from "react-router";
 import { Toaster } from "sonner";
 import { LoginScreen } from "./screens/auth/LoginScreen";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 
 export default function App() {
   return (
@@ -17,10 +18,10 @@ export default function App() {
           <Route path="signup" element={<SignupScreen />} />
           <Route path="signin" element={<LoginScreen />} />
 
-          <Route path="/" element={<DashboardScreen />} />
-          <Route path="/admin" element={<AdminDashboardScreen />} />
-          <Route path="/lobby" element={<LobbyScreen />} />
-          <Route path="meeting" element={<MeetingScreen />} />
+          <Route path="/" element={<ProtectedRoute><DashboardScreen /></ProtectedRoute>} />
+          <Route path="/admin" element={<ProtectedRoute><AdminDashboardScreen /></ProtectedRoute>} />
+          <Route path="/lobby" element={<ProtectedRoute><LobbyScreen /></ProtectedRoute>} />
+          <Route path="meeting" element={<ProtectedRoute><MeetingScreen /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
     </>

@@ -12,6 +12,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ accessToken: null, user: null, loading: false });
   },
 
+  logout: () => {
+    set({ accessToken: null, user: null });
+    toast.success("Logged out successfully!");
+  },
+
   signUp: async (fullname: string, email: string, password: string) => {
     try {
       set({ loading: true });

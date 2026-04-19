@@ -20,11 +20,14 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router";
+import { useAuthStore } from "@/stores/useAuthStore";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
 export function DashboardScreen() {
   const navigate = useNavigate();
+  const logout = useAuthStore((s) => s.logout);
+  const user = useAuthStore((s) => s.user);
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
@@ -38,6 +41,9 @@ export function DashboardScreen() {
             <p className="text-xs text-on-surface-variant/70 font-medium">
               Professional Studio
             </p>
+            {user && (
+              <span className="block text-xs text-on-surface-variant mt-2">{user.email}</span>
+            )}
           </div>
         </div>
 
@@ -84,7 +90,10 @@ export function DashboardScreen() {
             <span className="text-sm font-medium">Settings</span>
           </button>
           <button
-            onClick={() => {}}
+            onClick={() => {
+              logout();
+              navigate("/signin");
+            }}
             className="flex items-center gap-4 text-error hover:opacity-80 transition-colors w-full pt-2"
           >
             <span className="text-sm font-bold">Logout</span>
