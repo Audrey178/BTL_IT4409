@@ -19,10 +19,12 @@ import {
   Bot,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
 export function DashboardScreen() {
+  const navigate = useNavigate();
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
@@ -50,13 +52,25 @@ export function DashboardScreen() {
           <NavItem icon={<Archive size={20} />} label="Archives" />
         </nav>
 
-        <div className="px-6 mb-8">
+        <div className="px-6 mb-8 space-y-2">
           <Button
             onClick={() => {}}
             className="w-full h-12 bg-primary text-white rounded-full font-bold shadow-lg shadow-primary/20 flex items-center justify-center gap-2"
           >
             <Plus size={20} />
             New Meeting
+          </Button>
+          <Button
+            onClick={() => navigate("/signin")}
+            className="w-full h-12 bg-linear-to-r from-primary to-primary-container text-white font-bold rounded-full shadow-lg shadow-primary/20"
+          >
+            Login
+          </Button>
+          <Button
+            onClick={() => navigate("/signup")}
+            className="w-full h-12 bg-linear-to-r from-primary to-primary-container text-white font-bold rounded-full shadow-lg shadow-primary/20"
+          >
+            Signup
           </Button>
         </div>
 

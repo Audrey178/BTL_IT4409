@@ -5,7 +5,7 @@ import { email } from "zod";
 export const authService = {
   signUp: async (fullname: string, email: string, password: string) => {
     const res = await api.post(
-      "/auth/signup",
+      "/auth/register",
       {
         fullname,
         email,
@@ -19,7 +19,7 @@ export const authService = {
 
   signIn: async (email: string, password: string) => {
     const res = await api.post(
-      "/auth/signin",
+      "/auth/login",
       {
         email,
         password,
