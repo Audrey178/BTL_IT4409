@@ -21,6 +21,43 @@ import logger from '../utils/logger.js';
 
 class RoomService {
   /**
+   * Lấy danh sách phòng của người dùng
+   */
+  async getMyRooms(userId) {
+    try {
+      const hostRooms = await Room.find({ 
+        host_id: userId,
+        status: { $ne: ROOM_STATUS.ENDED } 
+      }).populate('host_id', '_id full_name email avatar').lean();
+
+      const memberEntries = await RoomMember.find({ user_id: userId });
+      const memberRoomIds = memberEntries.map(e => e.room_id);
+
+      const participantRooms = await Room.find({
+        _id: { $in: memberRoomIds, $nin: hostRooms.map(r => r._id) },
+        status: { $ne: ROOM_STATUS.ENDED }
+      }).populate('host_id', '_id full_name email avatar').lean();
+
+      const allRooms = [...hostRooms, ...participantRooms];
+
+      allRooms.sort((a, b) => {
+        if (!a.started_at && !b.started_at) return new Date(b.created_at) - new Date(a.created_at);
+        if (!a.started_at) return 1;
+        if (!b.started_at) return -1;
+        return new Date(a.started_at) - new Date(b.started_at);
+      });
+
+      return {
+        success: true,
+        rooms: allRooms
+      };
+    } catch (error) {
+      logger.error('Get my rooms error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Tạo phòng họp mới
    * @param {String} hostId - User ID of host
    * @param {Object} data - { title, description, settings }
@@ -45,7 +82,7 @@ class RoomService {
           allow_chat: settings?.allow_chat !== false,
           max_participants: settings?.max_participants || 100,
         },
-        started_at: null,
+        started_at: data.started_at || null,
         ended_at: null,
       });
 
@@ -135,18 +172,20 @@ class RoomService {
       // Check if user already in room
       let roomMember = await RoomMember.findOne({ room_id: room._id, user_id: userId });
 
+      const isHost = room.host_id.toString() === userId.toString();
+
       if (roomMember) {
         // If previously left, rejoin
-        roomMember.status = USER_STATUS.PENDING;
-        roomMember.joined_at = null;
+        roomMember.status = isHost ? USER_STATUS.JOINED : (room.settings.require_approval ? USER_STATUS.PENDING : USER_STATUS.JOINED);
+        roomMember.joined_at = isHost ? new Date() : (room.settings.require_approval ? null : new Date());
         roomMember.left_at = null;
       } else {
         // Create new room member entry
         roomMember = new RoomMember({
           room_id: room._id,
           user_id: userId,
-          status: room.settings.require_approval ? USER_STATUS.PENDING : USER_STATUS.JOINED,
-          joined_at: room.settings.require_approval ? null : new Date(),
+          status: isHost ? USER_STATUS.JOINED : (room.settings.require_approval ? USER_STATUS.PENDING : USER_STATUS.JOINED),
+          joined_at: isHost ? new Date() : (room.settings.require_approval ? null : new Date()),
         });
       }
 

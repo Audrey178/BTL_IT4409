@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useSocket } from "@/hooks/useSocket";
 import { useWebRTC } from "@/hooks/useWebRTC";
+import { useRoomEvents } from "@/hooks/useRoomEvents";
 import { useMediaStore } from "@/stores/mediaStore";
 import { useMeetingStore } from "@/stores/meetingStore";
 import { useAuthStore } from "@/stores/useAuthStore";
-import { ROOM_EVENTS } from "@/socket/events";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Mic,
@@ -16,9 +16,6 @@ import {
   PhoneOff,
   MessageSquare,
   Users,
-  MoreHorizontal,
-  Bell,
-  HelpCircle,
   X,
   Send,
   XCircle,
@@ -30,30 +27,38 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { WaitingRoomPanel } from "@/components/pages/meeting/WaitingRoomPanel";
+import { ROOM_EVENTS } from "@/socket/events";
+
 
 export function MeetingScreen() {
   const { id: roomCode } = useParams<{ id: string }>();
   const socket = useSocket();
-  const authUser = useAuthStore(state => state.user);
-  
+  const authUser = useAuthStore((state) => state.user);
+  const navigate = useNavigate();
   // Signaling
   useWebRTC(roomCode || null);
-  
-  const { localStream, isAudioMuted, isVideoMuted, toggleAudio, toggleVideo } = useMediaStore();
-  const { participants, messages } = useMeetingStore();
+
+  // Room-level events (waiting list, user joined from approve, force disconnect)
+  useRoomEvents(roomCode || null);
+
+  const { localStream, isAudioMuted, isVideoMuted, toggleAudio, toggleVideo } =
+    useMediaStore();
+  const { participants, messages, isHost, waitingList, hostId, removeWaitingUser } = useMeetingStore();
 
   const [showChat, setShowChat] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
-    if (socket && roomCode && authUser) {
-      socket.emit(ROOM_EVENTS.JOIN, { 
-        roomCode, 
-        userId: authUser._id, 
-        user: authUser 
-      });
+    if (!hostId) {
+      // Out room if host is not found (refresh page)
+      navigate(`/lobby?code=${roomCode}`);
+      socket.emit(ROOM_EVENTS.USER_LEFT, { roomId: roomCode, userId: authUser?._id });
+      return;
     }
-  }, [socket, roomCode, authUser]);
+  }, [roomCode, hostId]);
+
+  const waitingCount = waitingList.length;
 
   return (
     <div className="h-screen flex flex-col bg-surface overflow-hidden">
@@ -66,35 +71,33 @@ export function MeetingScreen() {
           <div className="px-3 py-1 bg-primary/10 rounded-full flex items-center gap-2">
             <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
             <span className="text-[10px] font-bold text-primary uppercase tracking-widest">
-              Live: Strategy Session
+              Live: {roomCode}
             </span>
           </div>
         </div>
         <div className="flex items-center gap-6">
-          <div className="flex gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="rounded-full text-on-surface-variant"
-            >
-              <Bell size={20} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="rounded-full text-on-surface-variant"
-            >
-              <HelpCircle size={20} />
-            </Button>
+          {/* Participants count */}
+          <div className="flex items-center gap-2 bg-surface-container rounded-full px-4 py-2">
+            <Users size={16} className="text-on-surface-variant" />
+            <span className="text-sm font-bold text-on-surface">
+              {participants.length + 1}
+            </span>
           </div>
           <div className="flex items-center gap-3 bg-white/50 px-4 py-2 rounded-full border border-outline-variant/20">
             <Avatar className="w-8 h-8">
-              <AvatarImage src="https://i.pravatar.cc/100?u=me" />
-              <AvatarFallback>EV</AvatarFallback>
+              <AvatarImage src={authUser?.avatar} />
+              <AvatarFallback>
+                {authUser?.full_name?.[0]?.toUpperCase() || "U"}
+              </AvatarFallback>
             </Avatar>
             <span className="font-bold text-orange-900 text-sm">
-              Elena Vance
+              {authUser?.full_name || "You"}
             </span>
+            {isHost && (
+              <Badge className="bg-primary/10 text-primary hover:bg-primary/10 text-[10px] px-2">
+                Host
+              </Badge>
+            )}
           </div>
         </div>
       </header>
@@ -106,15 +109,16 @@ export function MeetingScreen() {
         >
           {/* Local User */}
           <VideoTile
-            name={authUser?.fullName || "You"}
+            name={authUser?.full_name || "You"}
             stream={localStream}
             isMuted={isAudioMuted}
             isVideoOff={isVideoMuted}
             isLocal={true}
+            isHost={isHost}
           />
-          
+
           {/* Remote Users */}
-          {participants.map(p => (
+          {participants.map((p) => (
             <VideoTile
               key={p.id}
               name={p.fullName}
@@ -145,29 +149,30 @@ export function MeetingScreen() {
               </div>
               <ScrollArea className="flex-1 p-6">
                 <div className="space-y-6">
-                  <ChatMessage
-                    name="Marcus Chen"
-                    time="10:42 AM"
-                    message="Welcome everyone! Let's dive into the Q3 goals."
-                    color="text-orange-800"
-                  />
-                  <ChatMessage
-                    name="Sarah Jenkins"
-                    time="10:45 AM"
-                    message="I've prepared the slide deck for the marketing segment. Ready to share when needed!"
-                    color="text-stone-600"
-                  />
-                  <div className="text-center py-2">
-                    <span className="text-[10px] font-bold text-on-surface-variant/40 bg-surface-container-high px-3 py-1 rounded-full uppercase tracking-widest">
-                      David Miller joined
-                    </span>
-                  </div>
-                  <ChatMessage
-                    name="You"
-                    time="10:47 AM"
-                    message="Thanks Sarah, let's look at those after the budget update."
-                    isSelf
-                  />
+                  {messages.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-32 text-center">
+                      <MessageSquare
+                        size={24}
+                        className="text-on-surface-variant/30 mb-2"
+                      />
+                      <p className="text-xs text-on-surface-variant/40">
+                        No messages yet
+                      </p>
+                    </div>
+                  ) : (
+                    messages.map((msg) => (
+                      <ChatMessage
+                        key={msg.id}
+                        name={msg.senderName}
+                        time={new Date(msg.timestamp).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                        message={msg.content}
+                        isSelf={msg.senderId === authUser?._id}
+                      />
+                    ))
+                  )}
                 </div>
               </ScrollArea>
               <div className="p-6 bg-surface-container-low border-t border-outline-variant/10">
@@ -270,7 +275,9 @@ export function MeetingScreen() {
             active={isAudioMuted}
           />
           <ControlButton
-            icon={isVideoMuted ? <VideoOff size={24} /> : <Video size={24} />}
+            icon={
+              isVideoMuted ? <VideoOff size={24} /> : <Video size={24} />
+            }
             onClick={toggleVideo}
             active={isVideoMuted}
           />
@@ -285,7 +292,14 @@ export function MeetingScreen() {
             onClick={() => setShowChat(!showChat)}
             active={showChat}
           />
-          <ControlButton icon={<Users size={24} />} badge={12} />
+          <ControlButton
+            icon={<Users size={24} />}
+            badge={participants.length + 1}
+          />
+
+          {/* Waiting Room Panel - Host Only */}
+          {isHost && <WaitingRoomPanel roomCode={roomCode} waitingList={waitingList} removeWaitingUser={removeWaitingUser} />}
+
           <ControlButton
             icon={<Sparkles size={24} />}
             onClick={() => setShowFilters(!showFilters)}
@@ -295,18 +309,23 @@ export function MeetingScreen() {
           <ControlButton
             icon={<PhoneOff size={24} />}
             className="bg-error text-white shadow-lg shadow-error/20 border-none hover:bg-error/90"
-            onClick={() => {}}
+            onClick={() => { }}
           />
         </div>
 
         {/* Self Preview Floating */}
         <div className="absolute right-8 bottom-8 w-48 aspect-video rounded-2xl overflow-hidden border-2 border-primary shadow-2xl">
-          <img
-            src="https://picsum.photos/seed/me/400/225"
-            alt="Self"
-            className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
-          />
+          {localStream && !isVideoMuted ? (
+            <SelfPreviewVideo stream={localStream} />
+          ) : (
+            <div className="w-full h-full bg-stone-900 flex items-center justify-center">
+              <Avatar className="w-12 h-12">
+                <AvatarFallback className="bg-surface-container-highest text-on-surface-variant text-lg">
+                  {authUser?.full_name?.[0]?.toUpperCase() || "U"}
+                </AvatarFallback>
+              </Avatar>
+            </div>
+          )}
           <div className="absolute bottom-2 left-2 bg-black/40 backdrop-blur-md px-2 py-1 rounded-lg text-[10px] text-white font-bold">
             You (Live)
           </div>
@@ -316,7 +335,39 @@ export function MeetingScreen() {
   );
 }
 
-function VideoTile({ name, stream, isMuted = false, isVideoOff = false, isHost = false, isLocal = false }: any) {
+function SelfPreviewVideo({ stream }: { stream: MediaStream }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
+  return (
+    <video
+      ref={videoRef}
+      autoPlay
+      playsInline
+      muted
+      className="w-full h-full object-cover -scale-x-100"
+    />
+  );
+}
+
+function VideoTile({
+  name,
+  stream,
+  isMuted = false,
+  isVideoOff = false,
+  isHost = false,
+  isLocal = false,
+}: {
+  name: string;
+  stream?: MediaStream | null;
+  isMuted?: boolean;
+  isVideoOff?: boolean;
+  isHost?: boolean;
+  isLocal?: boolean;
+}) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -339,7 +390,9 @@ function VideoTile({ name, stream, isMuted = false, isVideoOff = false, isHost =
         />
       ) : (
         <Avatar className="w-24 h-24">
-          <AvatarFallback className="bg-surface-container-highest text-on-surface-variant text-4xl">{name?.[0]}</AvatarFallback>
+          <AvatarFallback className="bg-surface-container-highest text-on-surface-variant text-4xl">
+            {name?.[0]}
+          </AvatarFallback>
         </Avatar>
       )}
       <div className="absolute bottom-6 left-6 flex items-center gap-3 px-4 py-2 bg-black/40 backdrop-blur-md rounded-full text-white text-sm border border-white/10">
@@ -349,6 +402,11 @@ function VideoTile({ name, stream, isMuted = false, isVideoOff = false, isHost =
           <Mic size={14} />
         )}
         <span className="font-bold">{name}</span>
+        {isHost && (
+          <span className="text-[10px] text-primary-fixed bg-primary/20 px-1.5 py-0.5 rounded">
+            Host
+          </span>
+        )}
       </div>
     </div>
   );
@@ -360,7 +418,13 @@ function ChatMessage({
   message,
   isSelf = false,
   color = "text-on-surface",
-}: any) {
+}: {
+  name: string;
+  time: string;
+  message: string;
+  isSelf?: boolean;
+  color?: string;
+}) {
   return (
     <div className={`flex flex-col gap-1.5 ${isSelf ? "items-end" : ""}`}>
       <div className="flex justify-between w-full items-end px-1">
@@ -381,11 +445,10 @@ function ChatMessage({
         )}
       </div>
       <div
-        className={`p-4 rounded-3xl text-sm shadow-sm border ${
-          isSelf
-            ? "bg-primary text-white rounded-tr-none border-primary"
-            : "bg-white text-on-surface rounded-tl-none border-outline-variant/10"
-        }`}
+        className={`p-4 rounded-3xl text-sm shadow-sm border ${isSelf
+          ? "bg-primary text-white rounded-tr-none border-primary"
+          : "bg-white text-on-surface rounded-tl-none border-outline-variant/10"
+          }`}
       >
         {message}
       </div>
@@ -400,19 +463,25 @@ function ControlButton({
   badge,
   className,
   onClick,
-}: any) {
+}: {
+  icon: React.ReactNode;
+  label?: string;
+  active?: boolean;
+  badge?: number;
+  className?: string;
+  onClick?: () => void;
+}) {
   return (
     <button
       onClick={onClick}
-      className={`relative h-14 w-14 rounded-full flex items-center justify-center transition-all active:scale-90 border border-outline-variant/20 ${
-        active
-          ? "bg-secondary-container text-primary border-primary/20"
-          : "bg-surface-container-highest text-on-surface-variant hover:bg-orange-100"
-      } ${className}`}
+      className={`relative h-14 w-14 rounded-full flex items-center justify-center transition-all active:scale-90 border border-outline-variant/20 ${active
+        ? "bg-secondary-container text-primary border-primary/20"
+        : "bg-surface-container-highest text-on-surface-variant hover:bg-orange-100"
+        } ${className}`}
     >
       {icon}
       {label && <span className="ml-2 font-bold text-sm">{label}</span>}
-      {badge && (
+      {badge !== undefined && (
         <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
           {badge}
         </span>
@@ -421,15 +490,26 @@ function ControlButton({
   );
 }
 
-function FilterItem({ label, active = false, src, icon, blur = false }: any) {
+function FilterItem({
+  label,
+  active = false,
+  src,
+  icon,
+  blur = false,
+}: {
+  label: string;
+  active?: boolean;
+  src?: string;
+  icon?: React.ReactNode;
+  blur?: boolean;
+}) {
   return (
     <button className="flex flex-col gap-2 text-left group">
       <div
-        className={`aspect-video w-full rounded-2xl overflow-hidden relative border-2 transition-all ${
-          active
-            ? "border-primary ring-4 ring-primary-fixed"
-            : "border-transparent hover:border-outline-variant"
-        } ${!src ? "bg-surface-container-highest flex items-center justify-center" : ""}`}
+        className={`aspect-video w-full rounded-2xl overflow-hidden relative border-2 transition-all ${active
+          ? "border-primary ring-4 ring-primary-fixed"
+          : "border-transparent hover:border-outline-variant"
+          } ${!src ? "bg-surface-container-highest flex items-center justify-center" : ""}`}
       >
         {src ? (
           <img
@@ -455,7 +535,7 @@ function FilterItem({ label, active = false, src, icon, blur = false }: any) {
   );
 }
 
-function ColorFilter({ color, label }: any) {
+function ColorFilter({ color, label }: { color: string; label: string }) {
   return (
     <button className="flex-shrink-0 w-16 flex flex-col items-center gap-2 group">
       <div

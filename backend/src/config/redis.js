@@ -19,7 +19,7 @@ export const connectRedis = async () => {
       socket: {
         reconnectStrategy: (retries) => {
           if (retries > 10) {
-            logger.error('Redis reconnection failed after 10 attempts');
+            logger.error({ retries }, 'Redis reconnection failed after 10 attempts');
             return new Error('Max retries exceeded');
           }
           return Math.min(retries * 100, 3000);
@@ -29,7 +29,7 @@ export const connectRedis = async () => {
 
     // Error handler
     redisClient.on('error', (err) => {
-      logger.error('Redis error:', err.message);
+      logger.error({ err }, 'Redis error');
     });
 
     // Ready handler
@@ -57,7 +57,7 @@ export const connectRedis = async () => {
     
     return redisClient;
   } catch (error) {
-    logger.error('Failed to connect Redis:', error.message);
+    logger.error({ err: error }, 'Failed to connect Redis');
     process.exit(1);
   }
 };
@@ -73,7 +73,7 @@ export const disconnectRedis = async () => {
       redisClient = null;
     }
   } catch (error) {
-    logger.error('Failed to disconnect Redis:', error.message);
+    logger.error({ err: error }, 'Failed to disconnect Redis');
   }
 };
 
@@ -103,7 +103,7 @@ export const setWithExpire = async (key, value, expiresIn = null) => {
       await client.set(key, stringValue);
     }
   } catch (error) {
-    logger.error(`Error setting Redis key ${key}:`, error.message);
+    logger.error({ err: error, key }, 'Error setting Redis key');
     throw error;
   }
 };
@@ -116,7 +116,7 @@ export const getRedisValue = async (key) => {
     const client = getRedisClient();
     return await client.get(key);
   } catch (error) {
-    logger.error(`Error getting Redis key ${key}:`, error.message);
+    logger.error({ err: error, key }, 'Error getting Redis key');
     throw error;
   }
 };
@@ -129,7 +129,7 @@ export const deleteRedisKey = async (key) => {
     const client = getRedisClient();
     return await client.del(key);
   } catch (error) {
-    logger.error(`Error deleting Redis key ${key}:`, error.message);
+    logger.error({ err: error, key }, 'Error deleting Redis key');
     throw error;
   }
 };
@@ -142,7 +142,7 @@ export const addToSet = async (setKey, member) => {
     const client = getRedisClient();
     return await client.sAdd(setKey, member);
   } catch (error) {
-    logger.error(`Error adding to set ${setKey}:`, error.message);
+    logger.error({ err: error, setKey }, 'Error adding to Redis set');
     throw error;
   }
 };
@@ -155,7 +155,7 @@ export const removeFromSet = async (setKey, member) => {
     const client = getRedisClient();
     return await client.sRem(setKey, member);
   } catch (error) {
-    logger.error(`Error removing from set ${setKey}:`, error.message);
+    logger.error({ err: error, setKey }, 'Error removing from Redis set');
     throw error;
   }
 };
@@ -168,7 +168,7 @@ export const getSetMembers = async (setKey) => {
     const client = getRedisClient();
     return await client.sMembers(setKey);
   } catch (error) {
-    logger.error(`Error getting set members ${setKey}:`, error.message);
+    logger.error({ err: error, setKey }, 'Error getting Redis set members');
     throw error;
   }
 };

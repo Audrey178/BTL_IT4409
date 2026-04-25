@@ -1,83 +1,42 @@
-import React from "react";
+import React, { useState } from "react";
 import { motion } from "motion/react";
 import {
   LayoutDashboard,
   Calendar as CalendarIcon,
-  MessageSquare,
-  Archive,
   Plus,
-  HelpCircle,
-  Settings,
-  Flame,
   ChevronLeft,
   ChevronRight,
   PlayCircle,
-  Clock,
-  MapPin,
-  MoreVertical,
   Star,
   Bot,
+  LogIn,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { useNavigate } from "react-router";
+import SideBar from "@/components/layout/SideBar";
+import MeetingCard from "@/components/pages/dashboard/MeetingCard";
+import { CreateRoomDialog } from "@/components/pages/dashboard/room/CreateRoomDialog";
+import { JoinRoomDialog } from "@/components/pages/dashboard/room/JoinRoomDialog";
+import { ScheduleMeetingDialog } from "@/components/pages/dashboard/room/ScheduleMeetingDialog";
+import { useUpcomingMeetings } from "@/hooks/useUpcomingMeetings";
+import { useMeetingReminder } from "@/hooks/useMeetingReminder";
 
 export function DashboardScreen() {
+  const navigate = useNavigate();
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showScheduleDialog, setShowScheduleDialog] = useState(false);
+  const [showJoinDialog, setShowJoinDialog] = useState(false);
+
+  const { meetings, loading, refetch } = useUpcomingMeetings();
+  useMeetingReminder(meetings);
+
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
-      <aside className="h-screen w-64 fixed left-0 top-0 z-40 flex flex-col bg-surface-container-low border-r border-outline-variant/10">
-        <div className="p-8 flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white">
-            <Flame className="fill-current" size={24} />
-          </div>
-          <div>
-            <h2 className="font-bold text-lg text-primary">The Hearth</h2>
-            <p className="text-xs text-on-surface-variant/70 font-medium">
-              Professional Studio
-            </p>
-          </div>
-        </div>
-
-        <nav className="flex-1 px-4 space-y-2">
-          <NavItem
-            icon={<LayoutDashboard size={20} />}
-            label="Meetings"
-            active
-          />
-          <NavItem icon={<CalendarIcon size={20} />} label="Schedule" />
-          <NavItem icon={<MessageSquare size={20} />} label="Messages" />
-          <NavItem icon={<Archive size={20} />} label="Archives" />
-        </nav>
-
-        <div className="px-6 mb-8">
-          <Button
-            onClick={() => {}}
-            className="w-full h-12 bg-primary text-white rounded-full font-bold shadow-lg shadow-primary/20 flex items-center justify-center gap-2"
-          >
-            <Plus size={20} />
-            New Meeting
-          </Button>
-        </div>
-
-        <div className="p-6 space-y-4 border-t border-outline-variant/10">
-          <button className="flex items-center gap-4 text-on-surface-variant hover:text-primary transition-colors w-full">
-            <HelpCircle size={20} />
-            <span className="text-sm font-medium">Support</span>
-          </button>
-          <button className="flex items-center gap-4 text-on-surface-variant hover:text-primary transition-colors w-full">
-            <Settings size={20} />
-            <span className="text-sm font-medium">Settings</span>
-          </button>
-          <button
-            onClick={() => {}}
-            className="flex items-center gap-4 text-error hover:opacity-80 transition-colors w-full pt-2"
-          >
-            <span className="text-sm font-bold">Logout</span>
-          </button>
-        </div>
-      </aside>
-
+      <SideBar
+        onNewMeeting={() => setShowCreateDialog(true)}
+      />
       {/* Main Content */}
       <main className="ml-64 flex-1 p-8 lg:p-12 bg-surface">
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
@@ -93,16 +52,28 @@ export function DashboardScreen() {
               sessions are ready.
             </p>
           </div>
-          <Button
-            onClick={() => {}}
-            className="h-14 px-8 bg-gradient-to-r from-primary to-primary-container text-white rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3 group"
-          >
-            <Plus
-              className="group-hover:rotate-90 transition-transform"
-              size={20}
-            />
-            Schedule New Meeting
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={() => setShowJoinDialog(true)}
+              className="h-14 px-8 bg-surface-container-highest text-on-surface rounded-full font-bold shadow-sm hover:bg-surface-container-high hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3 group border border-outline-variant/20"
+            >
+              <LogIn
+                className="group-hover:translate-x-0.5 transition-transform"
+                size={20}
+              />
+              Join Meeting
+            </Button>
+            <Button
+              onClick={() => setShowScheduleDialog(true)}
+              className="h-14 px-8 bg-gradient-to-r from-primary to-primary-container text-white rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3 group"
+            >
+              <Plus
+                className="group-hover:rotate-90 transition-transform"
+                size={20}
+              />
+              Schedule New Meeting
+            </Button>
+          </div>
         </header>
 
         <div className="grid grid-cols-12 gap-8">
@@ -123,9 +94,9 @@ export function DashboardScreen() {
                 </div>
               </div>
               <div className="grid grid-cols-7 gap-2 text-center mb-4">
-                {["S", "M", "T", "W", "T", "F", "S"].map((d) => (
+                {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
                   <span
-                    key={d}
+                    key={`${d}-${i}`}
                     className="text-xs font-bold text-on-surface-variant/50"
                   >
                     {d}
@@ -136,11 +107,10 @@ export function DashboardScreen() {
                 {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
                   <button
                     key={day}
-                    className={`p-2 rounded-xl text-sm font-medium transition-colors ${
-                      day === 2
+                    className={`p-2 rounded-xl text-sm font-medium transition-colors ${day === 2
                         ? "bg-primary text-white font-bold"
                         : "hover:bg-primary-fixed"
-                    } ${[4, 9].includes(day) ? "text-primary font-bold" : ""}`}
+                      } ${[4, 9].includes(day) ? "text-primary font-bold" : ""}`}
                   >
                     {day}
                     {[2, 4, 9].includes(day) && (
@@ -205,36 +175,24 @@ export function DashboardScreen() {
             </div>
 
             <div className="space-y-4">
-              <MeetingCard
-                date="02"
-                month="Oct"
-                title="Product Sync & Design Review"
-                time="10:00 AM - 11:30 AM"
-                location="Studio A"
-                participants={4}
-                onJoin={() => {}}
-                active
-              />
-              <MeetingCard
-                date="04"
-                month="Oct"
-                title="Q4 Strategy Brainstorm"
-                time="2:00 PM - 3:30 PM"
-                location="Digital Hearth 1"
-                participants={12}
-                onJoin={() => {}}
-              />
-              <MeetingCard
-                date="09"
-                month="Oct"
-                title="Project 'Phoenix' Kickoff"
-                time="09:00 AM - 10:00 AM"
-                location="Main Hall"
-                participants={2}
-                onJoin={() => {}}
-              />
+              {loading ? (
+                <div className="text-center py-8 text-on-surface-variant">Loading meetings...</div>
+              ) : meetings.length === 0 ? (
+                <div className="text-center py-8 text-on-surface-variant bg-surface-container-low rounded-3xl border border-dashed border-outline-variant/30">
+                  <CalendarIcon size={32} className="mx-auto mb-3 opacity-50" />
+                  <p>No upcoming meetings scheduled</p>
+                </div>
+              ) : (
+                meetings.slice(0, 4).map((meeting) => (
+                  <MeetingCard
+                    key={meeting.room_code}
+                    meeting={meeting}
+                    onJoin={(code) => navigate(`/lobby?code=${code}`)}
+                  />
+                ))
+              )}
             </div>
-
+            {/* stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
               <div className="bg-gradient-to-br from-primary to-primary-container p-8 rounded-3xl text-white flex flex-col justify-between aspect-square md:aspect-auto">
                 <LayoutDashboard size={32} />
@@ -277,111 +235,21 @@ export function DashboardScreen() {
           </div>
         </div>
       </main>
+
+      {/* Dialogs */}
+      <CreateRoomDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+      />
+      <ScheduleMeetingDialog
+        open={showScheduleDialog}
+        onOpenChange={setShowScheduleDialog}
+        onScheduled={refetch}
+      />
+      <JoinRoomDialog
+        open={showJoinDialog}
+        onOpenChange={setShowJoinDialog}
+      />
     </div>
-  );
-}
-
-function NavItem({
-  icon,
-  label,
-  active = false,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  active?: boolean;
-}) {
-  return (
-    <button
-      className={`flex items-center gap-4 w-full py-3 px-6 rounded-r-full transition-all duration-200 group ${
-        active
-          ? "bg-background text-primary font-bold shadow-sm"
-          : "text-on-surface-variant hover:bg-white/50 hover:translate-x-1"
-      }`}
-    >
-      <span
-        className={`${active ? "text-primary" : "text-on-surface-variant group-hover:text-primary"}`}
-      >
-        {icon}
-      </span>
-      <span className="text-sm">{label}</span>
-    </button>
-  );
-}
-
-function MeetingCard({
-  date,
-  month,
-  title,
-  time,
-  location,
-  participants,
-  onJoin,
-  active = false,
-}: any) {
-  return (
-    <motion.div
-      whileHover={{ y: -2 }}
-      className="bg-surface-container-lowest p-6 rounded-3xl shadow-sm border border-transparent hover:border-outline-variant/20 flex flex-col md:flex-row md:items-center justify-between gap-6 transition-all"
-    >
-      <div className="flex items-start gap-6">
-        <div
-          className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center shrink-0 ${
-            active
-              ? "bg-primary-fixed text-on-primary-fixed"
-              : "bg-surface-container text-on-surface-variant"
-          }`}
-        >
-          <span className="text-[10px] font-bold uppercase tracking-tighter">
-            {month}
-          </span>
-          <span className="text-2xl font-extrabold">{date}</span>
-        </div>
-        <div className="space-y-1">
-          <h3 className="text-xl font-bold text-on-surface">{title}</h3>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-on-surface-variant/70 text-sm">
-            <span className="flex items-center gap-1.5">
-              <Clock size={14} /> {time}
-            </span>
-            <span className="w-1 h-1 bg-outline-variant rounded-full hidden sm:block" />
-            <span className="flex items-center gap-1.5">
-              <MapPin size={14} /> {location}
-            </span>
-          </div>
-          <div className="flex items-center -space-x-2 mt-4">
-            {[1, 2, 3].map((i) => (
-              <Avatar
-                key={i}
-                className="w-8 h-8 border-2 border-surface-container-lowest"
-              >
-                <AvatarImage src={`https://i.pravatar.cc/100?u=${i + date}`} />
-                <AvatarFallback>U</AvatarFallback>
-              </Avatar>
-            ))}
-            <div className="w-8 h-8 rounded-full border-2 border-surface-container-lowest bg-surface-container flex items-center justify-center text-[10px] font-bold text-on-surface-variant">
-              +{participants}
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center gap-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="rounded-full text-on-surface-variant"
-        >
-          <MoreVertical size={20} />
-        </Button>
-        <Button
-          onClick={onJoin}
-          className={`px-10 h-12 rounded-full font-bold transition-all active:scale-95 ${
-            active
-              ? "bg-primary text-white hover:shadow-lg shadow-primary/20"
-              : "variant-outline text-primary border-outline-variant/40"
-          }`}
-        >
-          Join
-        </Button>
-      </div>
-    </motion.div>
   );
 }

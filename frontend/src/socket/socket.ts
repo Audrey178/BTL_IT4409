@@ -5,15 +5,17 @@ let socket: Socket | null = null;
 
 export function getSocket(): Socket {
   if (!socket) {
-    const SOCKET_URL = import.meta.env.MODE === 'development' 
-      ? 'http://localhost:3000' 
-      : '/'; // Change to the correct production URL
-      
-    // Create socket with auth token
+    const SOCKET_URL = import.meta.env.MODE === 'development'
+      ? 'http://localhost:3000'
+      : '/';
+
+    const user = useAuthStore.getState().user;
+
     socket = io(SOCKET_URL, {
       autoConnect: false,
       auth: { token: useAuthStore.getState().accessToken },
-      transports: ['websocket', 'polling'], // Use polling fallback
+      query: { userId: user?._id || '' },
+      transports: ['websocket', 'polling'],
     });
   }
   return socket;

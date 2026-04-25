@@ -24,7 +24,7 @@
 import { SOCKET_EVENTS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
 import { getRedisClient } from '../config/redis.js';
-import { handleRoomJoin, handleApproveUser, handleRejectUser } from './room.handler.js';
+import { handleRoomJoin, handleApproveUser, handleRejectUser, handleUserLeft } from './room.handler.js';
 import { handleWebRTCOffer, handleWebRTCAnswer, handleICECandidate } from './webrtc.handler.js';
 import { handleChatSend, handleChatHistory } from './chat.handler.js';
 
@@ -39,7 +39,9 @@ export const initializeSocket = (io, redisClient) => {
   logger.info('🔌 Đang khởi tạo Socket.IO...');
 
   io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
+    // Lưu userId vào socket.data để các handler truy cập
     const userId = socket.handshake.query.userId || socket.id;
+    socket.data.userId = userId;
     logger.info(`✅ Kết nối mới: Socket ${socket.id} | Người dùng: ${userId}`);
 
     // =========================================================================
@@ -57,9 +59,10 @@ export const initializeSocket = (io, redisClient) => {
     /**
      * Sự kiện: Host duyệt người tham gia
      * Dữ liệu: { roomCode, memberId }
+     * Truyền io để handler có thể join approved user vào room
      */
     socket.on(SOCKET_EVENTS.ROOM_APPROVE_USER, (data) => {
-      handleApproveUser(socket, data);
+      handleApproveUser(io, socket, data);
     });
 
     /**
@@ -70,13 +73,21 @@ export const initializeSocket = (io, redisClient) => {
       handleRejectUser(socket, data);
     });
 
+    /**
+     * Sự kiện: Người dùng rời khỏi phòng
+     * Dữ liệu: { roomCode, userId }
+     */
+    socket.on(SOCKET_EVENTS.ROOM_USER_LEFT, (data) => {
+      handleUserLeft(socket, data);
+    });
+
     // =========================================================================
     // WEBRTC SIGNALING
     // =========================================================================
 
     /**
      * Sự kiện: WebRTC Offer (Peer A gửi)
-     * Dữ liệu: { roomCode, targetUserId, offer (SDP) }
+     * Dữ liệu: { to (targetUserId), offer }
      */
     socket.on(SOCKET_EVENTS.WEBRTC_OFFER, (data) => {
       handleWebRTCOffer(socket, data);
@@ -84,7 +95,7 @@ export const initializeSocket = (io, redisClient) => {
 
     /**
      * Sự kiện: WebRTC Answer (Peer B gửi)
-     * Dữ liệu: { roomCode, targetUserId, answer (SDP) }
+     * Dữ liệu: { to (targetUserId), answer }
      */
     socket.on(SOCKET_EVENTS.WEBRTC_ANSWER, (data) => {
       handleWebRTCAnswer(socket, data);
@@ -92,7 +103,7 @@ export const initializeSocket = (io, redisClient) => {
 
     /**
      * Sự kiện: ICE Candidate (cả hai peer gửi)
-     * Dữ liệu: { roomCode, targetUserId, candidate }
+     * Dữ liệu: { to (targetUserId), candidate }
      */
     socket.on(SOCKET_EVENTS.WEBRTC_ICE_CANDIDATE, (data) => {
       handleICECandidate(socket, data);
@@ -119,7 +130,7 @@ export const initializeSocket = (io, redisClient) => {
     });
 
     // =========================================================================
-    // QUẢN LÝ KỾT NỐI
+    // QUẢN LÝ KẾT NỐI
     // =========================================================================
 
     /**
@@ -137,6 +148,7 @@ export const initializeSocket = (io, redisClient) => {
 
           // Xóa từ Redis
           await redis.del(`socket:${socket.id}`);
+          await redis.del(`user:${userId}:socket`);
           await redis.sRem(`room:${roomCode}:members`, userId);
 
           // Thông báo tới những người còn lại

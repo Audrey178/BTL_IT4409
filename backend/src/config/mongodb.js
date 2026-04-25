@@ -16,7 +16,7 @@ export const connectMongoDB = async () => {
 
     // Handle connection events
     mongoose.connection.on('error', (err) => {
-      logger.error('MongoDB connection error:', err);
+      logger.error({ err }, 'MongoDB connection error');
     });
 
     mongoose.connection.on('disconnected', () => {
@@ -25,7 +25,7 @@ export const connectMongoDB = async () => {
 
     return mongoose.connection;
   } catch (error) {
-    logger.error('Failed to connect MongoDB:', error.message);
+    logger.error({ err: error }, 'Failed to connect MongoDB');
     process.exit(1);
   }
 };
@@ -35,7 +35,7 @@ export const disconnectMongoDB = async () => {
     await mongoose.disconnect();
     logger.info('✓ MongoDB disconnected');
   } catch (error) {
-    logger.error('Failed to disconnect MongoDB:', error.message);
+    logger.error({ err: error }, 'Failed to disconnect MongoDB');
   }
 };
 

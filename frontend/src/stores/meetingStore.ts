@@ -6,34 +6,50 @@ interface MeetingState {
   status: 'idle' | 'waiting' | 'in-room' | 'ended';
   participants: Participant[];
   hostId: string | null;
+  memberId: string | null;
+  isHost: boolean;
   messages: ChatMessage[];
   waitingList: WaitingUser[];
-  
+
   setRoomCode: (code: string | null) => void;
   setStatus: (status: 'idle' | 'waiting' | 'in-room' | 'ended') => void;
   setHostId: (id: string | null) => void;
-  
+  setIsHost: (v: boolean) => void;
+  setMemberId: (id: string | null) => void;
+
   addParticipant: (p: Participant) => void;
   removeParticipant: (userId: string) => void;
   updateParticipantStream: (userId: string, stream: MediaStream) => void;
-  
+
   addMessage: (msg: ChatMessage) => void;
+
   setWaitingList: (list: WaitingUser[]) => void;
+  addWaitingUser: (user: WaitingUser) => void;
+  removeWaitingUser: (userId: string) => void;
+
   reset: () => void;
 }
 
-export const useMeetingStore = create<MeetingState>((set) => ({
+const initialState = {
   roomCode: null,
-  status: 'idle',
+  status: 'idle' as const,
   participants: [],
   hostId: null,
+  isHost: false,
+  memberId: null,
   messages: [],
   waitingList: [],
-  
+};
+
+export const useMeetingStore = create<MeetingState>((set) => ({
+  ...initialState,
+
   setRoomCode: (code) => set({ roomCode: code }),
   setStatus: (status) => set({ status }),
   setHostId: (hostId) => set({ hostId }),
-  
+  setIsHost: (v) => set({ isHost: v }),
+  setMemberId: (memberId) => set({ memberId }),
+
   addParticipant: (p) => set((state) => {
     // Only add if not exist
     if (!state.participants.find(x => x.id === p.id)) {
@@ -41,26 +57,31 @@ export const useMeetingStore = create<MeetingState>((set) => ({
     }
     return state;
   }),
-  
+
   removeParticipant: (userId) => set((state) => ({
     participants: state.participants.filter(p => p.id !== userId)
   })),
-  
+
   updateParticipantStream: (userId, stream) => set((state) => ({
-    participants: state.participants.map(p => 
+    participants: state.participants.map(p =>
       p.id === userId ? { ...p, stream } : p
     )
   })),
-  
+
   addMessage: (msg) => set((state) => ({ messages: [...state.messages, msg] })),
+
   setWaitingList: (list) => set({ waitingList: list }),
-  
-  reset: () => set({
-    roomCode: null,
-    status: 'idle',
-    participants: [],
-    hostId: null,
-    messages: [],
-    waitingList: [],
-  })
+
+  addWaitingUser: (user) => set((state) => {
+    if (!state.waitingList.find(u => u.id === user.id)) {
+      return { waitingList: [...state.waitingList, user] };
+    }
+    return state;
+  }),
+
+  removeWaitingUser: (userId) => set((state) => ({
+    waitingList: state.waitingList.filter(u => u.id !== userId)
+  })),
+
+  reset: () => set(initialState),
 }));

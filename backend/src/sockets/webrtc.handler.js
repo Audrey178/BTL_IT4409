@@ -13,35 +13,50 @@
  * 2. Peer B gửi answer -> Server chuyển tiếp tới Peer A
  * 3. Cả 2 gửi ICE candidates -> Server chuyển tiếp
  * 
+ * QUAN TRỌNG: Tất cả signaling đều là UNICAST (1-to-1), KHÔNG broadcast.
+ * Lookup socketId từ Redis bằng userId, gửi trực tiếp.
+ * 
  * Tác giả: Meeting Team
  * Ngày tạo: 2026-04-08
  */
 
 import logger from '../utils/logger.js';
 import { SOCKET_EVENTS } from '../utils/constants.js';
+import { getRedisClient } from '../config/redis.js';
 
 /**
- * Xử lý WebRTC Offer từ Peer A
- * 
- * Offer chứa thông tin định dạng media (codec, resolution, etc.)
- * của người gửi
+ * Tìm socketId từ userId qua Redis
+ */
+async function getSocketIdForUser(userId) {
+  const redis = getRedisClient();
+  return await redis.get(`user:${userId}:socket`);
+}
+
+/**
+ * Xử lý WebRTC Offer từ Peer A → chuyển tiếp tới Peer B
  * 
  * @param {Object} socket - Socket.IO socket instance
- * @param {Object} data - { roomCode, targetUserId, offer }
+ * @param {Object} data - { to (targetUserId), offer, roomCode? }
  * @returns {Promise<void>}
  */
 export const handleWebRTCOffer = async (socket, data) => {
   try {
-    const { roomCode, targetUserId, offer } = data;
+    const { to, offer, roomCode } = data;
+    // userId lưu trong socket.data khi connect
+    const fromUserId = socket.data.userId || socket.handshake.query.userId || socket.id;
 
-    logger.debug(`📤 Forwarding WebRTC Offer in room ${roomCode} to user ${targetUserId}`);
+    logger.debug(`📤 WebRTC Offer: ${fromUserId} → ${to}`);
 
-    // Gửi offer tới peer nhận
-    socket.to(roomCode).emit(SOCKET_EVENTS.WEBRTC_OFFER, {
-      fromUserId: socket.handshake.query.userId,
-      targetUserId,
-      offer,
-    });
+    // Unicast: tìm socketId của target user, gửi trực tiếp
+    const targetSocketId = await getSocketIdForUser(to);
+    if (targetSocketId) {
+      socket.to(targetSocketId).emit(SOCKET_EVENTS.WEBRTC_OFFER, {
+        from: fromUserId,
+        offer,
+      });
+    } else {
+      logger.warn(`⚠️  WebRTC Offer: Không tìm thấy socket của user ${to}`);
+    }
   } catch (error) {
     logger.error('❌ Lỗi trong handleWebRTCOffer:', error);
     socket.emit(SOCKET_EVENTS.ERROR, { message: 'Lỗi khi gửi WebRTC offer' });
@@ -49,26 +64,28 @@ export const handleWebRTCOffer = async (socket, data) => {
 };
 
 /**
- * Xử lý WebRTC Answer từ Peer B
- * 
- * Answer chứa thông tin định dạng media của người nhận
- * để hoàn thành handshake
+ * Xử lý WebRTC Answer từ Peer B → chuyển tiếp tới Peer A
  * 
  * @param {Object} socket - Socket.IO socket instance
- * @param {Object} data - { roomCode, targetUserId, answer }
+ * @param {Object} data - { to (targetUserId), answer, roomCode? }
  * @returns {Promise<void>}
  */
 export const handleWebRTCAnswer = async (socket, data) => {
   try {
-    const { roomCode, targetUserId, answer } = data;
+    const { to, answer, roomCode } = data;
+    const fromUserId = socket.data.userId || socket.handshake.query.userId || socket.id;
 
-    logger.debug(`📥 Forwarding WebRTC Answer in room ${roomCode} to user ${targetUserId}`);
+    logger.debug(`📥 WebRTC Answer: ${fromUserId} → ${to}`);
 
-    socket.to(roomCode).emit(SOCKET_EVENTS.WEBRTC_ANSWER, {
-      fromUserId: socket.handshake.query.userId,
-      targetUserId,
-      answer,
-    });
+    const targetSocketId = await getSocketIdForUser(to);
+    if (targetSocketId) {
+      socket.to(targetSocketId).emit(SOCKET_EVENTS.WEBRTC_ANSWER, {
+        from: fromUserId,
+        answer,
+      });
+    } else {
+      logger.warn(`⚠️  WebRTC Answer: Không tìm thấy socket của user ${to}`);
+    }
   } catch (error) {
     logger.error('❌ Lỗi trong handleWebRTCAnswer:', error);
     socket.emit(SOCKET_EVENTS.ERROR, { message: 'Lỗi khi gửi WebRTC answer' });
@@ -76,30 +93,31 @@ export const handleWebRTCAnswer = async (socket, data) => {
 };
 
 /**
- * Xử lý ICE Candidate
- * 
- * ICE (Interactive Connectivity Establishment) candidates là các
- * thuộc những mạng có thể sử dụng để kết nối các peers
+ * Xử lý ICE Candidate → chuyển tiếp tới peer
  * 
  * @param {Object} socket - Socket.IO socket instance
- * @param {Object} data - { roomCode, targetUserId, candidate }
+ * @param {Object} data - { to (targetUserId), candidate, roomCode? }
  * @returns {Promise<void>}
  */
 export const handleICECandidate = async (socket, data) => {
   try {
-    const { roomCode, targetUserId, candidate } = data;
+    const { to, candidate, roomCode } = data;
+    const fromUserId = socket.data.userId || socket.handshake.query.userId || socket.id;
 
-    logger.debug(`🧊 Forwarding ICE Candidate in room ${roomCode} to user ${targetUserId}`);
+    logger.debug(`🧊 ICE Candidate: ${fromUserId} → ${to}`);
 
-    socket.to(roomCode).emit(SOCKET_EVENTS.WEBRTC_ICE_CANDIDATE, {
-      fromUserId: socket.handshake.query.userId,
-      targetUserId,
-      candidate,
-    });
+    const targetSocketId = await getSocketIdForUser(to);
+    if (targetSocketId) {
+      socket.to(targetSocketId).emit(SOCKET_EVENTS.WEBRTC_ICE_CANDIDATE, {
+        from: fromUserId,
+        candidate,
+      });
+    } else {
+      // ICE candidate thất bại không nghiêm trọng — connection vẫn có thể hoạt động
+      logger.debug(`⚠️  ICE: Không tìm thấy socket của user ${to}`);
+    }
   } catch (error) {
     logger.error('❌ Lỗi trong handleICECandidate:', error);
-    // Không emit lỗi ngay vì ICE candidate thất bại không gây ảnh hưởng lớn
-    logger.warn(`⚠️  ICE candidate thất bại nhưng hệ thống tiếp tục`);
   }
 };
 

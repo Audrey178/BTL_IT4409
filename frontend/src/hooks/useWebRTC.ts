@@ -3,6 +3,7 @@ import { getSocket } from '@/socket/socket';
 import { WEBRTC_EVENTS, ROOM_EVENTS } from '@/socket/events';
 import { useMediaStore } from '@/stores/mediaStore';
 import { useMeetingStore } from '@/stores/meetingStore';
+import { useAuthStore } from '@/stores/useAuthStore';
 
 const ICE_SERVERS = {
   iceServers: [
@@ -14,10 +15,18 @@ const ICE_SERVERS = {
 export function useWebRTC(roomCode: string | null) {
   const socket = getSocket();
   const { localStream } = useMediaStore();
-  const { addParticipant, removeParticipant, updateParticipantStream } = useMeetingStore();
+  const { addParticipant, updateParticipantStream, participants } = useMeetingStore();
+  const myUserId = useAuthStore((s) => s.user?._id);
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
 
   const createPeer = useCallback((userId: string, isInitiator: boolean) => {
+    // Nếu đã có peer cho user này, close cũ trước
+    const existingPeer = peersRef.current.get(userId);
+    if (existingPeer) {
+      existingPeer.close();
+      peersRef.current.delete(userId);
+    }
+
     const peer = new RTCPeerConnection(ICE_SERVERS);
     peersRef.current.set(userId, peer);
 
@@ -33,7 +42,6 @@ export function useWebRTC(roomCode: string | null) {
     };
 
     peer.onicecandidate = (event) => {
-      // Delay to ensure the receiver is ready, though normally trickle ICE works
       if (event.candidate) {
         socket.emit(WEBRTC_EVENTS.ICE_CANDIDATE, {
           to: userId,
@@ -48,7 +56,7 @@ export function useWebRTC(roomCode: string | null) {
       }).then(() => {
         socket.emit(WEBRTC_EVENTS.OFFER, {
           to: userId,
-          offer: peer.localDescription
+          offer: peer.localDescription,
         });
       });
     }
@@ -56,20 +64,40 @@ export function useWebRTC(roomCode: string | null) {
     return peer;
   }, [localStream, socket, updateParticipantStream]);
 
+  // Khởi tạo connection với các participants ĐÃ CÓ TRONG STORE (được set bởi LobbyScreen)
   useEffect(() => {
-    if (!roomCode) return;
+    if (!roomCode || !myUserId) return;
 
-    const handleUserJoined = (data: any) => {
-      const uId = data.userId || data.user?._id;
-      if (!uId) return;
-      addParticipant({ id: uId, fullName: data.user?.fullName || data.user?.full_name || 'Guest', isActive: true, isAudioMuted: false, isVideoMuted: false });
-      createPeer(uId, true); // I am already here, I initiate offer to latecomer
+    participants.forEach(p => {
+      if (p.id !== myUserId && !peersRef.current.has(p.id)) {
+        // Dùng tie-breaker để quyết định ai là initiator tránh WebRTC glare
+        const isInitiator = myUserId < p.id;
+        createPeer(p.id, isInitiator);
+      }
+    });
+  }, [participants, myUserId, roomCode, createPeer]); // Effect này sẽ chạy khi component mount và khi participants thay đổi
+
+  useEffect(() => {
+    if (!roomCode || !myUserId) return;
+
+    const handleUserJoined = (data: {
+      userId?: string;
+      isSelf?: boolean;
+    }) => {
+      if (data.isSelf) return; // LobbyScreen handling
+
+      const uId = data.userId;
+      if (!uId || uId === myUserId) return;
+
+      if (!peersRef.current.has(uId)) {
+        const isInitiator = myUserId < uId;
+        createPeer(uId, isInitiator);
+      }
     };
 
-    const handleUserLeft = (data: any) => {
-      const uId = data.userId || data.user?._id;
+    const handleUserLeft = (data: { userId?: string }) => {
+      const uId = data.userId;
       if (!uId) return;
-      removeParticipant(uId);
       const peer = peersRef.current.get(uId);
       if (peer) {
         peer.close();
@@ -77,28 +105,54 @@ export function useWebRTC(roomCode: string | null) {
       }
     };
 
-    const handleOffer = async ({ from, offer }: any) => {
-      const peer = createPeer(from, false);
-      await peer.setRemoteDescription(new RTCSessionDescription(offer));
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      socket.emit(WEBRTC_EVENTS.ANSWER, {
-        to: from,
-        answer: peer.localDescription
-      });
-    };
+    const handleOffer = async ({ from, offer }: { from: string; offer: RTCSessionDescriptionInit }) => {
+      if (from === myUserId) return;
 
-    const handleAnswer = async ({ from, answer }: any) => {
-      const peer = peersRef.current.get(from);
-      if (peer) {
-        await peer.setRemoteDescription(new RTCSessionDescription(answer));
+      addParticipant({
+        id: from,
+        fullName: 'Participant', // Fallback, useRoomEvents sẽ update full_name nếu cần
+        isActive: true,
+        isAudioMuted: false,
+        isVideoMuted: false,
+      });
+
+      let peer = peersRef.current.get(from);
+      if (!peer) {
+        peer = createPeer(from, false);
+      }
+      
+      try {
+        await peer.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await peer.createAnswer();
+        await peer.setLocalDescription(answer);
+        socket.emit(WEBRTC_EVENTS.ANSWER, {
+          to: from,
+          answer: peer.localDescription,
+        });
+      } catch (err) {
+        console.error("Error handling offer:", err);
       }
     };
 
-    const handleIceCandidate = async ({ from, candidate }: any) => {
+    const handleAnswer = async ({ from, answer }: { from: string; answer: RTCSessionDescriptionInit }) => {
       const peer = peersRef.current.get(from);
       if (peer) {
-        await peer.addIceCandidate(new RTCIceCandidate(candidate));
+        try {
+          await peer.setRemoteDescription(new RTCSessionDescription(answer));
+        } catch (err) {
+          console.error("Error setting remote description from answer:", err);
+        }
+      }
+    };
+
+    const handleIceCandidate = async ({ from, candidate }: { from: string; candidate: RTCIceCandidateInit }) => {
+      const peer = peersRef.current.get(from);
+      if (peer) {
+        try {
+          await peer.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (err) {
+          // ICE candidate errors are non-fatal
+        }
       }
     };
 
@@ -115,7 +169,7 @@ export function useWebRTC(roomCode: string | null) {
       socket.off(WEBRTC_EVENTS.ANSWER, handleAnswer);
       socket.off(WEBRTC_EVENTS.ICE_CANDIDATE, handleIceCandidate);
     };
-  }, [socket, createPeer, addParticipant, removeParticipant, roomCode]);
+  }, [socket, createPeer, addParticipant, myUserId, roomCode]);
 
   // Clean up all peers on unmount
   useEffect(() => {

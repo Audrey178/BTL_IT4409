@@ -8,11 +8,12 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       accessToken: null,
+      refreshToken: null,
       user: null,
       loading: false,
 
       clearState: () => {
-        set({ accessToken: null, user: null, loading: false });
+        set({ accessToken: null, refreshToken: null, user: null, loading: false });
       },
 
       signUp: async (fullname: string, email: string, password: string) => {
@@ -20,9 +21,11 @@ export const useAuthStore = create<AuthState>()(
           set({ loading: true });
           await authService.signUp(fullname, email, password);
           toast.success("Sign Up successfully!");
-        } catch (error) {
+          return { success: true };
+        } catch (error: any) {
           console.log(error);
-          toast.error("Sign Up unsuccessfully!");
+          toast.error(error.response?.data?.message || "Sign Up unsuccessfully!");
+          return { success: false, error: error.response?.data };
         } finally {
           set({ loading: false });
         }
@@ -36,23 +39,77 @@ export const useAuthStore = create<AuthState>()(
           if (response.success && response.data) {
             set({ 
               accessToken: response.data.access_token || response.data.accessToken,
+              refreshToken: response.data.refresh_token || response.data.refreshToken,
               user: response.data.user
             });
             toast.success("Sign In successfully!");
+            return { success: true };
+          } else if (response.access_token || response.accessToken) {
+            set({
+              accessToken: response.access_token || response.accessToken,
+              refreshToken: response.refresh_token || response.refreshToken,
+              user: response.user
+            });
+            toast.success("Sign In successfully!");
+            return { success: true };
           } else {
             toast.error(response.message || "Sign In failed");
+            return { success: false, error: response };
           }
         } catch (error: any) {
           console.log(error);
           toast.error(error.response?.data?.message || "Sign In unsuccessfully!");
+          return { success: false, error: error.response?.data };
         } finally {
           set({ loading: false });
         }
       },
+
+      logout: async () => {
+        try {
+            set({ loading: true });
+            await authService.logout().catch(() => {});
+        } finally {
+            get().clearState();
+            set({ loading: false });
+            toast.success("Logged out successfully");
+        }
+      },
+
+      fetchProfile: async () => {
+        try {
+            const response = await authService.getMe();
+            const user = response.data?.user || response.user || response; 
+            if(user && user.email) set({ user });
+        } catch(error) {
+            console.error("Failed to fetch profile", error);
+        }
+      },
+
+      updateProfile: async (data) => {
+        try {
+            set({ loading: true });
+            const response = await authService.updateMe(data);
+            const user = response.data?.user || response.user || response;
+            if(user && user.email) {
+                set({ user: { ...get().user, ...user } });
+                toast.success("Profile updated successfully!");
+            }
+        } catch(error: any) {
+            console.error(error);
+            toast.error(error.response?.data?.message || "Failed to update profile");
+        } finally {
+            set({ loading: false });
+        }
+      }
     }),
     {
       name: "auth-storage",
-      partialize: (state) => ({ accessToken: state.accessToken, user: state.user }),
+      partialize: (state) => ({ 
+        accessToken: state.accessToken, 
+        refreshToken: state.refreshToken, 
+        user: state.user 
+      }),
     }
   )
 );
