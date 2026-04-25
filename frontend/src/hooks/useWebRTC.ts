@@ -3,6 +3,39 @@ import { getSocket } from '@/socket/socket';
 import { WEBRTC_EVENTS, ROOM_EVENTS } from '@/socket/events';
 import { useMediaStore } from '@/stores/mediaStore';
 import { useMeetingStore } from '@/stores/meetingStore';
+import { useAuthStore } from '@/stores/useAuthStore';
+
+// TypeScript types for WebRTC events
+interface UserJoinedData {
+  userId: string;
+  user?: {
+    _id: string;
+    full_name: string;
+    fullName: string;
+  };
+}
+
+interface UserLeftData {
+  userId: string;
+  user?: {
+    _id: string;
+  };
+}
+
+interface WebRTCOfferData {
+  from: string;
+  offer: RTCSessionDescriptionInit;
+}
+
+interface WebRTCAnswerData {
+  from: string;
+  answer: RTCSessionDescriptionInit;
+}
+
+interface ICECandidateData {
+  from: string;
+  candidate: RTCIceCandidateInit;
+}
 
 const ICE_SERVERS = {
   iceServers: [
@@ -15,9 +48,15 @@ export function useWebRTC(roomCode: string | null) {
   const socket = getSocket();
   const { localStream } = useMediaStore();
   const { addParticipant, removeParticipant, updateParticipantStream } = useMeetingStore();
+  const currentUserId = useAuthStore((state) => state.user?._id);
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
 
   const createPeer = useCallback((userId: string, isInitiator: boolean) => {
+    const existingPeer = peersRef.current.get(userId);
+    if (existingPeer) {
+      return existingPeer;
+    }
+
     const peer = new RTCPeerConnection(ICE_SERVERS);
     peersRef.current.set(userId, peer);
 
@@ -59,14 +98,20 @@ export function useWebRTC(roomCode: string | null) {
   useEffect(() => {
     if (!roomCode) return;
 
-    const handleUserJoined = (data: any) => {
+    const handleUserJoined = (data: UserJoinedData) => {
       const uId = data.userId || data.user?._id;
-      if (!uId) return;
-      addParticipant({ id: uId, fullName: data.user?.fullName || data.user?.full_name || 'Guest', isActive: true, isAudioMuted: false, isVideoMuted: false });
+      if (!uId || uId === currentUserId) return;
+      addParticipant({ 
+        id: uId, 
+        fullName: data.user?.full_name || data.user?.fullName || 'Guest', 
+        isActive: true, 
+        isAudioMuted: false, 
+        isVideoMuted: false 
+      });
       createPeer(uId, true); // I am already here, I initiate offer to latecomer
     };
 
-    const handleUserLeft = (data: any) => {
+    const handleUserLeft = (data: UserLeftData) => {
       const uId = data.userId || data.user?._id;
       if (!uId) return;
       removeParticipant(uId);
@@ -77,28 +122,46 @@ export function useWebRTC(roomCode: string | null) {
       }
     };
 
-    const handleOffer = async ({ from, offer }: any) => {
+    const handleOffer = async (data: WebRTCOfferData) => {
+      const { from, offer } = data;
+      if (!from) return;
       const peer = createPeer(from, false);
-      await peer.setRemoteDescription(new RTCSessionDescription(offer));
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      socket.emit(WEBRTC_EVENTS.ANSWER, {
-        to: from,
-        answer: peer.localDescription
-      });
-    };
-
-    const handleAnswer = async ({ from, answer }: any) => {
-      const peer = peersRef.current.get(from);
-      if (peer) {
-        await peer.setRemoteDescription(new RTCSessionDescription(answer));
+      try {
+        await peer.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await peer.createAnswer();
+        await peer.setLocalDescription(answer);
+        socket.emit(WEBRTC_EVENTS.ANSWER, {
+          to: from,
+          answer: peer.localDescription
+        });
+      } catch (error) {
+        console.error('Error handling WebRTC offer:', error);
       }
     };
 
-    const handleIceCandidate = async ({ from, candidate }: any) => {
+    const handleAnswer = async (data: WebRTCAnswerData) => {
+      const { from, answer } = data;
+      if (!from) return;
       const peer = peersRef.current.get(from);
       if (peer) {
-        await peer.addIceCandidate(new RTCIceCandidate(candidate));
+        try {
+          await peer.setRemoteDescription(new RTCSessionDescription(answer));
+        } catch (error) {
+          console.error('Error handling WebRTC answer:', error);
+        }
+      }
+    };
+
+    const handleIceCandidate = async (data: ICECandidateData) => {
+      const { from, candidate } = data;
+      if (!from) return;
+      const peer = peersRef.current.get(from);
+      if (peer) {
+        try {
+          await peer.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (error) {
+          console.error('Error adding ICE candidate:', error);
+        }
       }
     };
 
@@ -115,7 +178,7 @@ export function useWebRTC(roomCode: string | null) {
       socket.off(WEBRTC_EVENTS.ANSWER, handleAnswer);
       socket.off(WEBRTC_EVENTS.ICE_CANDIDATE, handleIceCandidate);
     };
-  }, [socket, createPeer, addParticipant, removeParticipant, roomCode]);
+  }, [socket, createPeer, addParticipant, removeParticipant, roomCode, currentUserId]);
 
   // Clean up all peers on unmount
   useEffect(() => {

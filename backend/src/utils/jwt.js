@@ -1,8 +1,16 @@
 import jwt from 'jsonwebtoken';
 import logger from './logger.js';
 
-const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || 'your_access_token_secret_key_min_32_chars';
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'your_refresh_token_secret_key_min_32_chars';
+// Validate required JWT secrets at startup
+if (!process.env.JWT_ACCESS_SECRET) {
+  throw new Error('FATAL: JWT_ACCESS_SECRET environment variable is not set. Please configure it before starting the application.');
+}
+if (!process.env.JWT_REFRESH_SECRET) {
+  throw new Error('FATAL: JWT_REFRESH_SECRET environment variable is not set. Please configure it before starting the application.');
+}
+
+const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET;
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 const JWT_ACCESS_EXPIRY = process.env.JWT_ACCESS_EXPIRY || '15m';
 const JWT_REFRESH_EXPIRY = process.env.JWT_REFRESH_EXPIRY || '7d';
 

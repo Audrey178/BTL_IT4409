@@ -12,6 +12,7 @@ interface MeetingState {
   setRoomCode: (code: string | null) => void;
   setStatus: (status: 'idle' | 'waiting' | 'in-room' | 'ended') => void;
   setHostId: (id: string | null) => void;
+  setParticipants: (participants: Participant[]) => void;
   
   addParticipant: (p: Participant) => void;
   removeParticipant: (userId: string) => void;
@@ -33,6 +34,7 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   setRoomCode: (code) => set({ roomCode: code }),
   setStatus: (status) => set({ status }),
   setHostId: (hostId) => set({ hostId }),
+  setParticipants: (participants) => set({ participants }),
   
   addParticipant: (p) => set((state) => {
     // Only add if not exist

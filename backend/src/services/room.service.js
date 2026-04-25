@@ -28,7 +28,19 @@ class RoomService {
    */
   async createRoom(hostId, data) {
     try {
-      const { title, description, settings } = data;
+      const {
+        title,
+        description,
+        settings,
+        require_approval,
+        allow_chat,
+        max_participants,
+      } = data;
+      const normalizedSettings = {
+        require_approval: settings?.require_approval ?? require_approval ?? false,
+        allow_chat: settings?.allow_chat ?? allow_chat ?? true,
+        max_participants: settings?.max_participants ?? max_participants ?? 100,
+      };
 
       // Generate unique room code
       const roomCode = this.generateRoomCode();
@@ -40,11 +52,7 @@ class RoomService {
         title,
         description: description || '',
         status: ROOM_STATUS.WAITING,
-        settings: {
-          require_approval: settings?.require_approval || false,
-          allow_chat: settings?.allow_chat !== false,
-          max_participants: settings?.max_participants || 100,
-        },
+        settings: normalizedSettings,
         started_at: null,
         ended_at: null,
       });
@@ -137,8 +145,8 @@ class RoomService {
 
       if (roomMember) {
         // If previously left, rejoin
-        roomMember.status = USER_STATUS.PENDING;
-        roomMember.joined_at = null;
+        roomMember.status = room.settings.require_approval ? USER_STATUS.PENDING : USER_STATUS.JOINED;
+        roomMember.joined_at = room.settings.require_approval ? null : new Date();
         roomMember.left_at = null;
       } else {
         // Create new room member entry
@@ -155,6 +163,16 @@ class RoomService {
       // Store in Redis
       const redis = getRedisClient();
       await addToSet(`room:${roomCode}:members`, userId.toString());
+
+      if (roomMember.status === USER_STATUS.JOINED) {
+        if (room.status === ROOM_STATUS.WAITING) {
+          room.status = ROOM_STATUS.ACTIVE;
+        }
+        if (!room.started_at) {
+          room.started_at = new Date();
+        }
+        await room.save();
+      }
 
       logger.info(`✓ User ${userId} requested to join room ${roomCode}`);
 
@@ -204,6 +222,14 @@ class RoomService {
         error.statusCode = HTTP_STATUS.NOT_FOUND;
         throw error;
       }
+
+      if (room.status === ROOM_STATUS.WAITING) {
+        room.status = ROOM_STATUS.ACTIVE;
+      }
+      if (!room.started_at) {
+        room.started_at = new Date();
+      }
+      await room.save();
 
       await this.logEvent(room._id, userId, EVENT_TYPE.USER_APPROVED, 'User approved to join');
 
@@ -318,6 +344,9 @@ class RoomService {
 
       room.status = ROOM_STATUS.ENDED;
       room.ended_at = new Date();
+      if (!room.started_at) {
+        room.started_at = room.created_at;
+      }
       await room.save();
 
       // Mark all members as left
@@ -374,12 +403,17 @@ class RoomService {
   }
 
   /**
-   * Generate unique room code
-   * @returns {String} Room code (format: xxx-yyy-zzz)
+   * Generate unique room code - improved security with longer, random alphanumeric
+   * @returns {String} Room code (format: XXX-YYY-ZZZ in alphanumeric)
    */
   generateRoomCode() {
-    const uuid = uuidv4().replace(/-/g, '').substring(0, 9);
-    return `${uuid.substring(0, 3)}-${uuid.substring(3, 6)}-${uuid.substring(6, 9)}`;
+    // Generate 12-character random alphanumeric code (resistant to brute force)
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = '';
+    for (let i = 0; i < 12; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return `${code.substring(0, 4)}-${code.substring(4, 8)}-${code.substring(8, 12)}`;
   }
 
   /**

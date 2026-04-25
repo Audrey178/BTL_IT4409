@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router";
 import { motion } from "motion/react";
 import {
   LayoutDashboard,
@@ -21,8 +22,31 @@ import {
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { useAuthStore } from "@/stores/useAuthStore";
+import { toast } from "sonner";
 
 export function DashboardScreen() {
+  const navigate = useNavigate();
+  const { logout } = useAuthStore();
+
+  const handleNewMeeting = () => {
+    navigate('/lobby');
+  };
+
+  const handleLogout = async () => {
+    try {
+      logout();
+      toast.success("Logged out successfully");
+      navigate('/signin');
+    } catch (error) {
+      toast.error("Logout failed");
+      console.error(error);
+    }
+  };
+
+  const handleJoinMeeting = (meetingId: string) => {
+    navigate(`/meeting/${meetingId}`);
+  };
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
@@ -52,7 +76,7 @@ export function DashboardScreen() {
 
         <div className="px-6 mb-8">
           <Button
-            onClick={() => {}}
+            onClick={handleNewMeeting}
             className="w-full h-12 bg-primary text-white rounded-full font-bold shadow-lg shadow-primary/20 flex items-center justify-center gap-2"
           >
             <Plus size={20} />
@@ -70,7 +94,7 @@ export function DashboardScreen() {
             <span className="text-sm font-medium">Settings</span>
           </button>
           <button
-            onClick={() => {}}
+            onClick={handleLogout}
             className="flex items-center gap-4 text-error hover:opacity-80 transition-colors w-full pt-2"
           >
             <span className="text-sm font-bold">Logout</span>
@@ -94,7 +118,7 @@ export function DashboardScreen() {
             </p>
           </div>
           <Button
-            onClick={() => {}}
+            onClick={handleNewMeeting}
             className="h-14 px-8 bg-gradient-to-r from-primary to-primary-container text-white rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3 group"
           >
             <Plus
@@ -212,7 +236,7 @@ export function DashboardScreen() {
                 time="10:00 AM - 11:30 AM"
                 location="Studio A"
                 participants={4}
-                onJoin={() => {}}
+                onJoin={() => handleJoinMeeting("HEARTH-2024-STUDIO")}
                 active
               />
               <MeetingCard
@@ -222,7 +246,7 @@ export function DashboardScreen() {
                 time="2:00 PM - 3:30 PM"
                 location="Digital Hearth 1"
                 participants={12}
-                onJoin={() => {}}
+                onJoin={() => handleJoinMeeting("HEARTH-2024-Q4")}
               />
               <MeetingCard
                 date="09"
@@ -231,7 +255,7 @@ export function DashboardScreen() {
                 time="09:00 AM - 10:00 AM"
                 location="Main Hall"
                 participants={2}
-                onJoin={() => {}}
+                onJoin={() => handleJoinMeeting("HEARTH-2024-PHOENIX")}
               />
             </div>
 

@@ -16,7 +16,7 @@
  */
 
 import { getRedisClient } from '../config/redis.js';
-import { RoomMember, Room } from '../models/index.js';
+import { RoomMember, Room, User } from '../models/index.js';
 import { SOCKET_EVENTS, ROOM_STATUS, USER_STATUS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
 
@@ -29,7 +29,15 @@ import logger from '../utils/logger.js';
  */
 export const handleRoomJoin = async (socket, data) => {
   try {
-    const { userId, roomCode } = data;
+    // Use JWT-authenticated userId from socket instead of client-provided data
+    const userId = socket.userId;
+    const { roomCode } = data;
+    
+    if (!roomCode) {
+      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Room code is required' });
+      return;
+    }
+    
     const redis = getRedisClient();
 
     logger.info(`👤 Người dùng ${userId} yêu cầu vào phòng ${roomCode}`);
@@ -64,12 +72,23 @@ export const handleRoomJoin = async (socket, data) => {
       `socket:${socket.id}`,
       JSON.stringify({ userId, roomCode })
     );
+    await redis.set(`user:${userId}:socket`, socket.id);
 
     // 5. Thêm user vào Set thành viên phòng
-    await redis.sAdd(`room:${roomCode}:members`, userId);
+    if (!room.settings.require_approval) {
+      await redis.sAdd(`room:${roomCode}:members`, userId);
+      socket.join(roomCode);
+    }
 
-    // 6. Join socket vào room namespace
-    socket.join(roomCode);
+    const user = await User.findById(userId).select('full_name email avatar').lean();
+    const userPayload = user
+      ? {
+          _id: user._id.toString(),
+          full_name: user.full_name,
+          email: user.email,
+          avatar: user.avatar || null,
+        }
+      : null;
 
     if (room.settings.require_approval) {
       // Nếu cần duyệt, phát thông báo tới Host
@@ -78,11 +97,12 @@ export const handleRoomJoin = async (socket, data) => {
         memberId: member._id,
       });
 
-      const hostSocketId = await redis.get(`room:${roomCode}:host:socket`);
+      const hostSocketId = await redis.get(`user:${room.host_id.toString()}:socket`);
       if (hostSocketId) {
         socket.to(hostSocketId).emit(SOCKET_EVENTS.ROOM_REQUEST_APPROVAL, {
           userId,
           memberId: member._id,
+          user: userPayload,
           message: `Người dùng yêu cầu vào phòng`,
         });
       }
@@ -90,10 +110,11 @@ export const handleRoomJoin = async (socket, data) => {
       // Nếu không cần duyệt, thông báo cho tất cả
       socket.to(roomCode).emit(SOCKET_EVENTS.ROOM_USER_JOINED, {
         userId,
+        user: userPayload,
         message: `Một người dùng đã vào phòng`,
       });
 
-      socket.emit(SOCKET_EVENTS.ROOM_USER_JOINED, { success: true });
+      socket.emit(SOCKET_EVENTS.ROOM_USER_JOINED, { success: true, user: userPayload });
     }
 
     logger.info(`✅ Người dùng ${userId} đã tham gia phòng ${roomCode}`);
@@ -127,12 +148,35 @@ export const handleApproveUser = async (socket, data) => {
       return;
     }
 
+    const approvedUserId = member.user_id._id.toString();
+    const approvedSocketId = await redis.get(`user:${approvedUserId}:socket`);
+    if (approvedSocketId) {
+      const approvedSocket = socket.nsp.sockets.get(approvedSocketId);
+      approvedSocket?.join(roomCode);
+    }
+    await redis.sAdd(`room:${roomCode}:members`, approvedUserId);
+
     // Phát thông báo tới người dùng đó và tất cả trong phòng
     socket.to(roomCode).emit(SOCKET_EVENTS.ROOM_USER_JOINED, {
-      userId: member.user_id._id,
-      userName: member.user_id.full_name,
+      userId: approvedUserId,
+      user: {
+        _id: approvedUserId,
+        full_name: member.user_id.full_name,
+        email: member.user_id.email,
+      },
       message: `${member.user_id.full_name} đã được duyệt vào phòng`,
     });
+    if (approvedSocketId) {
+      socket.to(approvedSocketId).emit(SOCKET_EVENTS.ROOM_USER_JOINED, {
+        userId: approvedUserId,
+        user: {
+          _id: approvedUserId,
+          full_name: member.user_id.full_name,
+          email: member.user_id.email,
+        },
+        message: `${member.user_id.full_name} đã được duyệt vào phòng`,
+      });
+    }
 
     logger.info(`✅ Host đã duyệt người dùng ${member.user_id._id} vào phòng ${roomCode}`);
   } catch (error) {
@@ -151,6 +195,7 @@ export const handleApproveUser = async (socket, data) => {
 export const handleRejectUser = async (socket, data) => {
   try {
     const { roomCode, memberId } = data;
+    const redis = getRedisClient();
 
     const member = await RoomMember.findByIdAndUpdate(
       memberId,
@@ -163,11 +208,19 @@ export const handleRejectUser = async (socket, data) => {
       return;
     }
 
+    const rejectedSocketId = await redis.get(`user:${member.user_id.toString()}:socket`);
+
     // Phát thông báo tới tất cả trong phòng
     socket.to(roomCode).emit(SOCKET_EVENTS.ROOM_USER_REJECTED, {
       memberId,
       message: 'Yêu cầu vào phòng đã bị từ chối',
     });
+    if (rejectedSocketId) {
+      socket.to(rejectedSocketId).emit(SOCKET_EVENTS.ROOM_USER_REJECTED, {
+        memberId,
+        message: 'Yêu cầu vào phòng đã bị từ chối',
+      });
+    }
 
     logger.info(`❌ Host từ chối người dùng vào phòng ${roomCode}`);
   } catch (error) {

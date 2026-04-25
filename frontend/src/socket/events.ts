@@ -1,9 +1,10 @@
 export const ROOM_EVENTS = {
   JOIN:             'room:join',
   PENDING:          'room:pending',
-  REQUEST_APPROVE:  'room:request_approve',
+  REQUEST_APPROVE:  'room:request_approval',
   APPROVE_USER:     'room:approve_user',
   REJECT_USER:      'room:reject_user',
+  USER_REJECTED:    'room:user_rejected',
   USER_JOINED:      'room:user_joined',
   USER_LEFT:        'room:user_left',
   KICK_USER:        'room:kick_user',

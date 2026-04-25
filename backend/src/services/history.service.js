@@ -52,27 +52,34 @@ class HistoryService {
 
       const total = await Room.countDocuments(query);
 
-      // Enrich with user's role in room
-      const enrichedRooms = await Promise.all(
-        rooms.map(async (room) => {
-          let userRole = 'member';
-          if (room.host_id?._id.toString() === userId.toString()) {
-            userRole = 'host';
-          }
-
-          const memberInfo = await RoomMember.findOne({
-            room_id: room._id,
-            user_id: userId,
-          }).lean();
-
-          return {
-            ...room,
-            userRole,
-            userStatus: memberInfo?.status || 'unknown',
-            userJoinedAt: memberInfo?.joined_at,
-          };
-        })
+      // Fetch all member infos at once instead of N+1 queries
+      const roomIds = rooms.map(r => r._id);
+      const memberInfos = await RoomMember.find({
+        room_id: { $in: roomIds },
+        user_id: userId,
+      }).lean();
+      
+      // Create a map for quick lookup: roomId -> memberInfo
+      const memberMap = new Map(
+        memberInfos.map(m => [m.room_id.toString(), m])
       );
+
+      // Enrich with user's role in room
+      const enrichedRooms = rooms.map((room) => {
+        let userRole = 'member';
+        if (room.host_id?._id.toString() === userId.toString()) {
+          userRole = 'host';
+        }
+
+        const memberInfo = memberMap.get(room._id.toString());
+
+        return {
+          ...room,
+          userRole,
+          userStatus: memberInfo?.status || 'unknown',
+          userJoinedAt: memberInfo?.joined_at,
+        };
+      });
 
       return {
         success: true,
@@ -259,7 +266,7 @@ class HistoryService {
 
       // Get duration
       const duration = room.ended_at
-        ? Math.floor((room.ended_at - room.started_at) / 1000)
+        ? Math.floor((room.ended_at - (room.started_at || room.created_at)) / 1000)
         : null;
 
       return {

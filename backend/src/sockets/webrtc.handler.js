@@ -32,14 +32,18 @@ import { SOCKET_EVENTS } from '../utils/constants.js';
  */
 export const handleWebRTCOffer = async (socket, data) => {
   try {
-    const { roomCode, targetUserId, offer } = data;
+    const { roomCode, targetUserId, to, offer } = data;
+    // Use JWT-authenticated userId from socket
+    const fromUserId = socket.userId;
+    const recipientUserId = targetUserId || to;
 
-    logger.debug(`📤 Forwarding WebRTC Offer in room ${roomCode} to user ${targetUserId}`);
+    logger.debug(`📤 Forwarding WebRTC Offer in room ${roomCode} to user ${recipientUserId}`);
 
     // Gửi offer tới peer nhận
-    socket.to(roomCode).emit(SOCKET_EVENTS.WEBRTC_OFFER, {
-      fromUserId: socket.handshake.query.userId,
-      targetUserId,
+    socket.to(`user:${recipientUserId}`).emit(SOCKET_EVENTS.WEBRTC_OFFER, {
+      from: fromUserId,
+      fromUserId,
+      targetUserId: recipientUserId,
       offer,
     });
   } catch (error) {
@@ -60,13 +64,21 @@ export const handleWebRTCOffer = async (socket, data) => {
  */
 export const handleWebRTCAnswer = async (socket, data) => {
   try {
-    const { roomCode, targetUserId, answer } = data;
+    const { roomCode, targetUserId, to, answer } = data;
+    const recipientUserId = targetUserId || to;
 
-    logger.debug(`📥 Forwarding WebRTC Answer in room ${roomCode} to user ${targetUserId}`);
+    logger.debug(`📥 Forwarding WebRTC Answer in room ${roomCode} to user ${recipientUserId}`);
 
-    socket.to(roomCode).emit(SOCKET_EVENTS.WEBRTC_ANSWER, {
-      fromUserId: socket.handshake.query.userId,
-      targetUserId,
+    // Use JWT-authenticated userId from socket, not unverified query param (SECURITY FIX)
+    const fromUserId = socket.userId;
+    if (!fromUserId) {
+      throw new Error('Unauthorized: User ID not found in socket authentication');
+    }
+
+    socket.to(`user:${recipientUserId}`).emit(SOCKET_EVENTS.WEBRTC_ANSWER, {
+      from: fromUserId,
+      fromUserId,
+      targetUserId: recipientUserId,
       answer,
     });
   } catch (error) {
@@ -87,13 +99,21 @@ export const handleWebRTCAnswer = async (socket, data) => {
  */
 export const handleICECandidate = async (socket, data) => {
   try {
-    const { roomCode, targetUserId, candidate } = data;
+    const { roomCode, targetUserId, to, candidate } = data;
+    const recipientUserId = targetUserId || to;
 
-    logger.debug(`🧊 Forwarding ICE Candidate in room ${roomCode} to user ${targetUserId}`);
+    logger.debug(`🧊 Forwarding ICE Candidate in room ${roomCode} to user ${recipientUserId}`);
 
-    socket.to(roomCode).emit(SOCKET_EVENTS.WEBRTC_ICE_CANDIDATE, {
-      fromUserId: socket.handshake.query.userId,
-      targetUserId,
+    // Use JWT-authenticated userId from socket, not unverified query param (SECURITY FIX)
+    const fromUserId = socket.userId;
+    if (!fromUserId) {
+      throw new Error('Unauthorized: User ID not found in socket authentication');
+    }
+
+    socket.to(`user:${recipientUserId}`).emit(SOCKET_EVENTS.WEBRTC_ICE_CANDIDATE, {
+      from: fromUserId,
+      fromUserId,
+      targetUserId: recipientUserId,
       candidate,
     });
   } catch (error) {

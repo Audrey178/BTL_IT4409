@@ -5,13 +5,80 @@ const logger = pino();
 
 let redisClient = null;
 
-/**
- * Connect to Redis with proper configuration and error handling
- * @returns {Promise<Object>} Redis client instance
- */
+const createMemoryRedisClient = () => {
+  const kv = new Map();
+  const sets = new Map();
+  const listeners = new Map();
+
+  const emit = (event, ...args) => {
+    const handlers = listeners.get(event) || [];
+    handlers.forEach((handler) => handler(...args));
+  };
+
+  return {
+    on(event, handler) {
+      const handlers = listeners.get(event) || [];
+      handlers.push(handler);
+      listeners.set(event, handlers);
+    },
+    async connect() {
+      emit('connect');
+      emit('ready');
+    },
+    async quit() {
+      emit('disconnect');
+    },
+    async set(key, value) {
+      kv.set(key, value);
+      return 'OK';
+    },
+    async setEx(key, _expiresIn, value) {
+      kv.set(key, value);
+      return 'OK';
+    },
+    async get(key) {
+      return kv.has(key) ? kv.get(key) : null;
+    },
+    async del(key) {
+      const hadKey = kv.delete(key);
+      const hadSet = sets.delete(key);
+      return hadKey || hadSet ? 1 : 0;
+    },
+    async sAdd(key, member) {
+      const current = sets.get(key) || new Set();
+      const before = current.size;
+      current.add(member);
+      sets.set(key, current);
+      return current.size > before ? 1 : 0;
+    },
+    async sRem(key, member) {
+      const current = sets.get(key);
+      if (!current) {
+        return 0;
+      }
+      const existed = current.delete(member);
+      if (current.size === 0) {
+        sets.delete(key);
+      }
+      return existed ? 1 : 0;
+    },
+    async sMembers(key) {
+      return Array.from(sets.get(key) || []);
+    },
+  };
+};
+
 export const connectRedis = async () => {
   try {
-    const redisUrl = process.env.REDIS_URL || 
+    if (process.env.REDIS_MEMORY === 'true') {
+      redisClient = createMemoryRedisClient();
+      await redisClient.connect();
+      logger.info('Redis connected in memory mode');
+      return redisClient;
+    }
+
+    const redisUrl =
+      process.env.REDIS_URL ||
       `redis://${process.env.REDIS_HOST || 'localhost'}:${process.env.REDIS_PORT || 6379}`;
 
     redisClient = createClient({
@@ -27,34 +94,29 @@ export const connectRedis = async () => {
       },
     });
 
-    // Error handler
     redisClient.on('error', (err) => {
       logger.error('Redis error:', err.message);
     });
 
-    // Ready handler
     redisClient.on('ready', () => {
-      logger.info('✓ Redis client ready');
+      logger.info('Redis client ready');
     });
 
-    // Connect handler
     redisClient.on('connect', () => {
-      logger.info('✓ Redis connected successfully');
+      logger.info('Redis connected successfully');
     });
 
-    // Disconnect handler
     redisClient.on('disconnect', () => {
-      logger.warn('⚠ Redis disconnected');
+      logger.warn('Redis disconnected');
     });
 
-    // Reconnecting handler
     redisClient.on('reconnecting', () => {
-      logger.info('🔄 Attempting to reconnect to Redis...');
+      logger.info('Attempting to reconnect to Redis...');
     });
 
     await redisClient.connect();
-    logger.info(`✓ Connected to Redis at ${redisUrl.split('//')[1].split('?')[0]}`);
-    
+    logger.info(`Connected to Redis at ${redisUrl.split('//')[1].split('?')[0]}`);
+
     return redisClient;
   } catch (error) {
     logger.error('Failed to connect Redis:', error.message);
@@ -62,14 +124,11 @@ export const connectRedis = async () => {
   }
 };
 
-/**
- * Disconnect from Redis gracefully
- */
 export const disconnectRedis = async () => {
   try {
     if (redisClient) {
       await redisClient.quit();
-      logger.info('✓ Redis disconnected gracefully');
+      logger.info('Redis disconnected gracefully');
       redisClient = null;
     }
   } catch (error) {
@@ -77,11 +136,6 @@ export const disconnectRedis = async () => {
   }
 };
 
-/**
- * Get Redis client instance
- * @returns {Object} Redis client
- * @throws {Error} If Redis client not initialized
- */
 export const getRedisClient = () => {
   if (!redisClient) {
     throw new Error('Redis client not initialized. Call connectRedis first.');
@@ -89,14 +143,11 @@ export const getRedisClient = () => {
   return redisClient;
 };
 
-/**
- * Utility: Set key-value with expiration (in seconds)
- */
 export const setWithExpire = async (key, value, expiresIn = null) => {
   try {
     const client = getRedisClient();
     const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
-    
+
     if (expiresIn) {
       await client.setEx(key, expiresIn, stringValue);
     } else {
@@ -108,9 +159,6 @@ export const setWithExpire = async (key, value, expiresIn = null) => {
   }
 };
 
-/**
- * Utility: Get value from Redis
- */
 export const getRedisValue = async (key) => {
   try {
     const client = getRedisClient();
@@ -121,9 +169,6 @@ export const getRedisValue = async (key) => {
   }
 };
 
-/**
- * Utility: Delete key from Redis
- */
 export const deleteRedisKey = async (key) => {
   try {
     const client = getRedisClient();
@@ -134,9 +179,6 @@ export const deleteRedisKey = async (key) => {
   }
 };
 
-/**
- * Utility: Add member to set
- */
 export const addToSet = async (setKey, member) => {
   try {
     const client = getRedisClient();
@@ -147,9 +189,6 @@ export const addToSet = async (setKey, member) => {
   }
 };
 
-/**
- * Utility: Remove member from set
- */
 export const removeFromSet = async (setKey, member) => {
   try {
     const client = getRedisClient();
@@ -160,9 +199,6 @@ export const removeFromSet = async (setKey, member) => {
   }
 };
 
-/**
- * Utility: Get all members from set
- */
 export const getSetMembers = async (setKey) => {
   try {
     const client = getRedisClient();

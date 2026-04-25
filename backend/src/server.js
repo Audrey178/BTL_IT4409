@@ -3,8 +3,9 @@ import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import app from './app.js';
 import { connectMongoDB, disconnectMongoDB } from './config/mongodb.js';
-import { connectRedis, disconnectRedis, getRedisClient } from './config/redis.js';
+import { connectRedis, disconnectRedis } from './config/redis.js';
 import { initializeSocket } from './sockets/index.js';
+import { verifyAccessToken } from './utils/jwt.js';
 import logger from './utils/logger.js';
 
 const PORT = process.env.PORT || 3000;
@@ -13,7 +14,7 @@ const HOST = process.env.HOST || 'localhost';
 // Create HTTP server
 const httpServer = http.createServer(app);
 
-// Socket.IO Configuration
+// Socket.IO Configuration with JWT Authentication Middleware
 const io = new SocketIOServer(httpServer, {
   cors: {
     origin: (process.env.CORS_ORIGIN || 'http://localhost:3000').split(','),
@@ -22,6 +23,32 @@ const io = new SocketIOServer(httpServer, {
   transports: ['websocket', 'polling'],
   pingInterval: 25000,
   pingTimeout: 60000,
+});
+
+// Socket.IO Authentication Middleware
+// Verify JWT token before accepting socket connection
+io.use((socket, next) => {
+  const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.replace('Bearer ', '');
+  
+  if (!token) {
+    return next(new Error('Authentication error: No token provided'));
+  }
+  
+  try {
+    const decoded = verifyAccessToken(token);
+    if (!decoded || !decoded.userId) {
+      return next(new Error('Authentication error: Invalid token'));
+    }
+    
+    // Attach authenticated user data to socket object
+    socket.userId = decoded.userId;
+    socket.email = decoded.email;
+    
+    next();
+  } catch (error) {
+    logger.error('Socket authentication error:', error.message);
+    next(new Error('Authentication error: Token verification failed'));
+  }
 });
 
 // Store io instance in app for use in routes

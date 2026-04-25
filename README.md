@@ -1,257 +1,165 @@
-# IT4409 Meeting Project
+# IT4409 Meeting Platform
 
-Nền tảng họp trực tuyến realtime gồm frontend React/Vite và backend Node.js/Express/Socket.IO, được tổ chức theo mô hình tách lớp và có bổ sung các tính năng như waiting room, chat realtime, lịch sử phòng họp, audit log, và AI attendance bằng face embeddings.
+Nền tảng họp trực tuyến realtime gồm:
 
-README này được viết từ việc quét toàn bộ mã nguồn hiện có trong repo, không dựa hoàn toàn vào các README con sẵn có. Mục tiêu là mô tả đúng trạng thái triển khai hiện tại, chỉ ra các giới hạn còn tồn tại, và cung cấp quy trình chạy dự án đủ rõ cho môi trường phát triển.
+- `frontend/`: React 19 + Vite + TypeScript + Zustand + Socket.IO client.
+- `backend/`: Express + MongoDB + Redis + Socket.IO + Swagger.
+- `meeting-backend/`: snapshot cũ của backend, không nên dùng làm source chính.
 
-## Tổng quan
+Repo hiện dùng `backend/` làm backend canonical. Frontend và tài liệu dưới đây đã được đồng bộ theo cấu trúc này.
 
-- `frontend/`: ứng dụng client React 19 + Vite + TypeScript + Zustand + Socket.IO Client.
-- `backend/`: backend Express + MongoDB + Redis + Socket.IO + Swagger, là bản source sạch hơn để theo dõi.
-- `meeting-backend/`: một bản backend gần như song song với `backend/`, đang chứa `node_modules/` và `.env`; có thể xem như working snapshot.
-- `DacTaBackEnd.md`, `DacTaDatabase.md`: đặc tả kỹ thuật và thiết kế dữ liệu ở mức bài tập/môn học.
+## 1. Trạng thái hiện tại
 
-## Phạm vi chức năng
+Các hạng mục đã được rà và chỉnh:
 
-### Đã có trong mã nguồn
+- Chuẩn hóa contract auth giữa frontend và backend.
+- Chuẩn hóa room creation để frontend gửi cấu hình phòng theo payload thực tế.
+- Sửa mismatch socket/WebRTC payload giữa client và server.
+- Sửa lưu chat realtime để dùng đúng `room_id` ObjectId thay vì `roomCode`.
+- Bổ sung `frontend/.env.example`.
+- Bổ sung ESLint baseline cho backend để `npm run lint` chạy được.
+- Cập nhật lại tài liệu đặc tả theo trạng thái source code hiện tại.
 
-- Đăng ký, đăng nhập, lấy profile, cập nhật profile bằng JWT.
-- Tạo phòng họp, join room, approve/reject user chờ duyệt, kick user, end room.
-- Signaling WebRTC qua Socket.IO.
-- Quản lý media local trên frontend bằng `getUserMedia`.
-- Lưu chat history, attendance logs, room history, audit events vào MongoDB.
-- Lưu trạng thái realtime cơ bản vào Redis.
-- Swagger UI cho REST API.
+Các hạng mục vẫn còn là scope tiếp theo nếu muốn production-grade hoàn chỉnh:
 
-### Đang ở trạng thái một phần hoặc chưa hoàn tất end-to-end
+- Tự động test end-to-end.
+- TURN server thật cho WebRTC production.
+- CI pipeline.
+- token refresh persistence / blacklist khi logout.
+- tách `meeting-backend/` ra khỏi repo hoặc archive rõ ràng.
 
-- Frontend có nhiều màn hình đẹp và đầy đủ flow UI, nhưng một phần dữ liệu vẫn hard-coded/demo.
-- Chat UI ở `MeetingScreen` hiện đang hiển thị message mẫu, chưa nối hoàn toàn với store/socket flow.
-- Logout backend chưa có token blacklist hoặc refresh-token persistence; hiện chủ yếu là client-side cleanup.
-- Có script `lint`, nhưng backend chưa có file cấu hình ESLint; frontend cần cài dependencies trước khi chạy `tsc`.
-- Repo chưa có test suite tự động thực thụ.
-
-## Kiến trúc hệ thống
+## 2. Kiến trúc
 
 ### Frontend
 
-- React 19 + Vite 6 + TypeScript.
-- State management bằng Zustand.
-- Form validation bằng React Hook Form + Zod.
-- Giao tiếp HTTP qua Axios.
-- Giao tiếp realtime qua Socket.IO Client.
-- WebRTC peer connection được xử lý trong `src/hooks/useWebRTC.ts`.
+- Router: `react-router-dom`
+- State:
+  - `useAuthStore`: phiên đăng nhập
+  - `meetingStore`: participant, waiting list, chat
+  - `mediaStore`: local media state
+- HTTP client: [frontend/src/lib/axios.ts](/d:/BTL_IT4409/frontend/src/lib/axios.ts:1)
+- Socket client: [frontend/src/socket/socket.ts](/d:/BTL_IT4409/frontend/src/socket/socket.ts:1)
+- WebRTC hook: [frontend/src/hooks/useWebRTC.ts](/d:/BTL_IT4409/frontend/src/hooks/useWebRTC.ts:1)
 
 ### Backend
 
-- Express làm HTTP API.
-- Socket.IO làm realtime gateway cho room, signaling và chat.
-- MongoDB/Mongoose lưu dữ liệu bền vững.
-- Redis lưu state realtime như room members, socket mapping, host mapping.
-- Joi dùng cho validation.
-- Pino dùng cho logging.
-- Swagger dùng cho tài liệu API.
+- App bootstrap: [backend/src/app.js](/d:/BTL_IT4409/backend/src/app.js:1)
+- HTTP server + Socket.IO: [backend/src/server.js](/d:/BTL_IT4409/backend/src/server.js:1)
+- API routes: [backend/src/routes](/d:/BTL_IT4409/backend/src/routes:1)
+- Services:
+  - auth
+  - room
+  - attendance
+  - history
+- Socket handlers:
+  - `room.handler.js`
+  - `webrtc.handler.js`
+  - `chat.handler.js`
 
-### Dữ liệu chính
+### Data layer
 
-- `users`
-- `rooms`
-- `room_members`
-- `attendance_logs`
-- `messages`
-- `meeting_events`
+- MongoDB cho dữ liệu bền vững.
+- Redis cho state realtime và socket/user mapping.
 
-## Cấu trúc repo
+## 3. Contract triển khai
 
-```text
-BTL_IT4409/
-├─ frontend/
-│  ├─ src/
-│  │  ├─ screens/             # Dashboard, lobby, meeting, auth, admin
-│  │  ├─ hooks/               # useMedia, useSocket, useWebRTC
-│  │  ├─ stores/              # auth, meeting, media
-│  │  ├─ services/            # authService
-│  │  ├─ socket/              # socket factory + event constants
-│  │  └─ components/
-│  ├─ package.json
-│  └─ vite.config.ts
-├─ backend/
-│  ├─ src/
-│  │  ├─ config/
-│  │  ├─ controllers/
-│  │  ├─ services/
-│  │  ├─ models/
-│  │  ├─ routes/v1/
-│  │  ├─ sockets/
-│  │  ├─ middlewares/
-│  │  └─ utils/
-│  ├─ docker-compose.yml
-│  ├─ Dockerfile
-│  └─ .env.example
-├─ meeting-backend/           # Bản backend song song, gần trùng với backend/
-├─ DacTaBackEnd.md
-└─ DacTaDatabase.md
+### REST base URL
+
+- Development mặc định: `http://localhost:3000/api/v1`
+- Override bằng `VITE_API_BASE_URL`
+
+### Socket URL
+
+- Development mặc định: `http://localhost:3000`
+- Override bằng `VITE_SOCKET_URL`
+
+### Response format
+
+Backend đang chuẩn hóa theo dạng:
+
+```json
+{
+  "success": true,
+  "message": "optional",
+  "data": {}
+}
 ```
 
-## Trạng thái repo hiện tại
+Lưu ý: một số endpoint legacy vẫn trả object ở top-level như `user`, `room`, `rooms`, `messages`. Frontend hiện đã thêm lớp normalize cho auth và dùng trực tiếp các contract còn lại.
 
-### Điểm cần biết ngay
+## 4. Chạy local
 
-- Repo có hai thư mục backend gần như giống nhau. Với trạng thái hiện tại, nên chọn một thư mục làm canonical source để tránh drift.
-- `frontend` mặc định chạy Vite ở port `3000`, trong khi backend cũng mặc định chạy ở `3000`. Đây là xung đột cấu hình thực tế.
-- Frontend hiện hard-code backend URL/socket URL về `http://localhost:3000`, nên cách chạy hợp lý là giữ backend ở `3000` và chạy frontend ở một port khác, ví dụ `3001`.
-
-### Khuyến nghị vận hành local
-
-- Dùng `backend/` làm nguồn backend chính để phát triển.
-- Chỉ dùng `meeting-backend/` nếu bạn cần đúng snapshot đang có `node_modules` và `.env`.
-- Chạy backend ở `3000`.
-- Chạy frontend ở `3001`.
-
-## Yêu cầu môi trường
-
-- Node.js `>= 18`
-- npm `>= 8`
-- Docker + Docker Compose
-- MongoDB 7 và Redis 7 nếu không dùng Docker
-
-## Quick Start
-
-### 1. Khởi động backend
+### Backend
 
 ```bash
 cd backend
 cp .env.example .env
-docker-compose up -d
 npm install
+npm run lint
 npm run dev
 ```
 
-Các endpoint chính:
+Yêu cầu:
 
-- Health: `http://localhost:3000/health`
-- API v1: `http://localhost:3000/api/v1`
-- Swagger: `http://localhost:3000/api-docs`
+- MongoDB
+- Redis
 
-### 2. Khởi động frontend
+Hoặc bật memory-mode cho local verification:
 
-```bash
-cd frontend
-npm install
-npm run dev -- --port 3001
-```
+- `MONGODB_MEMORY=true`
+- `REDIS_MEMORY=true`
 
-Frontend sẽ truy cập backend tại:
+Health check:
 
-- REST base URL: `http://localhost:3000/api/v1`
-- Socket URL: `http://localhost:3000`
+- `GET http://localhost:3000/health`
+- `GET http://localhost:3000/api/v1/health`
 
-## Biến môi trường
+Swagger:
 
-### Backend
-
-File mẫu đã có tại [backend/.env.example](/d:/BTL_IT4409/backend/.env.example:1).
-
-Các biến quan trọng:
-
-- `PORT`
-- `MONGODB_URI`
-- `REDIS_HOST`
-- `REDIS_PORT`
-- `JWT_ACCESS_SECRET`
-- `JWT_REFRESH_SECRET`
-- `CORS_ORIGIN`
-- `ENABLE_SWAGGER`
+- `http://localhost:3000/api-docs`
 
 ### Frontend
 
-Frontend hiện chưa có `.env.example` riêng cho API URL/socket URL. Một biến có xuất hiện trong cấu hình Vite là `GEMINI_API_KEY`, nhưng mã ứng dụng hiện tại chưa sử dụng thực tế thư viện `@google/genai`.
+```bash
+cd frontend
+cp .env.example .env
+npm install
+npm run lint
+npm run build
+npm run dev -- --port 3001
+```
 
-## API và realtime
+Khuyến nghị local:
 
-### REST groups
+- backend: `3000`
+- frontend: `3001`
 
-- `POST /api/v1/auth/register`
-- `POST /api/v1/auth/login`
-- `POST /api/v1/auth/refresh-token`
-- `GET /api/v1/auth/me`
-- `PUT /api/v1/auth/me`
-- `POST /api/v1/rooms`
-- `POST /api/v1/rooms/:roomCode/join`
-- `POST /api/v1/rooms/:roomCode/approve/:userId`
-- `POST /api/v1/rooms/:roomCode/reject/:userId`
-- `POST /api/v1/rooms/:roomCode/kick/:userId`
-- `PUT /api/v1/rooms/:roomCode/end`
-- `GET /api/v1/attendance/:roomCode/stats`
-- `GET /api/v1/history/rooms`
-- `GET /api/v1/history/rooms/:roomCode/messages`
-- `GET /api/v1/history/rooms/:roomCode/events`
+## 5. Xác minh đã chạy
 
-### Socket events
+Đã chạy trực tiếp trên repo hiện tại:
 
-- `room:join`
-- `room:pending`
-- `room:request_approval`
-- `room:approve_user`
-- `room:reject_user`
-- `room:user_joined`
-- `room:user_left`
-- `webrtc:offer`
-- `webrtc:answer`
-- `webrtc:ice_candidate`
-- `chat:send`
-- `chat:receive`
-- `chat:history`
+- `frontend/npm run lint`
+- `frontend/npm run build`
+- `backend/npm run lint`
+- `node --check` cho các module backend chính
 
-## Frontend routes
+Kết quả:
 
-- `/`
-- `/admin`
-- `/lobby`
-- `/meeting/:id`
-- `/signin`
-- `/signup`
+- Frontend typecheck pass.
+- Frontend production build pass.
+- Backend lint pass với warning còn lại ở mức cleanup kỹ thuật.
+- Backend syntax check pass.
 
-## Tài liệu trong repo
+## 6. Tài liệu đặc tả
 
-### Root
+- [DacTaBackEnd.md](/d:/BTL_IT4409/DacTaBackEnd.md:1): đặc tả backend, API, socket contract, bảo mật, vận hành.
+- [DacTaDatabase.md](/d:/BTL_IT4409/DacTaDatabase.md:1): đặc tả MongoDB, Redis, index và data lifecycle.
+- [FRONTEND_FIX_GUIDE.md](/d:/BTL_IT4409/FRONTEND_FIX_GUIDE.md:1): audit/fix guide của frontend trước đó.
 
-- [DacTaBackEnd.md](/d:/BTL_IT4409/DacTaBackEnd.md:1): đặc tả backend.
-- [DacTaDatabase.md](/d:/BTL_IT4409/DacTaDatabase.md:1): thiết kế database và Redis.
+## 7. Quy ước phát triển
 
-### Backend docs
-
-- [backend/ARCHITECTURE_GUIDE.md](/d:/BTL_IT4409/backend/ARCHITECTURE_GUIDE.md:1)
-- [backend/DEPLOYMENT_GUIDE.md](/d:/BTL_IT4409/backend/DEPLOYMENT_GUIDE.md:1)
-- [backend/IMPLEMENTATION_GUIDE.md](/d:/BTL_IT4409/backend/IMPLEMENTATION_GUIDE.md:1)
-- [backend/FINAL_VERIFICATION_REPORT.md](/d:/BTL_IT4409/backend/FINAL_VERIFICATION_REPORT.md:1)
-
-## Những vấn đề đã xác minh khi quét repo
-
-- `meeting-backend/` và `backend/` gần như trùng nhau nhưng không đồng nhất hoàn toàn.
-- `meeting-backend/package.json` khác `backend/package.json` ở dependency `pino-pretty`.
-- `meeting-backend/src/app.js` import `httpLogger` từ middleware index, còn `backend/src/app.js` import từ logger.
-- `frontend/package.json` có dependency cho `@google/genai`, `express`, `dotenv`, nhưng mã frontend hiện tại chưa phản ánh rõ nhu cầu dùng các gói này.
-- `meeting-backend` có `node_modules/`; `backend` và `frontend` hiện chưa có.
-
-## Kiểm tra đã chạy
-
-Tôi đã thử các lệnh xác minh tối thiểu trên trạng thái repo hiện tại:
-
-- `meeting-backend/npm run lint`: thất bại vì chưa có cấu hình ESLint trong project.
-- `frontend/npm run lint`: thất bại vì chưa cài dependencies nên `tsc` chưa khả dụng.
-
-Điều này có nghĩa README mới không nên tuyên bố repo đang ở trạng thái production-ready hoàn chỉnh.
-
-## Hướng cải thiện nên làm tiếp
-
-1. Hợp nhất `backend/` và `meeting-backend/` thành một nguồn duy nhất.
-2. Chuẩn hóa port và đưa API URL/socket URL của frontend vào `.env`.
-3. Hoàn thiện end-to-end cho chat, participant sync và waiting room trên frontend.
-4. Thêm ESLint config, Prettier và test setup cho cả frontend/backend.
-5. Thêm CI cơ bản: install, lint, typecheck, smoke test.
-6. Thêm seed data hoặc script bootstrap để demo nhanh hơn.
-
-## License
-
-Repo hiện chưa có file `LICENSE` ở root. Nếu đây là đồ án học phần nội bộ, nên bổ sung license hoặc ghi rõ phạm vi sử dụng trong lần cập nhật tiếp theo.
+- Chỉ dùng `backend/` làm source backend chính.
+- Mọi base URL phải đi qua biến môi trường.
+- Event names giữa frontend/backend phải bám theo `backend/src/utils/constants.js`.
+- Không lưu `roomCode` vào các collection yêu cầu `ObjectId`.
+- Payload từ backend dùng `snake_case`; frontend có thể normalize ở edge nếu cần hiển thị.

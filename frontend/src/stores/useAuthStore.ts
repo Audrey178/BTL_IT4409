@@ -6,20 +6,29 @@ import { AuthState } from "@/types/store";
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       accessToken: null,
       user: null,
       loading: false,
+      isAuthenticated: false,
 
       clearState: () => {
-        set({ accessToken: null, user: null, loading: false });
+        set({ accessToken: null, user: null, loading: false, isAuthenticated: false });
+      },
+
+      logout: () => {
+        set({ accessToken: null, user: null, loading: false, isAuthenticated: false });
       },
 
       signUp: async (fullname: string, email: string, password: string) => {
         try {
           set({ loading: true });
-          await authService.signUp(fullname, email, password);
-          toast.success("Sign Up successfully!");
+          const response = await authService.signUp(fullname, email, password);
+          if (response.success) {
+            toast.success("Sign Up successfully!");
+          } else {
+            toast.error(response.message || "Sign Up failed");
+          }
         } catch (error) {
           console.log(error);
           toast.error("Sign Up unsuccessfully!");
@@ -33,10 +42,11 @@ export const useAuthStore = create<AuthState>()(
           set({ loading: true });
           const response = await authService.signIn(email, password);
           
-          if (response.success && response.data) {
+          if (response.success && response.accessToken && response.user) {
             set({ 
-              accessToken: response.data.access_token || response.data.accessToken,
-              user: response.data.user
+              accessToken: response.accessToken,
+              user: response.user,
+              isAuthenticated: true,
             });
             toast.success("Sign In successfully!");
           } else {
@@ -52,7 +62,11 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "auth-storage",
-      partialize: (state) => ({ accessToken: state.accessToken, user: state.user }),
+      partialize: (state) => ({
+        accessToken: state.accessToken,
+        user: state.user,
+        isAuthenticated: state.isAuthenticated,
+      }),
     }
   )
 );

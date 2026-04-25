@@ -106,7 +106,7 @@ export function MeetingScreen() {
         >
           {/* Local User */}
           <VideoTile
-            name={authUser?.fullName || "You"}
+            name={authUser?.full_name || "You"}
             stream={localStream}
             isMuted={isAudioMuted}
             isVideoOff={isVideoMuted}
