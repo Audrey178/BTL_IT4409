@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Mic,
@@ -9,7 +9,6 @@ import {
   PhoneOff,
   MessageSquare,
   Users,
-  MoreHorizontal,
   Bell,
   HelpCircle,
   X,
@@ -17,18 +16,132 @@ import {
   XCircle,
   Sparkles,
   CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 
+type MeetingMediaPreferences = {
+  isMuted: boolean;
+  isVideoOff: boolean;
+  displayName?: string;
+};
+
+function getInitialMediaPreferences(): MeetingMediaPreferences {
+  const fallback = { isMuted: false, isVideoOff: false, displayName: "" };
+
+  const savedPreferences = sessionStorage.getItem("meeting-media-preferences");
+  if (!savedPreferences) {
+    return fallback;
+  }
+
+  try {
+    const parsed = JSON.parse(savedPreferences);
+    return {
+      isMuted: Boolean(parsed.isMuted),
+      isVideoOff: Boolean(parsed.isVideoOff),
+      displayName: typeof parsed.displayName === "string" ? parsed.displayName : "",
+    };
+  } catch {
+    return fallback;
+  }
+}
+
 export function MeetingScreen() {
-  const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
+  const initialPreferences = useMemo(() => getInitialMediaPreferences(), []);
+  const [isMuted, setIsMuted] = useState(initialPreferences.isMuted);
+  const [isVideoOff, setIsVideoOff] = useState(initialPreferences.isVideoOff);
   const [showChat, setShowChat] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isCameraReady, setIsCameraReady] = useState(false);
+  const selfPreviewRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const setupSelfPreview = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        });
+
+        if (!isMounted) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        streamRef.current = stream;
+        stream.getAudioTracks().forEach((track) => {
+          track.enabled = !isMuted;
+        });
+        stream.getVideoTracks().forEach((track) => {
+          track.enabled = !isVideoOff;
+        });
+
+        if (selfPreviewRef.current) {
+          selfPreviewRef.current.srcObject = stream;
+        }
+      } catch {
+        if (isMounted) {
+          setCameraError(
+            "Khong the truy cap camera. Vui long kiem tra quyen truy cap tren trinh duyet."
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsCameraReady(true);
+        }
+      }
+    };
+
+    setupSelfPreview();
+
+    return () => {
+      isMounted = false;
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const stream = streamRef.current;
+    if (!stream) {
+      return;
+    }
+
+    stream.getAudioTracks().forEach((track) => {
+      track.enabled = !isMuted;
+    });
+  }, [isMuted]);
+
+  useEffect(() => {
+    const stream = streamRef.current;
+    if (!stream) {
+      return;
+    }
+
+    stream.getVideoTracks().forEach((track) => {
+      track.enabled = !isVideoOff;
+    });
+  }, [isVideoOff]);
+
+  useEffect(() => {
+    sessionStorage.setItem(
+      "meeting-media-preferences",
+      JSON.stringify({
+        isMuted,
+        isVideoOff,
+        displayName: initialPreferences.displayName,
+      })
+    );
+  }, [initialPreferences.displayName, isMuted, isVideoOff]);
+
+  const presenterName = initialPreferences.displayName?.trim() || "You";
 
   return (
     <div className="h-screen flex flex-col bg-surface overflow-hidden">
@@ -68,7 +181,7 @@ export function MeetingScreen() {
               <AvatarFallback>EV</AvatarFallback>
             </Avatar>
             <span className="font-bold text-orange-900 text-sm">
-              Elena Vance
+              {presenterName}
             </span>
           </div>
         </div>
@@ -286,14 +399,40 @@ export function MeetingScreen() {
 
         {/* Self Preview Floating */}
         <div className="absolute right-8 bottom-8 w-48 aspect-video rounded-2xl overflow-hidden border-2 border-primary shadow-2xl">
-          <img
-            src="https://picsum.photos/seed/me/400/225"
-            alt="Self"
-            className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
-          />
+          {!cameraError ? (
+            <video
+              ref={selfPreviewRef}
+              autoPlay
+              muted
+              playsInline
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full bg-surface-container-high flex items-center justify-center p-3 text-center">
+              <div>
+                <AlertCircle className="mx-auto text-error" size={18} />
+                <p className="text-[10px] mt-1 text-on-surface-variant">Camera blocked</p>
+              </div>
+            </div>
+          )}
+
+          {!isCameraReady && !cameraError && (
+            <div className="absolute inset-0 bg-surface/70 backdrop-blur-sm flex items-center justify-center text-[10px] font-bold tracking-widest uppercase text-on-surface-variant">
+              Loading...
+            </div>
+          )}
+
+          {isVideoOff && (
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center text-white text-center">
+              <div>
+                <VideoOff className="mx-auto mb-1" size={18} />
+                <p className="text-[10px] font-bold uppercase tracking-widest">Camera Off</p>
+              </div>
+            </div>
+          )}
+
           <div className="absolute bottom-2 left-2 bg-black/40 backdrop-blur-md px-2 py-1 rounded-lg text-[10px] text-white font-bold">
-            You (Live)
+            {presenterName} {isVideoOff ? "(Hidden)" : "(Live)"}
           </div>
         </div>
       </div>

@@ -26,6 +26,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (error) {
       console.log(error);
       toast.error("Sign Up unsuccessfully!");
+      throw error;
     } finally {
       set({ loading: false });
     }

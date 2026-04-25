@@ -6,6 +6,7 @@ export interface AuthState {
   loading: boolean;
 
   clearState: () => void;
+  logout: () => void;
 
   signUp: (fullname: string, email: string, password: string) => Promise<void>;
 

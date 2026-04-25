@@ -1,17 +1,106 @@
+import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import {
   Mic,
+  MicOff,
   Video,
+  VideoOff,
   Settings,
   ChevronLeft,
   Bell,
   HelpCircle,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { useNavigate } from "react-router";
 
 export function LobbyScreen() {
+  const navigate = useNavigate();
+  const [displayName, setDisplayName] = useState("");
+  const [isMuted, setIsMuted] = useState(false);
+  const [isVideoOff, setIsVideoOff] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isLoadingCamera, setIsLoadingCamera] = useState(true);
+  const previewRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const initializePreview = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        });
+
+        if (!isMounted) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        streamRef.current = stream;
+        if (previewRef.current) {
+          previewRef.current.srcObject = stream;
+        }
+      } catch {
+        if (isMounted) {
+          setCameraError(
+            "Khong the truy cap camera. Vui long kiem tra quyen truy cap tren trinh duyet."
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingCamera(false);
+        }
+      }
+    };
+
+    initializePreview();
+
+    return () => {
+      isMounted = false;
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const stream = streamRef.current;
+    if (!stream) {
+      return;
+    }
+
+    stream.getAudioTracks().forEach((track) => {
+      track.enabled = !isMuted;
+    });
+  }, [isMuted]);
+
+  useEffect(() => {
+    const stream = streamRef.current;
+    if (!stream) {
+      return;
+    }
+
+    stream.getVideoTracks().forEach((track) => {
+      track.enabled = !isVideoOff;
+    });
+  }, [isVideoOff]);
+
+  const joinMeeting = () => {
+    sessionStorage.setItem(
+      "meeting-media-preferences",
+      JSON.stringify({
+        isMuted,
+        isVideoOff,
+        displayName,
+      })
+    );
+    navigate("/meeting");
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-surface">
       {/* Top Nav */}
@@ -86,13 +175,15 @@ export function LobbyScreen() {
                   Display Name
                 </label>
                 <Input
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
                   className="h-14 bg-surface-container-highest border-none rounded-2xl px-6 text-on-surface placeholder:text-on-surface-variant/50 focus-visible:ring-2 focus-visible:ring-primary"
                   placeholder="How should we call you?"
                 />
               </div>
               <div className="pt-4">
                 <Button
-                  onClick={() => {}}
+                  onClick={joinMeeting}
                   className="w-full h-16 bg-gradient-to-r from-primary to-primary-container text-white rounded-full font-bold text-xl shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
                 >
                   Join Meeting
@@ -111,12 +202,39 @@ export function LobbyScreen() {
               animate={{ opacity: 1, scale: 1 }}
               className="relative aspect-video bg-surface-container-highest rounded-[2.5rem] overflow-hidden shadow-2xl border border-outline-variant/10"
             >
-              <img
-                src="https://picsum.photos/seed/lobby/1200/800"
-                alt="Video Preview"
-                className="w-full h-full object-cover"
-                referrerPolicy="no-referrer"
-              />
+              {!cameraError ? (
+                <video
+                  ref={previewRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full bg-surface-container-high flex items-center justify-center">
+                  <div className="text-center px-8">
+                    <AlertCircle className="mx-auto mb-3 text-error" size={28} />
+                    <p className="text-sm text-on-surface-variant">{cameraError}</p>
+                  </div>
+                </div>
+              )}
+
+              {isLoadingCamera && !cameraError && (
+                <div className="absolute inset-0 bg-surface/60 backdrop-blur-sm flex items-center justify-center text-xs font-bold tracking-widest uppercase text-on-surface-variant">
+                  Dang khoi tao camera...
+                </div>
+              )}
+
+              {isVideoOff && (
+                <div className="absolute inset-0 bg-stone-900/70 backdrop-blur-sm flex items-center justify-center">
+                  <div className="text-center text-white/90">
+                    <VideoOff className="mx-auto mb-3" size={34} />
+                    <p className="text-sm font-bold uppercase tracking-widest">
+                      Camera is off
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Overlay */}
               <div className="absolute top-6 left-6 bg-surface-bright/80 backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-2 border border-outline-variant/20">
@@ -128,11 +246,17 @@ export function LobbyScreen() {
 
               {/* Controls */}
               <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6 px-8 py-4 bg-surface-bright/90 backdrop-blur-xl rounded-full border border-outline-variant/20 shadow-2xl">
-                <LobbyControl icon={<Mic size={24} />} label="Mute" active />
                 <LobbyControl
-                  icon={<Video size={24} />}
-                  label="Stop Video"
-                  active
+                  icon={isMuted ? <MicOff size={24} /> : <Mic size={24} />}
+                  label={isMuted ? "Unmute" : "Mute"}
+                  active={!isMuted}
+                  onClick={() => setIsMuted((prev) => !prev)}
+                />
+                <LobbyControl
+                  icon={isVideoOff ? <VideoOff size={24} /> : <Video size={24} />}
+                  label={isVideoOff ? "Start Video" : "Stop Video"}
+                  active={!isVideoOff}
+                  onClick={() => setIsVideoOff((prev) => !prev)}
                 />
                 <div className="w-px h-10 bg-outline-variant/30 mx-2" />
                 <LobbyControl icon={<Settings size={24} />} label="Setup" />
@@ -191,9 +315,19 @@ export function LobbyScreen() {
   );
 }
 
-function LobbyControl({ icon, label, active = false }: any) {
+function LobbyControl({
+  icon,
+  label,
+  active = false,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active?: boolean;
+  onClick?: () => void;
+}) {
   return (
-    <button className="flex flex-col items-center gap-1.5 group">
+    <button onClick={onClick} className="flex flex-col items-center gap-1.5 group">
       <div
         className={`w-14 h-14 rounded-full flex items-center justify-center transition-all active:scale-90 ${
           active

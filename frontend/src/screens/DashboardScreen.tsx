@@ -60,7 +60,7 @@ export function DashboardScreen() {
 
         <div className="px-6 mb-8 space-y-2">
           <Button
-            onClick={() => {}}
+            onClick={() => navigate("/lobby")}
             className="w-full h-12 bg-primary text-white rounded-full font-bold shadow-lg shadow-primary/20 flex items-center justify-center gap-2"
           >
             <Plus size={20} />
@@ -117,8 +117,8 @@ export function DashboardScreen() {
             </p>
           </div>
           <Button
-            onClick={() => {}}
-            className="h-14 px-8 bg-gradient-to-r from-primary to-primary-container text-white rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3 group"
+            onClick={() => navigate("/lobby")}
+            className="h-14 px-8 bg-linear-to-r from-primary to-primary-container text-white rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3 group"
           >
             <Plus
               className="group-hover:rotate-90 transition-transform"
@@ -235,7 +235,7 @@ export function DashboardScreen() {
                 time="10:00 AM - 11:30 AM"
                 location="Studio A"
                 participants={4}
-                onJoin={() => {}}
+                onJoin={() => navigate("/lobby")}
                 active
               />
               <MeetingCard
@@ -245,7 +245,7 @@ export function DashboardScreen() {
                 time="2:00 PM - 3:30 PM"
                 location="Digital Hearth 1"
                 participants={12}
-                onJoin={() => {}}
+                onJoin={() => navigate("/lobby")}
               />
               <MeetingCard
                 date="09"
@@ -254,12 +254,12 @@ export function DashboardScreen() {
                 time="09:00 AM - 10:00 AM"
                 location="Main Hall"
                 participants={2}
-                onJoin={() => {}}
+                onJoin={() => navigate("/lobby")}
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
-              <div className="bg-gradient-to-br from-primary to-primary-container p-8 rounded-3xl text-white flex flex-col justify-between aspect-square md:aspect-auto">
+              <div className="bg-linear-to-br from-primary to-primary-container p-8 rounded-3xl text-white flex flex-col justify-between aspect-square md:aspect-auto">
                 <LayoutDashboard size={32} />
                 <div>
                   <h3 className="text-2xl font-bold">Total Meeting Time</h3>
