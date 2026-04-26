@@ -45,9 +45,30 @@ const updateSocketRoom = async (socketId, userId, roomCode) => {
     }
 };
 
+const removeUserFromRoom = async (roomCode, userId) => {
+    try {
+        // Lệnh sRem (Set Remove) sẽ tìm và xóa user khỏi tập hợp
+        await redisClient.sRem(`room:${roomCode}:members`, userId);
+        console.log(`🚪 Đã xóa User [${userId}] khỏi phòng [${roomCode}] trong Redis`);
+    } catch (error) {
+        console.error('❌ Lỗi xóa user khỏi phòng Redis:', error);
+    }
+};
+
+const deleteRoomData = async (roomCode) => {
+    try {
+        await redisClient.del(`room:${roomCode}:members`);
+        console.log(`🧹 Đã dọn dẹp sạch dữ liệu phòng [${roomCode}] trong Redis`);
+    } catch (error) {
+        console.error('❌ Lỗi dọn dẹp phòng Redis:', error);
+    }
+};
+
 module.exports = { 
     saveSocketState, 
     removeSocketState, 
     addUserToRoom, 
-    updateSocketRoom 
+    updateSocketRoom,
+    removeUserFromRoom,
+    deleteRoomData
 };

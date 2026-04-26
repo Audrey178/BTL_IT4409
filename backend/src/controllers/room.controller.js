@@ -1,4 +1,5 @@
 const Room = require('../models/room.model');
+const { deleteRoomData } = require('../services/redis.service'); 
 
 // Hàm tạo chuỗi ngẫu nhiên (VD: abc-def-ghi)
 const generateRoomCode = () => {
@@ -33,4 +34,50 @@ const createRoom = async (req, res) => {
     }
 };
 
+// ==========================================
+// API: KẾT THÚC PHÒNG HỌP
+// ==========================================
+const endRoom = async (req, res) => {
+    try {
+        const { roomCode } = req.params;
+        const userId = req.user.id; // Lấy từ verifyToken
+
+        // 1. Kiểm tra phòng và quyền Chủ phòng
+        const room = await Room.findOne({ room_code: roomCode });
+        if (!room) {
+            return res.status(404).json({ message: 'Không tìm thấy phòng!' });
+        }
+        if (room.host_id.toString() !== userId) {
+            return res.status(403).json({ message: 'Chỉ chủ phòng mới có quyền kết thúc cuộc họp!' });
+        }
+        if (room.status === 'ended') {
+            return res.status(400).json({ message: 'Phòng này đã kết thúc từ trước rồi.' });
+        }
+
+        // 2. Đổi trạng thái trong MongoDB
+        room.status = 'ended';
+        await room.save();
+
+        // 3. Dọn rác trong Redis
+        await deleteRoomData(roomCode);
+
+        // 4. Lấy cái 'io' mà ta đã bơm vào app ở Thao tác 1
+        const io = req.app.get('io');
+
+        // Báo tử cho cả phòng biết
+        io.to(roomCode).emit('room:ended', { 
+            message: 'Cuộc họp đã bị kết thúc bởi chủ phòng.' 
+        });
+
+        // Tuyệt chiêu cuối: Rút phích cắm tất cả mọi người đang ở trong phòng này
+        io.in(roomCode).disconnectSockets();
+
+        res.status(200).json({ message: 'Đã kết thúc cuộc họp và giải tán tất cả thành viên!' });
+
+    } catch (error) {
+        res.status(500).json({ message: 'Lỗi khi kết thúc phòng', error: error.message });
+    }
+};
+
+module.exports = { createRoom, endRoom };
 module.exports = { createRoom };

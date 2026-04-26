@@ -2,7 +2,10 @@ require('dotenv').config();
 const http = require('http');
 const app = require('./app.js');
 const connectDB = require('./config/mongodb.js'); // Import hàm kết nối
-const { connectRedis } = require('./config/redis.js')
+const httpServer = http.createServer(app);
+const io = initSocket(httpServer);
+const { connectRedis } = require('./config/redis.js');
+app.set('io', io);
 const { initSocket } = require('./sockets/index.js');
 
 const PORT = process.env.PORT || 5000;

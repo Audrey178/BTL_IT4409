@@ -61,6 +61,7 @@ const initSocket = (httpServer) => {
         // Lưu ngay trạng thái "Đang online" vào Redis
         // Lúc này họ mới vào mạng, chưa vào phòng nên roomCode = null
         saveSocketState(socket.id, socket.userId, null);
+        socket.join(socket.userId);
         roomHandler(io, socket);
         webrtcHandler(io, socket);
         
