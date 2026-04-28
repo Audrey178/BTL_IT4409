@@ -108,8 +108,8 @@ export function DashboardScreen() {
                   <button
                     key={day}
                     className={`p-2 rounded-xl text-sm font-medium transition-colors ${day === 2
-                        ? "bg-primary text-white font-bold"
-                        : "hover:bg-primary-fixed"
+                      ? "bg-primary text-white font-bold"
+                      : "hover:bg-primary-fixed"
                       } ${[4, 9].includes(day) ? "text-primary font-bold" : ""}`}
                   >
                     {day}
@@ -194,7 +194,7 @@ export function DashboardScreen() {
             </div>
             {/* stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
-              <div className="bg-gradient-to-br from-primary to-primary-container p-8 rounded-3xl text-white flex flex-col justify-between aspect-square md:aspect-auto">
+              <div className="bg-linear-to-br from-primary to-primary-container p-8 rounded-3xl text-white flex flex-col justify-between aspect-square md:aspect-auto">
                 <LayoutDashboard size={32} />
                 <div>
                   <h3 className="text-2xl font-bold">Total Meeting Time</h3>

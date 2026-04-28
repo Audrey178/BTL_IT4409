@@ -17,6 +17,7 @@ const signInSchema = z.object({
 type SignInFormValue = z.infer<typeof signInSchema>;
 
 export function LoginScreen() {
+  const { signIn } = useAuthStore();
   const navigate = useNavigate();
   const {
     register,
@@ -25,8 +26,6 @@ export function LoginScreen() {
     formState: { errors, isSubmitting },
   } = useForm<SignInFormValue>({ resolver: zodResolver(signInSchema) });
   const [isHide, setIsHide] = useState(true);
-
-  const { signIn } = useAuthStore();
 
   const onSubmit = async (data: SignInFormValue) => {
     const { email, password } = data;

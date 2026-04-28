@@ -13,28 +13,29 @@ export const useMediaStore = create<MediaState>((set, get) => ({
   localStream: null,
   isAudioMuted: false,
   isVideoMuted: false,
-  
+
   setLocalStream: (stream) => {
     set({ localStream: stream });
   },
-  
+
   toggleAudio: () => {
-    const { localStream, isAudioMuted } = get();
+    const { localStream } = get();
+
     if (localStream) {
       localStream.getAudioTracks().forEach((track) => {
-        track.enabled = isAudioMuted; // Toggle if muted -> now enabled=true, meaning unmuted
+        track.enabled = !track.enabled;
       });
-      set({ isAudioMuted: !isAudioMuted });
+      set(state => ({ isAudioMuted: !state.isAudioMuted }));
     }
   },
-  
+
   toggleVideo: () => {
-    const { localStream, isVideoMuted } = get();
+    const { localStream } = get();
     if (localStream) {
       localStream.getVideoTracks().forEach((track) => {
-        track.enabled = isVideoMuted;
+        track.enabled = !track.enabled;
       });
-      set({ isVideoMuted: !isVideoMuted });
+      set(state => ({ isVideoMuted: !state.isVideoMuted }));
     }
   }
 }));

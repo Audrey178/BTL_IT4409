@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useSocket } from "@/hooks/useSocket";
 import { useWebRTC } from "@/hooks/useWebRTC";
@@ -16,20 +16,49 @@ import {
   PhoneOff,
   MessageSquare,
   Users,
+  Bell,
+  HelpCircle,
   X,
   Send,
   XCircle,
   Sparkles,
   CheckCircle2,
+  AlertCircle,
+  Badge,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { WaitingRoomPanel } from "@/components/pages/meeting/WaitingRoomPanel";
 import { ROOM_EVENTS } from "@/socket/events";
 
+
+type MeetingMediaPreferences = {
+  isMuted: boolean;
+  isVideoOff: boolean;
+  displayName?: string;
+};
+
+function getInitialMediaPreferences(): MeetingMediaPreferences {
+  const fallback = { isMuted: false, isVideoOff: false, displayName: "" };
+
+  const savedPreferences = sessionStorage.getItem("meeting-media-preferences");
+  if (!savedPreferences) {
+    return fallback;
+  }
+
+  try {
+    const parsed = JSON.parse(savedPreferences);
+    return {
+      isMuted: Boolean(parsed.isMuted),
+      isVideoOff: Boolean(parsed.isVideoOff),
+      displayName: typeof parsed.displayName === "string" ? parsed.displayName : "",
+    };
+  } catch {
+    return fallback;
+  }
+}
 
 export function MeetingScreen() {
   const { id: roomCode } = useParams<{ id: string }>();
@@ -48,6 +77,9 @@ export function MeetingScreen() {
 
   const [showChat, setShowChat] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isCameraReady, setIsCameraReady] = useState(false);
+  const selfPreviewRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     if (!hostId) {
@@ -92,15 +124,16 @@ export function MeetingScreen() {
             </Avatar>
             <span className="font-bold text-orange-900 text-sm">
               {authUser?.full_name || "You"}
-            </span>
+            </span >
             {isHost && (
               <Badge className="bg-primary/10 text-primary hover:bg-primary/10 text-[10px] px-2">
                 Host
               </Badge>
-            )}
-          </div>
-        </div>
-      </header>
+            )
+            }
+          </div >
+        </div >
+      </header >
 
       <div className="flex-1 flex overflow-hidden p-6 gap-6 relative">
         {/* Video Grid */}
@@ -315,23 +348,42 @@ export function MeetingScreen() {
 
         {/* Self Preview Floating */}
         <div className="absolute right-8 bottom-8 w-48 aspect-video rounded-2xl overflow-hidden border-2 border-primary shadow-2xl">
-          {localStream && !isVideoMuted ? (
-            <SelfPreviewVideo stream={localStream} />
-          ) : (
-            <div className="w-full h-full bg-stone-900 flex items-center justify-center">
-              <Avatar className="w-12 h-12">
-                <AvatarFallback className="bg-surface-container-highest text-on-surface-variant text-lg">
-                  {authUser?.full_name?.[0]?.toUpperCase() || "U"}
-                </AvatarFallback>
-              </Avatar>
+          {
+            localStream && !isVideoMuted && !cameraError ? (
+              <SelfPreviewVideo stream={localStream} />
+            ) : (
+              <div className="w-full h-full bg-stone-900 flex items-center justify-center">
+                <Avatar className="w-12 h-12">
+                  <AvatarFallback className="bg-surface-container-highest text-on-surface-variant text-lg">
+                    {authUser?.full_name?.[0]?.toUpperCase() || "U"}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+            )
+          }
+
+
+          {!isCameraReady && !cameraError && (
+            <div className="absolute inset-0 bg-surface/70 backdrop-blur-sm flex items-center justify-center text-[10px] font-bold tracking-widest uppercase text-on-surface-variant">
+              Loading...
             </div>
           )}
+
+          {isVideoOff && (
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center text-white text-center">
+              <div>
+                <VideoOff className="mx-auto mb-1" size={18} />
+                <p className="text-[10px] font-bold uppercase tracking-widest">Camera Off</p>
+              </div>
+            </div>
+          )}
+
           <div className="absolute bottom-2 left-2 bg-black/40 backdrop-blur-md px-2 py-1 rounded-lg text-[10px] text-white font-bold">
-            You (Live)
+            {presenterName} {isVideoOff ? "(Hidden)" : "(Live)"}
           </div>
-        </div>
-      </div>
-    </div>
+        </div >
+      </div >
+    </div >
   );
 }
 

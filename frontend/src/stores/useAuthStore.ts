@@ -35,9 +35,9 @@ export const useAuthStore = create<AuthState>()(
         try {
           set({ loading: true });
           const response = await authService.signIn(email, password);
-          
+
           if (response.success && response.data) {
-            set({ 
+            set({
               accessToken: response.data.access_token || response.data.accessToken,
               refreshToken: response.data.refresh_token || response.data.refreshToken,
               user: response.data.user
@@ -67,48 +67,48 @@ export const useAuthStore = create<AuthState>()(
 
       logout: async () => {
         try {
-            set({ loading: true });
-            await authService.logout().catch(() => {});
+          set({ loading: true });
+          await authService.logout().catch(() => { });
         } finally {
-            get().clearState();
-            set({ loading: false });
-            toast.success("Logged out successfully");
+          get().clearState();
+          set({ loading: false });
+          toast.success("Logged out successfully");
         }
       },
 
       fetchProfile: async () => {
         try {
-            const response = await authService.getMe();
-            const user = response.data?.user || response.user || response; 
-            if(user && user.email) set({ user });
-        } catch(error) {
-            console.error("Failed to fetch profile", error);
+          const response = await authService.getMe();
+          const user = response.data?.user || response.user || response;
+          if (user && user.email) set({ user });
+        } catch (error) {
+          console.error("Failed to fetch profile", error);
         }
       },
 
       updateProfile: async (data) => {
         try {
-            set({ loading: true });
-            const response = await authService.updateMe(data);
-            const user = response.data?.user || response.user || response;
-            if(user && user.email) {
-                set({ user: { ...get().user, ...user } });
-                toast.success("Profile updated successfully!");
-            }
-        } catch(error: any) {
-            console.error(error);
-            toast.error(error.response?.data?.message || "Failed to update profile");
+          set({ loading: true });
+          const response = await authService.updateMe(data);
+          const user = response.data?.user || response.user || response;
+          if (user && user.email) {
+            set({ user: { ...get().user, ...user } });
+            toast.success("Profile updated successfully!");
+          }
+        } catch (error: any) {
+          console.error(error);
+          toast.error(error.response?.data?.message || "Failed to update profile");
         } finally {
-            set({ loading: false });
+          set({ loading: false });
         }
       }
     }),
     {
       name: "auth-storage",
-      partialize: (state) => ({ 
-        accessToken: state.accessToken, 
-        refreshToken: state.refreshToken, 
-        user: state.user 
+      partialize: (state) => ({
+        accessToken: state.accessToken,
+        refreshToken: state.refreshToken,
+        user: state.user
       }),
     }
   )
