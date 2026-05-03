@@ -12,7 +12,9 @@ import { roomService } from "@/services/roomService";
 import type { Room } from "@/types";
 import {
   Mic,
+  MicOff,
   Video,
+  VideoOff,
   Settings,
   ChevronLeft,
   Bell,
@@ -102,10 +104,10 @@ export function LobbyScreen() {
 
   // Attach local stream to video element
   useEffect(() => {
-    if (videoRef.current && localStream) {
+    if (videoRef.current && localStream && !isVideoMuted) {
       videoRef.current.srcObject = localStream;
     }
-  }, [localStream]);
+  }, [localStream, isVideoMuted]);
 
   // Listen for socket events when joining
   useEffect(() => {
@@ -346,7 +348,7 @@ export function LobbyScreen() {
                 />
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center bg-stone-900 text-stone-500">
-                  <Video size={64} className="mb-4 opacity-50" />
+                  <VideoOff size={64} className="mb-4 opacity-50" />
                   <span>Camera is off</span>
                 </div>
               )}
@@ -362,13 +364,13 @@ export function LobbyScreen() {
               {/* Controls */}
               <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6 px-8 py-4 bg-surface-bright/90 backdrop-blur-xl rounded-full border border-outline-variant/20 shadow-2xl">
                 <LobbyControl
-                  icon={<Mic size={24} />}
+                  icon={isAudioMuted ? <MicOff size={24} /> : <Mic size={24} />}
                   label={isAudioMuted ? "Unmute" : "Mute"}
                   active={!isAudioMuted}
                   onClick={toggleAudio}
                 />
                 <LobbyControl
-                  icon={<Video size={24} />}
+                  icon={isVideoMuted ? <VideoOff size={24} /> : <Video size={24} />}
                   label={isVideoMuted ? "Start Video" : "Stop Video"}
                   active={!isVideoMuted}
                   onClick={toggleVideo}

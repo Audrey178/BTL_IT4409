@@ -30,9 +30,13 @@ export function useWebRTC(roomCode: string | null) {
     const peer = new RTCPeerConnection(ICE_SERVERS);
     peersRef.current.set(userId, peer);
 
-    if (localStream) {
-      localStream.getTracks().forEach(track => {
-        peer.addTrack(track, localStream);
+    // Determine which stream to send: screen share or camera
+    const { screenStream, isScreenSharing } = useMediaStore.getState();
+    const streamToSend = isScreenSharing && screenStream ? screenStream : localStream;
+
+    if (streamToSend) {
+      streamToSend.getTracks().forEach(track => {
+        peer.addTrack(track, streamToSend);
       });
     }
 
@@ -171,6 +175,16 @@ export function useWebRTC(roomCode: string | null) {
     };
   }, [socket, createPeer, addParticipant, myUserId, roomCode]);
 
+  // Replace video track on all peer connections (for screen share)
+  const replaceVideoTrack = useCallback((newTrack: MediaStreamTrack) => {
+    peersRef.current.forEach((peer) => {
+      const sender = peer.getSenders().find(s => s.track?.kind === 'video');
+      if (sender) {
+        sender.replaceTrack(newTrack);
+      }
+    });
+  }, []);
+
   // Clean up all peers on unmount
   useEffect(() => {
     return () => {
@@ -179,5 +193,5 @@ export function useWebRTC(roomCode: string | null) {
     };
   }, []);
 
-  return null;
+  return { replaceVideoTrack };
 }

@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { getSocket } from '@/socket/socket';
-import { ROOM_EVENTS } from '@/socket/events';
+import { ROOM_EVENTS, MEDIA_EVENTS } from '@/socket/events';
 import { useMeetingStore } from '@/stores/meetingStore';
 import { useAuthStore } from '@/stores/useAuthStore';
 import type { WaitingUser } from '@/types';
@@ -10,7 +10,7 @@ import type { WaitingUser } from '@/types';
 /**
  * Hook xử lý tất cả room-level socket events trong MeetingScreen.
  * Quản lý waiting list (host-side), user join/leave notifications,
- * force disconnect, và room ended events.
+ * force disconnect, room ended events, và media state sync.
  */
 export function useRoomEvents(roomCode: string | null) {
   const socket = getSocket();
@@ -21,6 +21,8 @@ export function useRoomEvents(roomCode: string | null) {
     removeWaitingUser,
     addParticipant,
     removeParticipant,
+    updateParticipantMedia,
+    setScreenSharingUserId,
     setStatus,
     reset,
   } = useMeetingStore();
@@ -133,12 +135,44 @@ export function useRoomEvents(roomCode: string | null) {
       navigate('/', { replace: true });
     };
 
+    // =========================================================================
+    // MEDIA STATE SYNC — mic/cam toggle + screen share
+    // =========================================================================
+
+    const handleMediaToggle = (data: {
+      userId: string;
+      isAudioMuted: boolean;
+      isVideoMuted: boolean;
+    }) => {
+      if (data.userId === myUserId) return;
+      updateParticipantMedia(data.userId, {
+        isAudioMuted: data.isAudioMuted,
+        isVideoMuted: data.isVideoMuted,
+      });
+    };
+
+    const handleScreenShareStart = (data: {
+      userId: string;
+      userName?: string;
+    }) => {
+      setScreenSharingUserId(data.userId);
+      const name = data.userName || 'Someone';
+      toast.info(`${name} is sharing their screen`);
+    };
+
+    const handleScreenShareStop = (data: { userId: string }) => {
+      setScreenSharingUserId(null);
+    };
+
     socket.on(ROOM_EVENTS.REQUEST_APPROVAL, handleRequestApproval);
     socket.on(ROOM_EVENTS.USER_JOINED, handleUserJoined);
     socket.on(ROOM_EVENTS.USER_LEFT, handleUserLeft);
     socket.on(ROOM_EVENTS.USER_REJECTED, handleUserRejected);
     socket.on(ROOM_EVENTS.FORCE_DISCONNECT, handleForceDisconnect);
     socket.on(ROOM_EVENTS.ENDED, handleRoomEnded);
+    socket.on(MEDIA_EVENTS.TOGGLE, handleMediaToggle);
+    socket.on(MEDIA_EVENTS.SCREEN_SHARE_START, handleScreenShareStart);
+    socket.on(MEDIA_EVENTS.SCREEN_SHARE_STOP, handleScreenShareStop);
 
     return () => {
       socket.off(ROOM_EVENTS.REQUEST_APPROVAL, handleRequestApproval);
@@ -147,6 +181,9 @@ export function useRoomEvents(roomCode: string | null) {
       socket.off(ROOM_EVENTS.USER_REJECTED, handleUserRejected);
       socket.off(ROOM_EVENTS.FORCE_DISCONNECT, handleForceDisconnect);
       socket.off(ROOM_EVENTS.ENDED, handleRoomEnded);
+      socket.off(MEDIA_EVENTS.TOGGLE, handleMediaToggle);
+      socket.off(MEDIA_EVENTS.SCREEN_SHARE_START, handleScreenShareStart);
+      socket.off(MEDIA_EVENTS.SCREEN_SHARE_STOP, handleScreenShareStop);
     };
   }, [
     socket,
@@ -156,6 +193,8 @@ export function useRoomEvents(roomCode: string | null) {
     removeWaitingUser,
     addParticipant,
     removeParticipant,
+    updateParticipantMedia,
+    setScreenSharingUserId,
     setStatus,
     reset,
     navigate,

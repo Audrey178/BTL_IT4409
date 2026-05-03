@@ -27,6 +27,7 @@ import { getRedisClient } from '../config/redis.js';
 import { handleRoomJoin, handleApproveUser, handleRejectUser, handleUserLeft } from './room.handler.js';
 import { handleWebRTCOffer, handleWebRTCAnswer, handleICECandidate } from './webrtc.handler.js';
 import { handleChatSend, handleChatHistory } from './chat.handler.js';
+import { handleMediaToggle, handleScreenShareStart, handleScreenShareStop } from './media.handler.js';
 
 /**
  * Khởi tạo tất cả Socket.IO event handlers
@@ -132,6 +133,34 @@ export const initializeSocket = (io, redisClient) => {
     // =========================================================================
     // QUẢN LÝ KẾT NỐI
     // =========================================================================
+
+    // =========================================================================
+    // MEDIA EVENTS (MIC/CAM TOGGLE + SCREEN SHARE)
+    // =========================================================================
+
+    /**
+     * Sự kiện: Toggle mic/cam
+     * Dữ liệu: { roomCode, userId, isAudioMuted, isVideoMuted }
+     */
+    socket.on(SOCKET_EVENTS.MEDIA_TOGGLE, (data) => {
+      handleMediaToggle(socket, data);
+    });
+
+    /**
+     * Sự kiện: Bắt đầu screen share
+     * Dữ liệu: { roomCode, userId, userName }
+     */
+    socket.on(SOCKET_EVENTS.MEDIA_SCREEN_SHARE_START, (data) => {
+      handleScreenShareStart(socket, data);
+    });
+
+    /**
+     * Sự kiện: Dừng screen share
+     * Dữ liệu: { roomCode, userId }
+     */
+    socket.on(SOCKET_EVENTS.MEDIA_SCREEN_SHARE_STOP, (data) => {
+      handleScreenShareStop(socket, data);
+    });
 
     /**
      * Sự kiện: Người dùng ngắt kết nối

@@ -52,6 +52,11 @@ export const SOCKET_EVENTS = {
   CHAT_RECEIVE: 'chat:receive',
   CHAT_HISTORY: 'chat:history',
 
+  // Media events
+  MEDIA_TOGGLE: 'media:toggle',
+  MEDIA_SCREEN_SHARE_START: 'media:screen_share_start',
+  MEDIA_SCREEN_SHARE_STOP: 'media:screen_share_stop',
+
   // Attendance events
   ATTENDANCE_CHECK_IN: 'attendance:check_in',
   ATTENDANCE_CHECK_OUT: 'attendance:check_out',

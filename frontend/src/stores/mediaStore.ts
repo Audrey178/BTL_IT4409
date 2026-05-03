@@ -4,15 +4,21 @@ interface MediaState {
   localStream: MediaStream | null;
   isAudioMuted: boolean;
   isVideoMuted: boolean;
+  screenStream: MediaStream | null;
+  isScreenSharing: boolean;
   setLocalStream: (stream: MediaStream | null) => void;
   toggleAudio: () => void;
   toggleVideo: () => void;
+  setScreenStream: (stream: MediaStream | null) => void;
+  setIsScreenSharing: (v: boolean) => void;
 }
 
 export const useMediaStore = create<MediaState>((set, get) => ({
   localStream: null,
   isAudioMuted: false,
   isVideoMuted: false,
+  screenStream: null,
+  isScreenSharing: false,
 
   setLocalStream: (stream) => {
     set({ localStream: stream });
@@ -37,5 +43,13 @@ export const useMediaStore = create<MediaState>((set, get) => ({
       });
       set(state => ({ isVideoMuted: !state.isVideoMuted }));
     }
-  }
+  },
+
+  setScreenStream: (stream) => {
+    set({ screenStream: stream });
+  },
+
+  setIsScreenSharing: (v) => {
+    set({ isScreenSharing: v });
+  },
 }));
