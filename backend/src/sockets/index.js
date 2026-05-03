@@ -4,6 +4,7 @@ const { createAdapter } = require('@socket.io/redis-adapter');
 const { redisClient } = require('../config/redis.js'); 
 const roomHandler = require('./room.handler');
 const webrtcHandler = require('./webrtc.handler');
+const chatHandler = require('./chat.handler');
 
 const initSocket = (httpServer) => {
     const io = new Server(httpServer, {
@@ -64,6 +65,7 @@ const initSocket = (httpServer) => {
         socket.join(socket.userId);
         roomHandler(io, socket);
         webrtcHandler(io, socket);
+        chatHandler(io, socket);
         
         // Khi ngắt kết nối (Tắt tab, mất mạng...)
         socket.on('disconnect', () => {

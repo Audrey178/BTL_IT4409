@@ -64,11 +64,32 @@ const deleteRoomData = async (roomCode) => {
     }
 };
 
+const updateMediaState = async (socketId, audio, video) => {
+    try {
+        // 1. Lấy dữ liệu hiện tại của Socket này ra
+        const stateData = await redisClient.get(`socket:${socketId}`);
+        if (stateData) {
+            const state = JSON.parse(stateData);
+            
+            // 2. Cập nhật thêm thông tin Audio/Video
+            state.audio = audio;
+            state.video = video;
+            
+            // 3. Lưu ngược trở lại vào Redis
+            await redisClient.set(`socket:${socketId}`, JSON.stringify(state), { EX: 86400 });
+            console.log(`🎛️ Cập nhật thiết bị Socket [${socketId}]: Audio=${audio}, Video=${video}`);
+        }
+    } catch (error) {
+        console.error('❌ Lỗi cập nhật trạng thái thiết bị trong Redis:', error);
+    }
+};
+
 module.exports = { 
     saveSocketState, 
     removeSocketState, 
     addUserToRoom, 
     updateSocketRoom,
     removeUserFromRoom,
-    deleteRoomData
+    deleteRoomData,
+    updateMediaState
 };

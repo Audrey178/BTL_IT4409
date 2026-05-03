@@ -1,4 +1,5 @@
 const Room = require('../models/room.model');
+const Message = require('../models/message.model');
 const { deleteRoomData } = require('../services/redis.service'); 
 
 // Hàm tạo chuỗi ngẫu nhiên (VD: abc-def-ghi)
@@ -79,5 +80,27 @@ const endRoom = async (req, res) => {
     }
 };
 
-module.exports = { createRoom, endRoom };
-module.exports = { createRoom };
+// ==========================================
+// API: LẤY LỊCH SỬ TIN NHẮN CỦA PHÒNG
+// ==========================================
+const getChatHistory = async (req, res) => {
+    try {
+        const { roomCode } = req.params;
+
+        // Tìm tất cả tin nhắn thuộc về roomCode này
+        // .sort({ createdAt: 1 }) nghĩa là sắp xếp theo thời gian: Cũ nhất xếp trước, mới nhất xếp sau
+        const messages = await Message.find({ room_code: roomCode })
+            .sort({ createdAt: 1 });
+
+        res.status(200).json({
+            message: 'Lấy lịch sử tin nhắn thành công!',
+            total_messages: messages.length,
+            data: messages
+        });
+
+    } catch (error) {
+        res.status(500).json({ message: 'Lỗi hệ thống khi lấy lịch sử chat', error: error.message });
+    }
+};
+
+module.exports = { createRoom, endRoom, getChatHistory };

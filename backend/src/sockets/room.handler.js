@@ -1,6 +1,7 @@
 const Room = require('../models/room.model');
 const { addUserToRoom, updateSocketRoom } = require('../services/redis.service');
 const { removeUserFromRoom } = require('../services/redis.service');
+const { updateMediaState } = require('../services/redis.service');
 
 module.exports = (io, socket) => {
     
@@ -168,6 +169,74 @@ module.exports = (io, socket) => {
 
         } catch (error) {
             console.error('Lỗi khi kick user:', error);
+        }
+    });
+
+    // ==========================================
+    // LỆNH 4: ĐỒNG BỘ TRẠNG THÁI MIC / CAMERA
+    // ==========================================
+    socket.on('room:toggle_media', async (payload) => {
+        try {
+            // Nhận dữ liệu từ Frontend: Họ đang ở phòng nào, Mic bật hay tắt, Cam bật hay tắt
+            const { roomCode, audio, video } = payload;
+            const userId = socket.userId;
+
+            // 1. Cập nhật trạng thái này vào Redis để lưu vết
+            await updateMediaState(socket.id, audio, video);
+
+            // 2. Phát loa cho TẤT CẢ NHỮNG NGƯỜI KHÁC trong phòng biết
+            // Dùng socket.to() thay vì io.to() để tin nhắn không bị gửi ngược lại cho chính người vừa bấm
+            socket.to(roomCode).emit('room:media_changed', {
+                userId: userId,
+                audio: audio, // true là đang bật, false là đã tắt
+                video: video
+            });
+
+            console.log(`🎙️ User [${userId}] đổi trạng thái: Audio [${audio}], Video [${video}]`);
+
+        } catch (error) {
+            console.error('Lỗi khi đồng bộ thiết bị:', error);
+        }
+    });
+
+    // ==========================================
+    // LỆNH 5: GIƠ TAY PHÁT BIỂU (RAISE HAND)
+    // ==========================================
+    socket.on('room:raise_hand', (payload) => {
+        try {
+            const { roomCode } = payload;
+            const userId = socket.userId;
+
+            // Bắn tín hiệu cho TẤT CẢ những người khác trong phòng
+            socket.to(roomCode).emit('room:hand_raised', {
+                userId: userId,
+                message: `Người dùng ${userId} muốn phát biểu.`
+            });
+
+            console.log(`✋ User [${userId}] đã giơ tay trong phòng [${roomCode}]`);
+
+        } catch (error) {
+            console.error('Lỗi khi giơ tay:', error);
+        }
+    });
+
+    // ==========================================
+    // LỆNH 6: HẠ TAY XUỐNG (LOWER HAND)
+    // ==========================================
+    socket.on('room:lower_hand', (payload) => {
+        try {
+            const { roomCode } = payload;
+            const userId = socket.userId;
+
+            // Bắn tín hiệu xóa biểu tượng giơ tay
+            socket.to(roomCode).emit('room:hand_lowered', {
+                userId: userId
+            });
+
+            console.log(`👇 User [${userId}] đã hạ tay trong phòng [${roomCode}]`);
+
+        } catch (error) {
+            console.error('Lỗi khi hạ tay:', error);
         }
     });
 };
