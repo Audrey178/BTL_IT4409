@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Mic,
@@ -22,6 +22,9 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
+import { useParams } from "react-router-dom";
+import { useWebRTC } from "@/hooks/useWebRTC";
+import { useMediaStore } from "@/stores/mediaStore";
 
 type MeetingMediaPreferences = {
   isMuted: boolean;
@@ -105,6 +108,95 @@ export function MeetingScreen() {
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [showChat, setShowChat] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
+  const [applyOutgoing, setApplyOutgoing] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const offscreenVideoRef = useRef<HTMLVideoElement | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const canvasStreamRef = useRef<MediaStream | null>(null);
+  const params = useParams();
+  const roomId = params.id ?? null;
+  const { replaceOutgoingTrack } = useWebRTC(roomId) as any;
+  const localStream = useMediaStore((s) => s.localStream);
+
+  const startCanvasPipeline = useCallback((filterCss: string) => {
+    if (!localStream || !replaceOutgoingTrack) return;
+
+    // Create offscreen video element
+    let v = offscreenVideoRef.current;
+    if (!v) {
+      v = document.createElement('video');
+      v.autoplay = true;
+      v.muted = true;
+      v.playsInline = true;
+      offscreenVideoRef.current = v;
+    }
+    v.srcObject = localStream;
+
+    // Create canvas
+    let canvas = canvasRef.current;
+    if (!canvas) {
+      canvas = document.createElement('canvas');
+      canvasRef.current = canvas;
+    }
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const draw = () => {
+      if (!v || v.readyState < 2) {
+        rafRef.current = requestAnimationFrame(draw);
+        return;
+      }
+      const w = v.videoWidth || 640;
+      const h = v.videoHeight || 480;
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      ctx.filter = filterCss === 'none' ? 'none' : filterCss;
+      ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+      rafRef.current = requestAnimationFrame(draw);
+    };
+
+    rafRef.current = requestAnimationFrame(draw);
+
+    const stream = (canvas as HTMLCanvasElement).captureStream(30);
+    canvasStreamRef.current = stream;
+
+    const track = stream.getVideoTracks()[0];
+    if (track) {
+      replaceOutgoingTrack(track);
+    }
+  }, [localStream, replaceOutgoingTrack]);
+
+  const stopCanvasPipeline = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    if (canvasStreamRef.current) {
+      canvasStreamRef.current.getTracks().forEach(t => t.stop());
+      canvasStreamRef.current = null;
+    }
+    if (replaceOutgoingTrack) {
+      // revert to original local video track
+      const orig = localStream?.getVideoTracks()?.[0] ?? null;
+      replaceOutgoingTrack(orig ?? null);
+    }
+  }, [localStream, replaceOutgoingTrack]);
+
+  useEffect(() => {
+    if (applyOutgoing) {
+      const filterCss = VIDEO_FILTERS[selectedFilter].css;
+      startCanvasPipeline(filterCss);
+    } else {
+      stopCanvasPipeline();
+    }
+    return () => {
+      // cleanup on unmount
+      stopCanvasPipeline();
+    };
+  }, [applyOutgoing, selectedFilter, startCanvasPipeline, stopCanvasPipeline]);
 
   return (
     <div className="h-screen flex flex-col bg-surface overflow-hidden">
@@ -242,6 +334,13 @@ export function MeetingScreen() {
                     <Send size={18} />
                   </button>
                 </div>
+              </div>
+              <div className="pt-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-semibold">Apply Filter to Outgoing Stream</label>
+                  <Switch checked={applyOutgoing} onCheckedChange={(v) => setApplyOutgoing(Boolean(v))} />
+                </div>
+                <p className="text-xs text-on-surface-variant mt-2">When enabled, selected studio filter is rendered to a canvas and sent to peers instead of the raw camera.</p>
               </div>
             </motion.aside>
           )}

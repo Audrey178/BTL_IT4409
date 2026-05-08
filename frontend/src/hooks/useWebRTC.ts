@@ -50,6 +50,7 @@ export function useWebRTC(roomCode: string | null) {
   const { addParticipant, removeParticipant, updateParticipantStream } = useMeetingStore();
   const currentUserId = useAuthStore((state) => state.user?._id);
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+  const outgoingTrackRef = useRef<MediaStreamTrack | null>(null);
 
   const createPeer = useCallback((userId: string, isInitiator: boolean) => {
     const existingPeer = peersRef.current.get(userId);
@@ -61,8 +62,15 @@ export function useWebRTC(roomCode: string | null) {
     peersRef.current.set(userId, peer);
 
     if (localStream) {
+      // If there's an overridden outgoing video track (canvas pipeline), add it instead of the raw local video track
+      const outVideoTrack = outgoingTrackRef.current;
       localStream.getTracks().forEach(track => {
-        peer.addTrack(track, localStream);
+        if (track.kind === 'video' && outVideoTrack) {
+          const outStream = new MediaStream([outVideoTrack]);
+          peer.addTrack(outVideoTrack, outStream);
+        } else {
+          peer.addTrack(track, localStream);
+        }
       });
     }
 
@@ -94,6 +102,24 @@ export function useWebRTC(roomCode: string | null) {
 
     return peer;
   }, [localStream, socket, updateParticipantStream]);
+
+  const replaceOutgoingTrack = useCallback((newTrack: MediaStreamTrack | null) => {
+    outgoingTrackRef.current = newTrack;
+    peersRef.current.forEach((peer) => {
+      try {
+        const sender = peer.getSenders().find(s => s.track && s.track.kind === 'video');
+        if (sender) {
+          if (newTrack) {
+            sender.replaceTrack(newTrack);
+          } else if (localStream && localStream.getVideoTracks().length) {
+            sender.replaceTrack(localStream.getVideoTracks()[0]);
+          }
+        }
+      } catch (err) {
+        console.error('Error replacing outgoing track for peer', err);
+      }
+    });
+  }, [localStream]);
 
   useEffect(() => {
     if (!roomCode) return;
@@ -188,5 +214,5 @@ export function useWebRTC(roomCode: string | null) {
     };
   }, []);
 
-  return null;
+  return { replaceOutgoingTrack };
 }
