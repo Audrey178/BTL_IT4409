@@ -126,6 +126,7 @@ export function MeetingScreen() {
   const { replaceOutgoingTrack } = useWebRTC(roomId) as any;
   const { localStream, isAudioMuted, isVideoMuted, toggleAudio, toggleVideo } = useMediaStore();
   const presenterName = useMeetingStore((s) => s.participants.find((p: any) => p.isHost)?.fullName ?? 'Host');
+  const currentVideoFilter = VIDEO_FILTERS[selectedFilter].css;
 
   const startCanvasPipeline = useCallback((filterCss: string) => {
     if (!localStream || !replaceOutgoingTrack) return;
