@@ -108,12 +108,21 @@ export function useWebRTC(roomCode: string | null) {
     peersRef.current.forEach((peer) => {
       try {
         const sender = peer.getSenders().find(s => s.track && s.track.kind === 'video');
+        const fallbackTrack = localStream?.getVideoTracks()?.[0] ?? null;
+
         if (sender) {
           if (newTrack) {
             sender.replaceTrack(newTrack);
-          } else if (localStream && localStream.getVideoTracks().length) {
-            sender.replaceTrack(localStream.getVideoTracks()[0]);
+          } else {
+            sender.replaceTrack(fallbackTrack);
           }
+          return;
+        }
+
+        // If no sender exists (e.g. peer was created before camera track was ready), add one now.
+        const trackToAdd = newTrack ?? fallbackTrack;
+        if (trackToAdd) {
+          peer.addTrack(trackToAdd, new MediaStream([trackToAdd]));
         }
       } catch (err) {
         console.error('Error replacing outgoing track for peer', err);
