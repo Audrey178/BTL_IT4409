@@ -25,6 +25,7 @@ import { Switch } from "@/components/ui/switch";
 import { useParams } from "react-router-dom";
 import { useWebRTC } from "@/hooks/useWebRTC";
 import { useMediaStore } from "@/stores/mediaStore";
+import { useMeetingStore } from "@/stores/meetingStore";
 
 type MeetingMediaPreferences = {
   isMuted: boolean;
@@ -108,6 +109,13 @@ export function MeetingScreen() {
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [showChat, setShowChat] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
+  const [selectedFilter, setSelectedFilter] = useState<VideoFilterKey>("original");
+  const [faceOverlayEnabled, setFaceOverlayEnabled] = useState(false);
+  const [faceDetectionSupported, setFaceDetectionSupported] = useState(false);
+  const [faceBoxes, setFaceBoxes] = useState<FaceBox[]>([]);
+  const selfPreviewRef = useRef<HTMLVideoElement | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isCameraReady, setIsCameraReady] = useState(false);
   const [applyOutgoing, setApplyOutgoing] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const offscreenVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -116,7 +124,8 @@ export function MeetingScreen() {
   const params = useParams();
   const roomId = params.id ?? null;
   const { replaceOutgoingTrack } = useWebRTC(roomId) as any;
-  const localStream = useMediaStore((s) => s.localStream);
+  const { localStream, isAudioMuted, isVideoMuted, toggleAudio, toggleVideo } = useMediaStore();
+  const presenterName = useMeetingStore((s) => s.participants.find((p: any) => p.isHost)?.fullName ?? 'Host');
 
   const startCanvasPipeline = useCallback((filterCss: string) => {
     if (!localStream || !replaceOutgoingTrack) return;
