@@ -272,7 +272,7 @@ export function MeetingScreen() {
             src="https://picsum.photos/seed/david/800/600"
           />
           <div className="relative rounded-3xl overflow-hidden bg-stone-900 shadow-sm flex items-center justify-center">
-            <div className="absolute inset-0 opacity-50 bg-gradient-to-br from-orange-900 to-stone-900 flex flex-col items-center justify-center text-center p-8">
+              <div className="absolute inset-0 opacity-50 bg-linear-to-br from-orange-900 to-stone-900 flex flex-col items-center justify-center text-center p-8">
               <ScreenShare size={64} className="text-orange-200 mb-4" />
               <h3 className="text-orange-50 font-bold text-xl">
                 Presentation in Progress

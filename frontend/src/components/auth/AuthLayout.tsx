@@ -94,7 +94,7 @@ export function AuthLayout({ children, title, description }: AuthLayoutProps) {
                 animate={{ opacity: 1, scale: 1, rotate: -3 }}
                 transition={{ delay: 0.6 }}
                 whileHover={{ rotate: 0 }}
-                className="bg-gradient-to-br from-primary-container to-primary rounded-[2rem] p-6 text-white shadow-2xl shadow-primary/30 transition-all duration-500"
+                className="bg-linear-to-br from-primary-container to-primary rounded-[2rem] p-6 text-white shadow-2xl shadow-primary/30 transition-all duration-500"
               >
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-md">
