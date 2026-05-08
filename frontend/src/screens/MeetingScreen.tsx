@@ -109,7 +109,22 @@ export function MeetingScreen() {
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [showChat, setShowChat] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedFilter, setSelectedFilter] = useState<VideoFilterKey>("original");
+  const getInitialFilter = () => {
+    try {
+      const url = new URL(window.location.href);
+      const f = url.searchParams.get('filter');
+      if (f && (f === 'original' || f === 'warm' || f === 'mono' || f === 'cool' || f === 'golden')) {
+        return f as VideoFilterKey;
+      }
+    } catch {}
+    const saved = sessionStorage.getItem('selectedFilter');
+    if (saved && (saved === 'original' || saved === 'warm' || saved === 'mono' || saved === 'cool' || saved === 'golden')) {
+      return saved as VideoFilterKey;
+    }
+    return 'original' as VideoFilterKey;
+  };
+
+  const [selectedFilter, setSelectedFilter] = useState<VideoFilterKey>(getInitialFilter);
   const [faceOverlayEnabled, setFaceOverlayEnabled] = useState(false);
   const [faceDetectionSupported, setFaceDetectionSupported] = useState(false);
   const [faceBoxes, setFaceBoxes] = useState<FaceBox[]>([]);
@@ -127,6 +142,20 @@ export function MeetingScreen() {
   const { localStream, isAudioMuted, isVideoMuted, toggleAudio, toggleVideo } = useMediaStore();
   const presenterName = useMeetingStore((s) => s.participants.find((p: any) => p.isHost)?.fullName ?? 'Host');
   const currentVideoFilter = VIDEO_FILTERS[selectedFilter].css;
+
+  useEffect(() => {
+    // apply to self preview element
+    if (selfPreviewRef.current) {
+      selfPreviewRef.current.style.filter = VIDEO_FILTERS[selectedFilter].css;
+    }
+    // persist and update URL
+    try {
+      sessionStorage.setItem('selectedFilter', selectedFilter);
+      const url = new URL(window.location.href);
+      url.searchParams.set('filter', selectedFilter);
+      window.history.replaceState({}, '', url.toString());
+    } catch {}
+  }, [selectedFilter]);
 
   const startCanvasPipeline = useCallback((filterCss: string) => {
     if (!localStream || !replaceOutgoingTrack) return;
