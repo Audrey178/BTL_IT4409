@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { useNavigate } from "react-router-dom";
-import { useMedia } from "@/hooks/useMedia";
-import { useMediaStore } from "@/stores/mediaStore";
-import { getSocket } from "@/socket/socket";
 import {
   Mic,
   MicOff,
@@ -13,99 +9,31 @@ import {
   ChevronLeft,
   Bell,
   HelpCircle,
-  AlertCircle,
 } from "lucide-react";
+import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { useMedia } from "@/hooks/useMedia";
+import { useMediaStore } from "@/stores/mediaStore";
+
+type MeetingMediaPreferences = {
+  displayName: string;
+  isMuted: boolean;
+  isVideoOff: boolean;
+};
 
 export function LobbyScreen() {
   const navigate = useNavigate();
-  const [displayName, setDisplayName] = useState("");
-  const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
-  const [cameraError, setCameraError] = useState<string | null>(null);
-  const [isLoadingCamera, setIsLoadingCamera] = useState(true);
-  const previewRef = useRef<HTMLVideoElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const initializePreview = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true,
-        });
-
-        if (!isMounted) {
-          stream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-
-        streamRef.current = stream;
-        if (previewRef.current) {
-          previewRef.current.srcObject = stream;
-        }
-      } catch {
-        if (isMounted) {
-          setCameraError(
-            "Khong the truy cap camera. Vui long kiem tra quyen truy cap tren trinh duyet."
-          );
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoadingCamera(false);
-        }
-      }
-    };
-
-    initializePreview();
-
-    return () => {
-      isMounted = false;
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    const stream = streamRef.current;
-    if (!stream) {
-      return;
-    }
-
-    stream.getAudioTracks().forEach((track) => {
-      track.enabled = !isMuted;
-    });
-  }, [isMuted]);
-
-  useEffect(() => {
-    const stream = streamRef.current;
-    if (!stream) {
-      return;
-    }
-
-    stream.getVideoTracks().forEach((track) => {
-      track.enabled = !isVideoOff;
-    });
-  }, [isVideoOff]);
-
-  const handleJoin = () => {
-    sessionStorage.setItem(
-      "meeting-media-preferences",
-      JSON.stringify({
-        isMuted,
-        isVideoOff,
-        displayName,
-      })
-    );
-    navigate("/meeting");
-  };
-
   const { requestMedia } = useMedia();
-  const { localStream, isAudioMuted, isVideoMuted, toggleAudio, toggleVideo } = useMediaStore();
+  const {
+    localStream,
+    isAudioMuted,
+    isVideoMuted,
+    toggleAudio,
+    toggleVideo,
+  } = useMediaStore();
+  const [displayName, setDisplayName] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -117,6 +45,22 @@ export function LobbyScreen() {
       videoRef.current.srcObject = localStream;
     }
   }, [localStream]);
+
+  const handleJoin = () => {
+    const preferences: MeetingMediaPreferences = {
+      displayName,
+      isMuted: isAudioMuted,
+      isVideoOff: isVideoMuted,
+    };
+
+    sessionStorage.setItem(
+      "meeting-media-preferences",
+      JSON.stringify(preferences)
+    );
+
+    navigate("/meeting/HEARTH-2024-STUDIO");
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-surface">
       {/* Top Nav */}
@@ -192,7 +136,7 @@ export function LobbyScreen() {
                 </label>
                 <Input
                   value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
+                  onChange={(event) => setDisplayName(event.target.value)}
                   className="h-14 bg-surface-container-highest border-none rounded-2xl px-6 text-on-surface placeholder:text-on-surface-variant/50 focus-visible:ring-2 focus-visible:ring-primary"
                   placeholder="How should we call you?"
                 />
@@ -256,7 +200,11 @@ export function LobbyScreen() {
                   onClick={toggleVideo}
                 />
                 <div className="w-px h-10 bg-outline-variant/30 mx-2" />
-                <LobbyControl icon={<Settings size={24} />} label="Setup" onClick={() => {}} />
+                <LobbyControl
+                  icon={<Settings size={24} />}
+                  label="Setup"
+                  onClick={() => {}}
+                />
               </div>
             </motion.div>
 
@@ -269,11 +217,9 @@ export function LobbyScreen() {
             >
               <div className="flex items-center gap-3">
                 <div className="flex -space-x-2">
-                  {[1, 2].map((i) => (
-                    <Avatar key={i} className="w-8 h-8 border-2 border-white">
-                      <AvatarImage
-                        src={`https://i.pravatar.cc/100?u=${i + 10}`}
-                      />
+                  {[1, 2].map((index) => (
+                    <Avatar key={index} className="w-8 h-8 border-2 border-white">
+                      <AvatarImage src={`https://i.pravatar.cc/100?u=${index + 10}`} />
                       <AvatarFallback>U</AvatarFallback>
                     </Avatar>
                   ))}
@@ -324,7 +270,10 @@ function LobbyControl({
   onClick?: () => void;
 }) {
   return (
-    <button onClick={onClick} className="flex flex-col items-center gap-1.5 group">
+    <button
+      onClick={onClick}
+      className="flex flex-col items-center gap-1.5 group"
+    >
       <div
         className={`w-14 h-14 rounded-full flex items-center justify-center transition-all active:scale-90 ${
           active
