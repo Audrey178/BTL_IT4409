@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Mic,
@@ -29,6 +29,57 @@ type MeetingMediaPreferences = {
   displayName?: string;
 };
 
+type VideoFilterKey = "original" | "warm" | "mono" | "cool" | "golden";
+
+type FaceBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+const VIDEO_FILTERS: Record<
+  VideoFilterKey,
+  { label: string; css: string; accent: string }
+> = {
+  original: {
+    label: "Original",
+    css: "none",
+    accent: "bg-surface-container-highest",
+  },
+  warm: {
+    label: "Warm",
+    css: "sepia(0.25) saturate(1.35) contrast(1.04) brightness(1.02)",
+    accent: "bg-orange-200",
+  },
+  mono: {
+    label: "Mono",
+    css: "grayscale(1) contrast(1.05)",
+    accent: "bg-stone-300",
+  },
+  cool: {
+    label: "Cool",
+    css: "saturate(1.15) hue-rotate(20deg) contrast(1.05)",
+    accent: "bg-blue-100",
+  },
+  golden: {
+    label: "Golden",
+    css: "sepia(0.18) saturate(1.55) brightness(1.08) contrast(1.03)",
+    accent: "bg-rose-100",
+  },
+};
+
+type FaceDetectorInstance = {
+  detect: (
+    source: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
+  ) => Promise<Array<{ boundingBox: DOMRectReadOnly }>>;
+};
+
+type FaceDetectorConstructor = new (options?: {
+  fastMode?: boolean;
+  maxDetectedFaces?: number;
+}) => FaceDetectorInstance;
+
 function getInitialMediaPreferences(): MeetingMediaPreferences {
   const fallback = { isMuted: false, isVideoOff: false, displayName: "" };
 
@@ -53,12 +104,22 @@ export function MeetingScreen() {
   const initialPreferences = useMemo(() => getInitialMediaPreferences(), []);
   const [isMuted, setIsMuted] = useState(initialPreferences.isMuted);
   const [isVideoOff, setIsVideoOff] = useState(initialPreferences.isVideoOff);
+  const [selectedFilter, setSelectedFilter] = useState<VideoFilterKey>("original");
+  const [faceOverlayEnabled, setFaceOverlayEnabled] = useState(true);
+  const [faceBoxes, setFaceBoxes] = useState<FaceBox[]>([]);
+  const [faceDetectionSupported, setFaceDetectionSupported] = useState(false);
   const [showChat, setShowChat] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isCameraReady, setIsCameraReady] = useState(false);
   const selfPreviewRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const currentVideoFilter = VIDEO_FILTERS[selectedFilter].css;
+
+  useEffect(() => {
+    const faceDetector = (window as Window & { FaceDetector?: FaceDetectorConstructor }).FaceDetector;
+    setFaceDetectionSupported(Boolean(faceDetector));
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -129,6 +190,67 @@ export function MeetingScreen() {
       track.enabled = !isVideoOff;
     });
   }, [isVideoOff]);
+
+  useEffect(() => {
+    if (!faceOverlayEnabled || !faceDetectionSupported || !isCameraReady) {
+      setFaceBoxes([]);
+      return;
+    }
+
+    const video = selfPreviewRef.current;
+    const faceDetectorCtor = (window as Window & { FaceDetector?: FaceDetectorConstructor }).FaceDetector;
+
+    if (!video || !faceDetectorCtor) {
+      setFaceBoxes([]);
+      return;
+    }
+
+    const detector = new faceDetectorCtor({ fastMode: true, maxDetectedFaces: 3 });
+    let cancelled = false;
+    let inFlight = false;
+
+    const scanFaces = async () => {
+      if (cancelled || inFlight || video.readyState < 2) {
+        return;
+      }
+
+      inFlight = true;
+      try {
+        const faces = await detector.detect(video);
+        if (cancelled) {
+          return;
+        }
+
+        const videoWidth = video.videoWidth || video.clientWidth || 1;
+        const videoHeight = video.videoHeight || video.clientHeight || 1;
+        const widthScale = video.clientWidth / videoWidth;
+        const heightScale = video.clientHeight / videoHeight;
+
+        setFaceBoxes(
+          faces.map((face) => ({
+            x: face.boundingBox.x * widthScale,
+            y: face.boundingBox.y * heightScale,
+            width: face.boundingBox.width * widthScale,
+            height: face.boundingBox.height * heightScale,
+          }))
+        );
+      } catch {
+        if (!cancelled) {
+          setFaceBoxes([]);
+        }
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    const intervalId = window.setInterval(scanFaces, 250);
+    scanFaces();
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [faceDetectionSupported, faceOverlayEnabled, isCameraReady]);
 
   useEffect(() => {
     sessionStorage.setItem(
@@ -207,7 +329,7 @@ export function MeetingScreen() {
             src="https://picsum.photos/seed/david/800/600"
           />
           <div className="relative rounded-3xl overflow-hidden bg-stone-900 shadow-sm flex items-center justify-center">
-            <div className="absolute inset-0 opacity-50 bg-gradient-to-br from-orange-900 to-stone-900 flex flex-col items-center justify-center text-center p-8">
+            <div className="absolute inset-0 opacity-50 bg-linear-to-br from-orange-900 to-stone-900 flex flex-col items-center justify-center text-center p-8">
               <ScreenShare size={64} className="text-orange-200 mb-4" />
               <h3 className="text-orange-50 font-bold text-xl">
                 Presentation in Progress
@@ -290,7 +412,7 @@ export function MeetingScreen() {
               initial={{ opacity: 0, scale: 0.95, x: 20 }}
               animate={{ opacity: 1, scale: 1, x: 0 }}
               exit={{ opacity: 0, scale: 0.95, x: 20 }}
-              className="absolute top-6 right-6 w-80 max-h-[calc(100%-120px)] glass-panel rounded-[2.5rem] shadow-2xl border border-white/40 flex flex-col overflow-hidden z-[60]"
+              className="absolute top-6 right-6 w-80 max-h-[calc(100%-120px)] glass-panel rounded-[2.5rem] shadow-2xl border border-white/40 flex flex-col overflow-hidden z-60"
             >
               <div className="p-8 pb-4 flex justify-between items-center">
                 <h2 className="text-xl font-bold text-orange-950 tracking-tight">
@@ -307,38 +429,64 @@ export function MeetingScreen() {
                 <div className="space-y-8">
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60 mb-4">
-                      Focus & Backgrounds
+                      Video Filters
                     </p>
                     <div className="grid grid-cols-2 gap-4">
                       <FilterItem
                         label="Original"
-                        active
+                        active={selectedFilter === "original"}
                         icon={<XCircle size={24} />}
+                        onClick={() => setSelectedFilter("original")}
                       />
                       <FilterItem
-                        label="Soft Blur"
-                        src="https://picsum.photos/seed/blur/200/120"
-                        blur
+                        label="Warm"
+                        src="https://picsum.photos/seed/warm/200/120"
+                        active={selectedFilter === "warm"}
+                        onClick={() => setSelectedFilter("warm")}
                       />
                       <FilterItem
-                        label="Oak Studio"
-                        src="https://picsum.photos/seed/oak/200/120"
+                        label="Mono"
+                        src="https://picsum.photos/seed/mono/200/120"
+                        active={selectedFilter === "mono"}
+                        onClick={() => setSelectedFilter("mono")}
                       />
                       <FilterItem
-                        label="The Hearth"
-                        src="https://picsum.photos/seed/hearth/200/120"
+                        label="Cool"
+                        src="https://picsum.photos/seed/cool/200/120"
+                        active={selectedFilter === "cool"}
+                        onClick={() => setSelectedFilter("cool")}
                       />
                     </div>
                   </div>
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60 mb-4">
-                      Mood & Color
+                      Color Presets
                     </p>
                     <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
-                      <ColorFilter color="bg-orange-200" label="Warm" />
-                      <ColorFilter color="bg-stone-300" label="Mono" />
-                      <ColorFilter color="bg-blue-100" label="Cool" />
-                      <ColorFilter color="bg-rose-100" label="Golden" />
+                      <ColorFilter
+                        color={VIDEO_FILTERS.warm.accent}
+                        label="Warm"
+                        active={selectedFilter === "warm"}
+                        onClick={() => setSelectedFilter("warm")}
+                      />
+                      <ColorFilter
+                        color={VIDEO_FILTERS.mono.accent}
+                        label="Mono"
+                        active={selectedFilter === "mono"}
+                        onClick={() => setSelectedFilter("mono")}
+                      />
+                      <ColorFilter
+                        color={VIDEO_FILTERS.cool.accent}
+                        label="Cool"
+                        active={selectedFilter === "cool"}
+                        onClick={() => setSelectedFilter("cool")}
+                      />
+                      <ColorFilter
+                        color={VIDEO_FILTERS.golden.accent}
+                        label="Golden"
+                        active={selectedFilter === "golden"}
+                        onClick={() => setSelectedFilter("golden")}
+                      />
                     </div>
                   </div>
                 </div>
@@ -348,11 +496,20 @@ export function MeetingScreen() {
                   <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
                     <Sparkles size={18} className="text-primary" />
                   </div>
-                  <span className="text-sm font-bold text-orange-950">
-                    Auto-Touchup
-                  </span>
+                  <div>
+                    <span className="block text-sm font-bold text-orange-950">
+                      Face Tracking
+                    </span>
+                    <span className="block text-[10px] text-on-surface-variant/60">
+                      Experimental browser face detection
+                    </span>
+                  </div>
                 </div>
-                <Switch defaultChecked />
+                <Switch
+                  checked={faceOverlayEnabled}
+                  onCheckedChange={setFaceOverlayEnabled}
+                  disabled={!faceDetectionSupported}
+                />
               </div>
             </motion.div>
           )}
@@ -376,7 +533,7 @@ export function MeetingScreen() {
           <ControlButton
             icon={<ScreenShare size={24} />}
             label="Share Screen"
-            className="px-8 w-auto bg-gradient-to-r from-primary to-primary-container text-white shadow-lg shadow-primary/20 border-none"
+            className="px-8 w-auto bg-linear-to-r from-primary to-primary-container text-white shadow-lg shadow-primary/20 border-none"
           />
           <ControlButton
             icon={<MessageSquare size={24} />}
@@ -405,6 +562,7 @@ export function MeetingScreen() {
               autoPlay
               muted
               playsInline
+              style={{ filter: currentVideoFilter }}
               className="w-full h-full object-cover"
             />
           ) : (
@@ -428,6 +586,27 @@ export function MeetingScreen() {
                 <VideoOff className="mx-auto mb-1" size={18} />
                 <p className="text-[10px] font-bold uppercase tracking-widest">Camera Off</p>
               </div>
+            </div>
+          )}
+
+          {faceOverlayEnabled && faceDetectionSupported && faceBoxes.length > 0 && (
+            <div className="absolute inset-0 pointer-events-none">
+              {faceBoxes.map((box, index) => (
+                <div
+                  key={`${index}-${box.x}-${box.y}`}
+                  className="absolute rounded-2xl border-2 border-primary/80"
+                  style={{
+                    left: box.x,
+                    top: box.y,
+                    width: box.width,
+                    height: box.height,
+                  }}
+                >
+                  <span className="absolute -top-6 left-0 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-white shadow-lg">
+                    Face
+                  </span>
+                </div>
+              ))}
             </div>
           )}
 
@@ -530,9 +709,9 @@ function ControlButton({
   );
 }
 
-function FilterItem({ label, active = false, src, icon, blur = false }: any) {
+function FilterItem({ label, active = false, src, icon, blur = false, onClick }: any) {
   return (
-    <button className="flex flex-col gap-2 text-left group">
+    <button onClick={onClick} className="flex flex-col gap-2 text-left group">
       <div
         className={`aspect-video w-full rounded-2xl overflow-hidden relative border-2 transition-all ${
           active
@@ -564,11 +743,11 @@ function FilterItem({ label, active = false, src, icon, blur = false }: any) {
   );
 }
 
-function ColorFilter({ color, label }: any) {
+function ColorFilter({ color, label, active = false, onClick }: any) {
   return (
-    <button className="flex-shrink-0 w-16 flex flex-col items-center gap-2 group">
+    <button onClick={onClick} className="shrink-0 w-16 flex flex-col items-center gap-2 group">
       <div
-        className={`w-12 h-12 rounded-full border-2 border-white shadow-sm transition-transform group-hover:scale-110 ${color}`}
+        className={`w-12 h-12 rounded-full border-2 border-white shadow-sm transition-transform group-hover:scale-110 ${color} ${active ? "ring-4 ring-primary/30 scale-110" : ""}`}
       />
       <span className="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">
         {label}

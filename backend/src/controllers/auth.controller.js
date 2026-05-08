@@ -1,80 +1,127 @@
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
-const User = require('../models/user.model'); // Gọi Khuôn đúc User từ kho ra
+/**
+ * ============================================================================
+ * CONTROLLER: AUTH - Xác thực
+ * ============================================================================
+ * 
+ * Mục đích: Handle HTTP requests liên quan đến xác thực.
+ * Lưu ý: Tất cả business logic nên ở Service layer, Controller chỉ:
+ * - Validate request
+ * - Call service
+ * - Handle response/errors
+ * 
+ * Tác giả: Meeting Team
+ */
 
-// ==========================================
-// 1. API ĐĂNG KÝ (REGISTER)
-// ==========================================
-const register = async (req, res) => {
+import authService from '../services/auth.service.js';
+import { HTTP_STATUS } from '../utils/constants.js';
+import logger from '../utils/logger.js';
+
+class AuthController {
+  /**
+   * POST /api/v1/auth/register
+   */
+  async register(req, res) {
     try {
-        // Lấy dữ liệu khách hàng gửi lên
-        const { email, password } = req.body;
-
-        // B1: Kiểm tra xem email này đã có ai đăng ký chưa?
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(400).json({ message: 'Email này đã được sử dụng!' });
-        }
-
-        // B2: Mã hóa mật khẩu (Tuyệt đối không lưu mật khẩu thô)
-        // bcrypt sẽ băm mật khẩu "123" thành một chuỗi ngoằn ngoèo không thể dịch ngược
-        const salt = await bcrypt.genSalt(10);
-        const password_hash = await bcrypt.hash(password, salt);
-
-        // B3: Bỏ dữ liệu vào Khuôn đúc và lưu vào Database
-        const newUser = new User({
-            email: email,
-            password_hash: password_hash,
-        });
-        await newUser.save(); // Lệnh này chính thức ghi vào MongoDB
-
-        res.status(201).json({ message: 'Đăng ký tài khoản thành công!' });
+      const result = await authService.register(req.body);
+      res.status(HTTP_STATUS.CREATED).json(result);
     } catch (error) {
-        res.status(500).json({ message: 'Lỗi server', error: error.message });
+      logger.error('Register controller error:', error);
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        message: error.message,
+      });
     }
-};
+  }
 
-// ==========================================
-// 2. API ĐĂNG NHẬP (LOGIN)
-// ==========================================
-const login = async (req, res) => {
+  /**
+   * POST /api/v1/auth/login
+   */
+  async login(req, res) {
     try {
-        const { email, password } = req.body;
-
-        // B1: Tìm xem có ông nào mang email này trong kho không?
-        const user = await User.findOne({ email });
-        if (!user) {
-            return res.status(401).json({ message: 'Email hoặc mật khẩu không đúng!' });
-        }
-
-        // B2: So sánh mật khẩu khách gửi với mật khẩu đã mã hóa trong kho
-        const isMatch = await bcrypt.compare(password, user.password_hash);
-        if (!isMatch) {
-            return res.status(401).json({ message: 'Email hoặc mật khẩu không đúng!' });
-        }
-
-        // B3: Cấp vé thông hành (Token) vì đã xác thực đúng người
-        const access_token = jwt.sign(
-            { id: user._id, role: user.role }, // Những thông tin được nhét vào vé
-            process.env.JWT_ACCESS_SECRET,     // Chữ ký bảo mật của nhà hàng
-            { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN } // Thời hạn của vé
-        );
-
-        res.status(200).json({
-            message: 'Đăng nhập thành công',
-            access_token: access_token
-        });
+      const result = await authService.login(req.body);
+      res.status(HTTP_STATUS.OK).json(result);
     } catch (error) {
-        res.status(500).json({ message: 'Lỗi server', error: error.message });
+      logger.error('Login controller error:', error);
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        message: error.message,
+      });
     }
-};
+  }
 
-// ==========================================
-// 3. API ĐĂNG XUẤT (LOGOUT)
-// ==========================================
-const logout = async (req, res) => {
-    // Tạm thời logout làm đơn giản: Frontend chỉ cần xóa Token là xong.
-    res.status(200).json({ message: 'Đăng xuất thành công!' });
-};
+  /**
+   * POST /api/v1/auth/refresh-token
+   */
+  async refreshToken(req, res) {
+    try {
+      const result = await authService.refreshToken(req.body.refresh_token);
+      res.status(HTTP_STATUS.OK).json(result);
+    } catch (error) {
+      logger.error('Refresh token controller error:', error);
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
 
-module.exports = { register, login, logout };
+  /**
+   * GET /api/v1/auth/me
+   */
+  async getProfile(req, res) {
+    try {
+      const user = await authService.getUserProfile(req.userId);
+      res.status(HTTP_STATUS.OK).json({
+        success: true,
+        user,
+      });
+    } catch (error) {
+      logger.error('Get profile controller error:', error);
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+
+  /**
+   * PUT /api/v1/auth/me
+   */
+  async updateProfile(req, res) {
+    try {
+      const user = await authService.updateUserProfile(req.userId, req.body);
+      res.status(HTTP_STATUS.OK).json({
+        success: true,
+        user,
+      });
+    } catch (error) {
+      logger.error('Update profile controller error:', error);
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+
+  /**
+   * POST /api/v1/auth/logout
+   */
+  async logout(req, res) {
+    try {
+      // Client handles token removal
+      // Backend could implement token blacklist if needed
+      res.status(HTTP_STATUS.OK).json({
+        success: true,
+        message: 'Logged out successfully',
+      });
+    } catch (error) {
+      logger.error('Logout controller error:', error);
+      res.status(HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+}
+
+export default new AuthController();

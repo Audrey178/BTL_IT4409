@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, Apple } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router";
+import { useAuthStore } from "@/stores/useAuthStore";
 import z from "zod";
 
 const signInSchema = z.object({
@@ -13,8 +14,6 @@ const signInSchema = z.object({
 });
 
 type SignInFormValue = z.infer<typeof signInSchema>;
-
-import { useAuthStore } from "@/stores/useAuthStore";
 
 export function LoginScreen() {
   const { signIn } = useAuthStore();
@@ -28,7 +27,10 @@ export function LoginScreen() {
   const onSubmit = async (data: SignInFormValue) => {
     const { email, password } = data;
     await signIn(email, password);
-    navigate("/");
+    const token = useAuthStore.getState().accessToken;
+    if (token) {
+      navigate("/");
+    }
   };
 
   return (

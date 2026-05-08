@@ -1,122 +1,252 @@
-4 phần chính:
+# Đặc tả Database
 
-Lý do chọn công nghệ: Tại sao lại dùng MongoDB và Redis?
+## 1. Tổng quan
 
-Sơ đồ cấu trúc dữ liệu (Ảnh ERD/Schema Diagram): Cái nhìn trực quan về các bảng và mối liên hệ.
+Hệ thống dùng:
 
-Từ điển dữ liệu (Data Dictionary): Bảng giải thích chi tiết từng trường (field), kiểu dữ liệu, ràng buộc.
+- MongoDB cho persistent data
+- Redis cho realtime/session state
 
-Thiết kế Caching/Realtime (Redis): Thể hiện tư duy hệ thống lớn.
+Thiết kế hiện tại tối ưu cho:
 
-PHẦN: THIẾT KẾ CƠ SỞ DỮ LIỆU (DATABASE DESIGN)
+- room lifecycle
+- participant tracking
+- chat history
+- meeting audit trail
+- attendance logging
 
-1. Lựa chọn Công nghệ & Kiến trúc lưu trữ
-Hệ thống Meeting Project có đặc thù là yêu cầu xử lý thời gian thực (realtime) liên tục và lưu trữ các dạng dữ liệu phi cấu trúc (ví dụ: mảng vector khuôn mặt từ AI). Do đó, nhóm quyết định sử dụng kiến trúc lưu trữ đa tầng (Polyglot Persistence):
+## 2. MongoDB collections
 
-MongoDB (Persistent Database): Cơ sở dữ liệu NoSQL phù hợp để lưu trữ Document có cấu trúc linh hoạt (như cài đặt phòng họp, mảng Face Embeddings). Tốc độ đọc/ghi nhanh, dễ dàng mở rộng (scale) theo chiều ngang.
+### `users`
 
-Redis (In-memory Data Store): Đóng vai trò làm bộ nhớ đệm tốc độ siêu cao. Dùng để lưu trữ các trạng thái "nóng" của hệ thống Realtime (Socket.IO) như: danh sách người dùng đang online, mapping giữa SocketID và UserID. Điều này giúp giảm tải tối đa các truy vấn không cần thiết xuống MongoDB.
+Mục đích:
 
-2. Sơ đồ Cấu trúc Cơ sở dữ liệu (Schema Diagram)
-(VỊ TRÍ CHÈN ẢNH MERMAID: Sơ đồ thực thể liên kết (ERD) của hệ thống)
+- thông tin định danh user
+- password hash
+- face embeddings
+- role
 
-Đoạn mã gốc (dùng để render trên Mermaid):
-erDiagram
-    USERS ||--o{ ROOM_MEMBERS : "tham gia"
-    USERS ||--o{ ATTENDANCE_LOGS : "điểm danh"
-    USERS ||--o{ MESSAGES : "gửi"
-    USERS ||--o{ ROOMS : "làm chủ (host)"
-    
-    ROOMS ||--o{ ROOM_MEMBERS : "chứa"
-    ROOMS ||--o{ ATTENDANCE_LOGS : "lưu trữ"
-    ROOMS ||--o{ MESSAGES : "lưu trữ"
-    ROOMS ||--o{ MEETING_EVENTS : "ghi vết sự kiện"
+Thuộc tính chính:
 
-    USERS {
-        ObjectId _id PK
-        String email UK "Index"
-        String password_hash
-        String full_name
-        Array face_embeddings
-    }
+- `_id`
+- `email` unique
+- `password_hash`
+- `full_name`
+- `avatar`
+- `face_embeddings[]`
+- `role`
+- `created_at`
+- `updated_at`
 
-    ROOMS {
-        ObjectId _id PK
-        String room_code UK "Index"
-        ObjectId host_id FK
-        String status
-        Object settings
-    }
+Index:
 
-    ROOM_MEMBERS {
-        ObjectId _id PK
-        ObjectId room_id FK "Index"
-        ObjectId user_id FK "Index"
-        String status
-        Date joined_at
-    }
+- `email` unique
+- `created_at`
 
-    ATTENDANCE_LOGS {
-        ObjectId _id PK
-        ObjectId room_id FK "Index"
-        ObjectId user_id FK "Index"
-        Number confidence_score
-        Date check_in_time
-        Date check_out_time
-    }
+### `rooms`
 
-    MESSAGES {
-        ObjectId _id PK
-        ObjectId room_id FK "Index"
-        ObjectId sender_id FK
-        String content
-        Date timestamp "Index -1"
-    }
+Mục đích:
 
-. Từ điển Dữ liệu (Data Dictionary - MongoDB)
-Hệ thống bao gồm 6 Collection chính. Dưới đây là đặc tả chi tiết cho từng cấu trúc dữ liệu.
+- metadata phòng họp
+- trạng thái phòng
+- cấu hình phòng
 
-3.1. Collection users (Quản lý Người dùng & Dữ liệu AI)
-Lưu trữ thông tin tài khoản định danh và dữ liệu vector đặc trưng khuôn mặt dùng cho tính năng AI Attendance.
-Tên trường (Field)Kiểu (Type)Ràng buộcMô tả chi tiết_idObjectIdKhóa chính (PK)Mã định danh tự sinh của MongoDBemailStringBắt buộc, Unique, IndexEmail đăng nhập của người dùngpassword_hashStringBắt buộcMật khẩu đã được mã hóa bcryptfull_nameStringBắt buộcHọ và tên hiển thịavatarStringMặc địnhĐường dẫn ảnh đại diệnface_embeddingsArray[Object]Mảng lưu trữ các vector khuôn mặt (trích xuất từ TensorFlow.js). Cho phép lưu nhiều góc mặt.roleStringEnum: ['user', 'admin']Phân quyền hệ thống
+Thuộc tính chính:
 
-3.2. Collection rooms (Quản lý Phòng họp)Lưu trữ cấu hình và trạng thái của các phiên họp tĩnh.Tên trường (Field)Kiểu (Type)Ràng buộcMô tả chi tiết_idObjectIdKhóa chính (PK)room_codeStringBắt buộc, Unique, IndexMã phòng (VD: abc-xyz-def) dùng để sharehost_idObjectIdBắt buộc, Ref: usersNgười tạo/quản lý phòngtitleStringBắt buộcTên cuộc họpstatusStringEnum: ['waiting', 'active', 'ended']Trạng thái hiện tại của phòngsettingsObjectChứa các cờ cấu hình: require_approval (duyệt người vào), allow_chat
+- `_id`
+- `room_code` unique
+- `host_id`
+- `title`
+- `description`
+- `status`
+- `settings.require_approval`
+- `settings.allow_chat`
+- `settings.max_participants`
+- `started_at`
+- `ended_at`
+- `created_at`
+- `updated_at`
 
-3.3. Collection room_members (Quản lý Phiên tham gia)Lưu trữ thông tin ai đang ở phòng nào để quản lý host control. Tạo Compound Index cho (room_id, user_id).Tên trường (Field)Kiểu (Type)Ràng buộcMô tả chi tiết_idObjectIdKhóa chính (PK)room_idObjectIdBắt buộc, Ref: roomsuser_idObjectIdBắt buộc, Ref: usersstatusStringEnum: ['pending', 'joined', 'kicked', 'left']Trạng thái tham gia (dùng cho tính năng Waiting Room)joined_atDateMặc định: Date.nowThời gian bắt đầu vào phòng
+Index:
 
-3.4. Collection attendance_logs (Nhật ký Điểm danh AI)Lưu trữ kết quả nhận diện khuôn mặt và tính toán thời lượng tham gia.Tên trường (Field)Kiểu (Type)Ràng buộcMô tả chi tiết_idObjectIdKhóa chính (PK)room_idObjectIdBắt buộc, Ref: roomsuser_idObjectIdBắt buộc, Ref: usersconfidence_scoreNumberĐiểm tự tin của mô hình AI khi so khớpcheck_in_timeDateMặc định: Date.nowThời điểm nhận diện thành côngcheck_out_timeDateNullableThời điểm người dùng rời phòng (để tính tổng thời lượng)methodStringEnum: ['face_recognition', 'manual']Phân biệt AI điểm danh hay Host tự tích
+- `room_code` unique
+- `status`
+- `(status, created_at)`
+- `host_id`
 
-3.5. Collection messages (Lịch sử Chat Realtime)Áp dụng kỹ thuật Denormalization (Khử chuẩn hóa) để tối ưu hóa tốc độ đọc. Bảng lưu trực tiếp tên và avatar người gửi để khi truy vấn lịch sử không cần thao tác JOIN (Populate) phức tạp.Tên trường (Field)Kiểu (Type)Ràng buộcMô tả chi tiết_idObjectIdKhóa chính (PK)room_idObjectIdBắt buộc, Ref: roomssender_idObjectIdRef: usersCần thiết để đánh dấu "Tin nhắn của tôi"sender_nameStringKhử chuẩn hóaSnapshot tên người gửi lúc chatsender_avatarStringKhử chuẩn hóaSnapshot avatar người gửi lúc chatcontentStringBắt buộcNội dung tin nhắntimestampDateIndex: -1Sắp xếp giảm dần để lấy tin nhắn mới nhất
+### `room_members`
 
-4. Thiết kế Cấu trúc Trạng thái (State Design - Redis)
-Hệ thống yêu cầu phản hồi Realtime tính bằng mili-giây, việc truy vấn CSDL vật lý (MongoDB) để lấy danh sách người online là không khả thi. Thiết kế sử dụng Redis Key-Value để giải quyết bài toán này:
+Mục đích:
 
-Truy xuất nhanh thông tin Socket:
+- membership của user trong từng room
+- waiting/joined/rejected/kicked/left state
+- joined/left timestamp
 
-Cấu trúc: String / Hash
+Thuộc tính chính:
 
-Key: socket:{socketId}
+- `_id`
+- `room_id`
+- `user_id`
+- `status`
+- `joined_at`
+- `left_at`
+- `duration`
+- `created_at`
+- `updated_at`
 
-Value: {"userId": "...", "roomCode": "..."}
+Index:
 
-Mục đích: Khi một client mất kết nối đột ngột (disconnect event), hệ thống lập tức tra cứu xem họ là ai, ở phòng nào để phát đi thông báo user_left cho những người còn lại.
+- unique `(room_id, user_id)`
+- `(room_id, status)`
+- `(user_id, created_at)`
 
-Quản lý danh sách người dùng trong phòng:
+### `messages`
 
-Cấu trúc: Set (Đảm bảo không trùng lặp)
+Mục đích:
 
-Key: room:{roomCode}:members
+- chat persistence
 
-Value: [userId1, userId2, ...]
+Thuộc tính chính:
 
-Mục đích: Trả về danh sách người tham gia (Participant List) gần như ngay lập tức cho Frontend.
+- `_id`
+- `room_id`
+- `sender_id`
+- `sender_name`
+- `sender_avatar`
+- `type`
+- `content`
+- `file_url`
+- `timestamp`
 
-Phân quyền Chủ phòng (Host Control):
+Index:
 
-Cấu trúc: String
+- `(room_id, timestamp desc)`
+- TTL `timestamp` 180 ngày
 
-Key: room:{roomCode}:host
+Ràng buộc triển khai:
 
-Value: userId của người tạo phòng
+- `room_id` phải là ObjectId của room, không phải `room_code`
 
-Mục đích: Dùng làm middleware cache để xác thực nhanh quyền Mute, Kick, Duyệt người (Admit) mà không cần gọi xuống Database.
+### `meeting_events`
+
+Mục đích:
+
+- audit trail
+
+Event điển hình:
+
+- `room_created`
+- `user_joined`
+- `user_left`
+- `user_approved`
+- `user_rejected`
+- `user_kicked`
+- `room_ended`
+
+Thuộc tính chính:
+
+- `_id`
+- `room_id`
+- `user_id`
+- `event_type`
+- `description`
+- `created_at`
+
+### `attendance_logs`
+
+Mục đích:
+
+- check-in / check-out
+- attendance reporting
+
+Thuộc tính chính:
+
+- `_id`
+- `room_id`
+- `user_id`
+- `check_in_time`
+- `check_out_time`
+- `method`
+- `confidence_score`
+
+## 3. Redis design
+
+### Keys đang dùng
+
+- `socket:{socketId}`
+  - value: `{ userId, roomCode }`
+- `user:{userId}:socket`
+  - value: `socketId`
+- `room:{roomCode}:members`
+  - set user ids
+- `room:{roomCode}:host`
+  - host user id
+
+### Redis usage
+
+- map user/socket để gửi socket event point-to-point
+- track realtime room membership
+- cleanup nhanh khi disconnect
+
+## 4. Quan hệ dữ liệu
+
+- `rooms.host_id -> users._id`
+- `room_members.room_id -> rooms._id`
+- `room_members.user_id -> users._id`
+- `messages.room_id -> rooms._id`
+- `messages.sender_id -> users._id`
+- `meeting_events.room_id -> rooms._id`
+- `meeting_events.user_id -> users._id`
+- `attendance_logs.room_id -> rooms._id`
+- `attendance_logs.user_id -> users._id`
+
+## 5. Lifecycle dữ liệu
+
+### Room
+
+1. tạo room
+2. host hoặc participant join
+3. room chuyển `waiting -> active`
+4. chat/events/attendance phát sinh
+5. host end room
+6. room chuyển `ended`
+
+### Attendance
+
+1. user join room
+2. check-in
+3. check-out
+4. thống kê theo room hoặc theo user
+
+### Chat
+
+1. socket nhận message
+2. xác thực user và membership
+3. resolve `room_code -> room_id`
+4. persist vào `messages`
+5. emit realtime
+
+## 6. Retention và housekeeping
+
+- `messages` có TTL 180 ngày
+- các collection khác chưa có retention policy tự động
+
+Khuyến nghị tiếp theo:
+
+- retention cho audit log nếu volume tăng
+- archive room history cũ
+- background cleanup cho redis stale keys nếu shutdown không graceful
+
+## 7. Ràng buộc nghiệp vụ
+
+- một user chỉ có một membership record trên mỗi room
+- chỉ host được approve/reject/kick/end room
+- attendance stats theo room chỉ host được xem
+- history room/chat/event chỉ host hoặc member của room được xem
+
+## 8. Khuyến nghị production
+
+- bật replica set cho MongoDB nếu cần transactional guarantees tốt hơn
+- thêm backup policy
+- thêm monitoring cho Redis memory growth
+- nếu message volume lớn, cân nhắc tách chat sang storage chuyên dụng hoặc retention ngắn hơn

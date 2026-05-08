@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
+import { useNavigate } from "react-router-dom";
+import { useMedia } from "@/hooks/useMedia";
+import { useMediaStore } from "@/stores/mediaStore";
+import { getSocket } from "@/socket/socket";
 import {
   Mic,
   MicOff,
@@ -14,7 +18,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { useNavigate } from "react-router";
 
 export function LobbyScreen() {
   const navigate = useNavigate();
@@ -89,7 +92,7 @@ export function LobbyScreen() {
     });
   }, [isVideoOff]);
 
-  const joinMeeting = () => {
+  const handleJoin = () => {
     sessionStorage.setItem(
       "meeting-media-preferences",
       JSON.stringify({
@@ -101,6 +104,19 @@ export function LobbyScreen() {
     navigate("/meeting");
   };
 
+  const { requestMedia } = useMedia();
+  const { localStream, isAudioMuted, isVideoMuted, toggleAudio, toggleVideo } = useMediaStore();
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    requestMedia();
+  }, [requestMedia]);
+
+  useEffect(() => {
+    if (videoRef.current && localStream) {
+      videoRef.current.srcObject = localStream;
+    }
+  }, [localStream]);
   return (
     <div className="min-h-screen flex flex-col bg-surface">
       {/* Top Nav */}
@@ -151,7 +167,7 @@ export function LobbyScreen() {
         </div>
       </nav>
 
-      <main className="flex-grow flex items-center justify-center p-8 lg:p-12">
+      <main className="grow flex items-center justify-center p-8 lg:p-12">
         <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
           {/* Left: Content */}
           <div className="lg:col-span-5 space-y-8">
@@ -183,8 +199,8 @@ export function LobbyScreen() {
               </div>
               <div className="pt-4">
                 <Button
-                  onClick={joinMeeting}
-                  className="w-full h-16 bg-gradient-to-r from-primary to-primary-container text-white rounded-full font-bold text-xl shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
+                  onClick={handleJoin}
+                  className="w-full h-16 bg-linear-to-r from-primary to-primary-container text-white rounded-full font-bold text-xl shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
                 >
                   Join Meeting
                 </Button>
@@ -200,39 +216,20 @@ export function LobbyScreen() {
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="relative aspect-video bg-surface-container-highest rounded-[2.5rem] overflow-hidden shadow-2xl border border-outline-variant/10"
+              className="relative aspect-video bg-surface-container-highest rounded-[2.5rem] overflow-hidden shadow-2xl border border-outline-variant/10 flex justify-center items-center"
             >
-              {!cameraError ? (
+              {localStream && !isVideoMuted ? (
                 <video
-                  ref={previewRef}
+                  ref={videoRef}
                   autoPlay
-                  muted
                   playsInline
-                  className="w-full h-full object-cover"
+                  muted
+                  className="w-full h-full object-cover -scale-x-100"
                 />
               ) : (
-                <div className="w-full h-full bg-surface-container-high flex items-center justify-center">
-                  <div className="text-center px-8">
-                    <AlertCircle className="mx-auto mb-3 text-error" size={28} />
-                    <p className="text-sm text-on-surface-variant">{cameraError}</p>
-                  </div>
-                </div>
-              )}
-
-              {isLoadingCamera && !cameraError && (
-                <div className="absolute inset-0 bg-surface/60 backdrop-blur-sm flex items-center justify-center text-xs font-bold tracking-widest uppercase text-on-surface-variant">
-                  Dang khoi tao camera...
-                </div>
-              )}
-
-              {isVideoOff && (
-                <div className="absolute inset-0 bg-stone-900/70 backdrop-blur-sm flex items-center justify-center">
-                  <div className="text-center text-white/90">
-                    <VideoOff className="mx-auto mb-3" size={34} />
-                    <p className="text-sm font-bold uppercase tracking-widest">
-                      Camera is off
-                    </p>
-                  </div>
+                <div className="w-full h-full flex flex-col items-center justify-center bg-stone-900 text-stone-500">
+                  <Video size={64} className="mb-4 opacity-50" />
+                  <span>Camera is off</span>
                 </div>
               )}
 
@@ -247,19 +244,19 @@ export function LobbyScreen() {
               {/* Controls */}
               <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6 px-8 py-4 bg-surface-bright/90 backdrop-blur-xl rounded-full border border-outline-variant/20 shadow-2xl">
                 <LobbyControl
-                  icon={isMuted ? <MicOff size={24} /> : <Mic size={24} />}
-                  label={isMuted ? "Unmute" : "Mute"}
-                  active={!isMuted}
-                  onClick={() => setIsMuted((prev) => !prev)}
+                  icon={isAudioMuted ? <MicOff size={24} /> : <Mic size={24} />}
+                  label={isAudioMuted ? "Unmute" : "Mute"}
+                  active={!isAudioMuted}
+                  onClick={toggleAudio}
                 />
                 <LobbyControl
-                  icon={isVideoOff ? <VideoOff size={24} /> : <Video size={24} />}
-                  label={isVideoOff ? "Start Video" : "Stop Video"}
-                  active={!isVideoOff}
-                  onClick={() => setIsVideoOff((prev) => !prev)}
+                  icon={isVideoMuted ? <VideoOff size={24} /> : <Video size={24} />}
+                  label={isVideoMuted ? "Start Video" : "Stop Video"}
+                  active={!isVideoMuted}
+                  onClick={toggleVideo}
                 />
                 <div className="w-px h-10 bg-outline-variant/30 mx-2" />
-                <LobbyControl icon={<Settings size={24} />} label="Setup" />
+                <LobbyControl icon={<Settings size={24} />} label="Setup" onClick={() => {}} />
               </div>
             </motion.div>
 

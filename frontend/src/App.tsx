@@ -1,29 +1,29 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardScreen } from "./screens/DashboardScreen";
 import { LobbyScreen } from "./screens/LobbyScreen";
 import { MeetingScreen } from "./screens/MeetingScreen";
 import { AdminDashboardScreen } from "./screens/AdminDashboardScreen";
 import { SignupScreen } from "./screens/auth/SignupScreen";
-import { BrowserRouter, Routes, Route } from "react-router";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import { LoginScreen } from "./screens/auth/LoginScreen";
-import { ProtectedRoute } from "./components/ProtectedRoute";
 
 export default function App() {
   return (
-    <>
+    <ErrorBoundary>
       <Toaster richColors />
       <BrowserRouter>
         <Routes>
-          <Route path="signup" element={<SignupScreen />} />
-          <Route path="signin" element={<LoginScreen />} />
+          {/* Auth Routes - No Protection */}
+          <Route path="/signup" element={<SignupScreen />} />
+          <Route path="/signin" element={<LoginScreen />} />
 
-          <Route path="/" element={<ProtectedRoute><DashboardScreen /></ProtectedRoute>} />
-          <Route path="/admin" element={<ProtectedRoute><AdminDashboardScreen /></ProtectedRoute>} />
-          <Route path="/lobby" element={<ProtectedRoute><LobbyScreen /></ProtectedRoute>} />
-          <Route path="meeting" element={<ProtectedRoute><MeetingScreen /></ProtectedRoute>} />
+          <Route path="/" element={<DashboardScreen />} />
+          <Route path="/admin" element={<AdminDashboardScreen />} />
+          <Route path="/lobby" element={<LobbyScreen />} />
+          <Route path="meeting" element={<MeetingScreen />} />
         </Routes>
       </BrowserRouter>
-    </>
+    </ErrorBoundary>
   );
 }
