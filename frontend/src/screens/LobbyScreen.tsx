@@ -23,6 +23,19 @@ type MeetingMediaPreferences = {
   isVideoOff: boolean;
 };
 
+type VideoFilterKey = "original" | "warm" | "mono" | "cool" | "golden";
+
+const VIDEO_FILTERS: Record<
+  VideoFilterKey,
+  { label: string; css: string; accent: string }
+> = {
+  original: { label: "Original", css: "none", accent: "bg-surface-container-highest" },
+  warm: { label: "Warm", css: "sepia(0.25) saturate(1.35) contrast(1.04) brightness(1.02)", accent: "bg-orange-200" },
+  mono: { label: "Mono", css: "grayscale(1) contrast(1.05)", accent: "bg-stone-300" },
+  cool: { label: "Cool", css: "saturate(1.15) hue-rotate(20deg) contrast(1.05)", accent: "bg-blue-100" },
+  golden: { label: "Golden", css: "sepia(0.18) saturate(1.55) brightness(1.08) contrast(1.03)", accent: "bg-rose-100" },
+};
+
 export function LobbyScreen() {
   const navigate = useNavigate();
   const { requestMedia } = useMedia();
@@ -34,7 +47,36 @@ export function LobbyScreen() {
     toggleVideo,
   } = useMediaStore();
   const [displayName, setDisplayName] = useState("");
+  const getInitialFilter = () => {
+    try {
+      const url = new URL(window.location.href);
+      const f = url.searchParams.get('filter');
+      if (f && (f === 'original' || f === 'warm' || f === 'mono' || f === 'cool' || f === 'golden')) {
+        return f as VideoFilterKey;
+      }
+    } catch {}
+    const saved = sessionStorage.getItem('selectedFilter');
+    if (saved && (saved === 'original' || saved === 'warm' || saved === 'mono' || saved === 'cool' || saved === 'golden')) {
+      return saved as VideoFilterKey;
+    }
+    return 'original' as VideoFilterKey;
+  };
+  const [selectedFilter, setSelectedFilter] = useState<VideoFilterKey>(getInitialFilter);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    // apply filter to preview video element
+    if (videoRef.current) {
+      videoRef.current.style.filter = VIDEO_FILTERS[selectedFilter].css;
+    }
+    // persist to sessionStorage and update URL
+    try {
+      sessionStorage.setItem('selectedFilter', selectedFilter);
+      const url = new URL(window.location.href);
+      url.searchParams.set('filter', selectedFilter);
+      window.history.replaceState({}, '', url.toString());
+    } catch {}
+  }, [selectedFilter]);
 
   useEffect(() => {
     requestMedia();
@@ -183,6 +225,20 @@ export function LobbyScreen() {
                 <span className="text-xs font-bold text-on-surface tracking-tight uppercase">
                   Live Preview
                 </span>
+              </div>
+
+              {/* Filter selector (pre-join) */}
+              <div className="absolute top-6 right-6 bg-surface-bright/80 backdrop-blur-md px-3 py-2 rounded-full flex items-center gap-2 border border-outline-variant/20">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/80 mr-2">Filter</label>
+                <select
+                  value={selectedFilter}
+                  onChange={(e) => setSelectedFilter(e.target.value as VideoFilterKey)}
+                  className="h-8 text-sm bg-white/90 rounded-md px-2 border border-outline-variant"
+                >
+                  {Object.keys(VIDEO_FILTERS).map((k) => (
+                    <option key={k} value={k}>{VIDEO_FILTERS[k as VideoFilterKey].label}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Controls */}
