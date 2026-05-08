@@ -42,7 +42,7 @@ export function AuthLayout({ children, title, description }: AuthLayoutProps) {
 
       {/* Right Side: Visual */}
       <section className="hidden lg:flex flex-1 relative bg-surface-container-low overflow-hidden items-center justify-center p-12">
-        <div className="absolute top-0 right-0 w-[80%] h-[80%] bg-primary-fixed/30 rounded-bl-[200px] -z-0" />
+        <div className="absolute top-0 right-0 w-[80%] h-[80%] bg-primary-fixed/30 rounded-bl-[200px] z-0" />
         <div className="relative z-10 w-full max-w-2xl">
           <div className="grid grid-cols-12 gap-6 items-end">
             <motion.div
@@ -51,7 +51,7 @@ export function AuthLayout({ children, title, description }: AuthLayoutProps) {
               transition={{ delay: 0.2 }}
               className="col-span-7 bg-surface-container-lowest rounded-[2rem] p-4 shadow-2xl shadow-outline/10 group hover:scale-[1.02] transition-transform duration-500"
             >
-              <div className="aspect-[4/5] rounded-2xl overflow-hidden relative">
+              <div className="aspect-4/5 rounded-2xl overflow-hidden relative">
                 <img
                   src="https://picsum.photos/seed/hearth1/800/1000"
                   alt="Professional woman"
