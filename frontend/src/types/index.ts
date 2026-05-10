@@ -23,6 +23,7 @@ export interface ChatMessage {
   senderName: string;
   content: string;
   timestamp: string;
+  type?: 'text' | 'system' | 'file';
 }
 
 export interface Room {

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useSocket } from "@/hooks/useSocket";
 import { useWebRTC } from "@/hooks/useWebRTC";
 import { useRoomEvents } from "@/hooks/useRoomEvents";
+import { useChatEvents } from "@/hooks/useChatEvents";
 import { useMediaStore } from "@/stores/mediaStore";
 import { useMeetingStore } from "@/stores/meetingStore";
 import { useAuthStore } from "@/stores/useAuthStore";
@@ -11,7 +12,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import {
   Mic, MicOff, Video, VideoOff, ScreenShare, ScreenShareOff,
-  PhoneOff, MessageSquare, Users, X, Send, XCircle,
+  PhoneOff, MessageSquare, Users, X, XCircle,
   Sparkles, CheckCircle2, Badge, MonitorUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { WaitingRoomPanel } from "@/components/pages/meeting/WaitingRoomPanel";
+import { ChatPanel } from "@/components/pages/meeting/ChatPanel";
 
 export function MeetingScreen() {
   const { id: roomCode } = useParams<{ id: string }>();
@@ -28,6 +30,7 @@ export function MeetingScreen() {
 
   const { replaceVideoTrack } = useWebRTC(roomCode || null);
   useRoomEvents(roomCode || null);
+  const { sendMessage } = useChatEvents(roomCode || null);
 
   const {
     localStream, isAudioMuted, isVideoMuted, toggleAudio, toggleVideo,
@@ -35,12 +38,31 @@ export function MeetingScreen() {
   } = useMediaStore();
 
   const {
-    participants, messages, isHost, waitingList, hostId,
+    participants, isHost, waitingList, hostId,
     removeWaitingUser, screenSharingUserId, setScreenSharingUserId,
   } = useMeetingStore();
+  const messageCount = useMeetingStore((s) => s.messages.length);
 
-  const [showChat, setShowChat] = useState(true);
+  const [showChat, setShowChat] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const prevMessageCountRef = useRef(messageCount);
+
+  // Track unread messages when chat panel is closed
+  useEffect(() => {
+    if (messageCount > prevMessageCountRef.current) {
+      if (!showChat) {
+        setUnreadCount((c) => c + (messageCount - prevMessageCountRef.current));
+      }
+    }
+    prevMessageCountRef.current = messageCount;
+  }, [messageCount, showChat]);
+
+  const handleToggleChat = useCallback(() => {
+    const next = !showChat;
+    setShowChat(next);
+    if (next) setUnreadCount(0);
+  }, [showChat]);
   const myUserId = authUser?._id;
 
   // Is someone (me or remote) sharing screen?
@@ -258,51 +280,8 @@ export function MeetingScreen() {
 
         {/* Chat Sidebar */}
         <AnimatePresence>
-          {showChat && (
-            <motion.aside
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              className="w-80 flex flex-col bg-surface-container-low rounded-[2rem] shadow-sm overflow-hidden border border-outline-variant/10"
-            >
-              <div className="p-6 bg-surface-container-high flex justify-between items-center border-b border-outline-variant/10">
-                <h3 className="font-bold text-on-surface">Meeting Chat</h3>
-                <button onClick={() => setShowChat(false)} className="text-on-surface-variant hover:text-primary transition-colors">
-                  <X size={20} />
-                </button>
-              </div>
-              <ScrollArea className="flex-1 p-6">
-                <div className="space-y-6">
-                  {messages.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-32 text-center">
-                      <MessageSquare size={24} className="text-on-surface-variant/30 mb-2" />
-                      <p className="text-xs text-on-surface-variant/40">No messages yet</p>
-                    </div>
-                  ) : (
-                    messages.map((msg) => (
-                      <ChatMessage
-                        key={msg.id}
-                        name={msg.senderName}
-                        time={new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                        message={msg.content}
-                        isSelf={msg.senderId === myUserId}
-                      />
-                    ))
-                  )}
-                </div>
-              </ScrollArea>
-              <div className="p-6 bg-surface-container-low border-t border-outline-variant/10">
-                <div className="relative">
-                  <input
-                    className="w-full h-12 bg-surface-container-highest border-none rounded-2xl px-4 pr-12 text-sm focus:ring-2 focus:ring-primary/20 placeholder:text-on-surface-variant/40"
-                    placeholder="Send a message..."
-                  />
-                  <button className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-primary hover:bg-primary/10 rounded-xl transition-colors">
-                    <Send size={18} />
-                  </button>
-                </div>
-              </div>
-            </motion.aside>
+          {showChat && roomCode && (
+            <ChatPanel roomCode={roomCode} onClose={() => setShowChat(false)} sendMessage={sendMessage} />
           )}
         </AnimatePresence>
 
@@ -381,7 +360,7 @@ export function MeetingScreen() {
               : "px-8 w-auto bg-gradient-to-r from-primary to-primary-container text-white shadow-lg shadow-primary/20 border-none"
             }
           />
-          <ControlButton icon={<MessageSquare size={24} />} onClick={() => setShowChat(!showChat)} active={showChat} />
+          <ControlButton icon={<MessageSquare size={24} />} onClick={handleToggleChat} active={showChat} badge={unreadCount > 0 ? unreadCount : undefined} />
           <ControlButton icon={<Users size={24} />} badge={participants.length + 1} />
           {isHost && <WaitingRoomPanel roomCode={roomCode} waitingList={waitingList} removeWaitingUser={removeWaitingUser} />}
           <ControlButton icon={<Sparkles size={24} />} onClick={() => setShowFilters(!showFilters)} active={showFilters} />
@@ -470,24 +449,7 @@ function VideoTile({
   );
 }
 
-function ChatMessage({ name, time, message, isSelf = false }: {
-  name: string; time: string; message: string; isSelf?: boolean;
-}) {
-  return (
-    <div className={`flex flex-col gap-1.5 ${isSelf ? "items-end" : ""}`}>
-      <div className="flex justify-between w-full items-end px-1">
-        {!isSelf && <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface">{name}</span>}
-        <span className="text-[10px] text-on-surface-variant/40 uppercase tracking-widest">{time}</span>
-        {isSelf && <span className="text-[10px] font-bold uppercase tracking-widest text-primary">You</span>}
-      </div>
-      <div className={`p-4 rounded-3xl text-sm shadow-sm border ${
-        isSelf ? "bg-primary text-white rounded-tr-none border-primary" : "bg-white text-on-surface rounded-tl-none border-outline-variant/10"
-      }`}>
-        {message}
-      </div>
-    </div>
-  );
-}
+
 
 function ControlButton({ icon, label, active = false, badge, className, onClick }: {
   icon: React.ReactNode; label?: string; active?: boolean;

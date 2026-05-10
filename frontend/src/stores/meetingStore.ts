@@ -24,6 +24,8 @@ interface MeetingState {
   updateParticipantMedia: (userId: string, patch: { isAudioMuted?: boolean; isVideoMuted?: boolean }) => void;
 
   addMessage: (msg: ChatMessage) => void;
+  setMessages: (msgs: ChatMessage[]) => void;
+  prependMessages: (msgs: ChatMessage[]) => void;
 
   setWaitingList: (list: WaitingUser[]) => void;
   addWaitingUser: (user: WaitingUser) => void;
@@ -82,6 +84,8 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   })),
 
   addMessage: (msg) => set((state) => ({ messages: [...state.messages, msg] })),
+  setMessages: (msgs) => set({ messages: msgs }),
+  prependMessages: (msgs) => set((state) => ({ messages: [...msgs, ...state.messages] })),
 
   setWaitingList: (list) => set({ waitingList: list }),
 

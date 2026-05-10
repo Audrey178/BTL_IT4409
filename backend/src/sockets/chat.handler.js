@@ -18,7 +18,7 @@
  * Ngày tạo: 2026-04-08
  */
 
-import { Message } from '../models/index.js';
+import { Message, Room } from '../models/index.js';
 import { MESSAGE_TYPE, SOCKET_EVENTS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
 
@@ -44,9 +44,16 @@ export const handleChatSend = async (socket, data) => {
       return;
     }
 
+    // Kiểm tra và lấy thông tin Room
+    const room = await Room.findOne({ room_code: roomCode });
+    if (!room) {
+      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Phòng không tồn tại' });
+      return;
+    }
+
     // Lưu tin nhắn vào MongoDB
     const message = new Message({
-      room_id: roomCode, // Trong thực tế cần convert roomCode -> room ObjectId
+      room_id: room._id, // Đã convert roomCode -> room ObjectId
       sender_id: userId,
       sender_name: senderName,
       sender_avatar: senderAvatar,
@@ -102,8 +109,15 @@ export const handleChatHistory = async (socket, data) => {
 
     const skip = (page - 1) * limit;
 
+    // Kiểm tra và lấy thông tin Room
+    const room = await Room.findOne({ room_code: roomCode });
+    if (!room) {
+      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Phòng không tồn tại' });
+      return;
+    }
+
     // Lấy tin nhắn từ MongoDB
-    const messages = await Message.find({ room_id: roomCode })
+    const messages = await Message.find({ room_id: room._id })
       .sort({ timestamp: -1 })
       .skip(skip)
       .limit(limit)

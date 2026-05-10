@@ -25,6 +25,7 @@ export const CHAT_EVENTS = {
   SEND: 'chat:send',
   RECEIVE: 'chat:receive',
   SYSTEM_ALERT: 'chat:system_alert',
+  HISTORY: 'chat:history',
 } as const;
 
 export const MEDIA_EVENTS = {
