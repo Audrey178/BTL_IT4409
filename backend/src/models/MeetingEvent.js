@@ -15,7 +15,17 @@ const meetingEventSchema = new mongoose.Schema(
     },
     event_type: {
       type: String,
-      enum: ['room_created', 'user_joined', 'user_left', 'user_kicked', 'room_ended', 'user_approved', 'user_rejected'],
+      enum: [
+        'room_created',
+        'user_joined',
+        'user_left',
+        'user_kicked',
+        'room_ended',
+        'user_approved',
+        'user_rejected',
+        'recording_created',
+        'recording_deleted',
+      ],
       required: [true, 'Event type is required'],
       index: true,
     },

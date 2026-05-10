@@ -70,7 +70,7 @@ class RoomService {
 
       return {
         success: true,
-        room: room.toJSON(),
+        room: this.mapRoom(room),
       };
     } catch (error) {
       logger.error('Create room error:', error);
@@ -100,7 +100,7 @@ class RoomService {
         throw error;
       }
 
-      return room.toJSON();
+      return this.mapRoom(room);
     } catch (error) {
       logger.error('Get room info error:', error);
       throw error;
@@ -363,7 +363,7 @@ class RoomService {
       await this.logEvent(room._id, hostId, EVENT_TYPE.ROOM_ENDED, 'Room ended by host');
 
       logger.info(`✓ Room ended: ${roomCode}`);
-      return { success: true, room: room.toJSON() };
+      return { success: true, room: this.mapRoom(room) };
     } catch (error) {
       logger.error('End room error:', error);
       throw error;
@@ -394,6 +394,9 @@ class RoomService {
         participants: participants.map(p => ({
           ...p.toJSON(),
           user: p.user_id?.toJSON() || null,
+          id: p.user_id?._id?.toString() || p.user_id?.toString(),
+          fullName: p.user_id?.full_name || null,
+          avatar: p.user_id?.avatar || null,
         })),
       };
     } catch (error) {
@@ -435,6 +438,19 @@ class RoomService {
     } catch (error) {
       logger.error('Log event error:', error);
     }
+  }
+
+  mapRoom(room) {
+    const raw = typeof room.toJSON === 'function' ? room.toJSON() : room;
+    const host = raw.host_id;
+
+    return {
+      ...raw,
+      host_name: host?.full_name || raw.host_name || null,
+      require_approval: raw.settings?.require_approval ?? false,
+      allow_chat: raw.settings?.allow_chat ?? true,
+      max_participants: raw.settings?.max_participants ?? 100,
+    };
   }
 }
 

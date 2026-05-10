@@ -58,10 +58,23 @@ class HistoryService {
         room_id: { $in: roomIds },
         user_id: userId,
       }).lean();
+
+      const memberCounts = await RoomMember.aggregate([
+        {
+          $match: {
+            room_id: { $in: roomIds },
+            status: { $in: ['joined', 'left'] },
+          },
+        },
+        { $group: { _id: '$room_id', count: { $sum: 1 } } },
+      ]);
       
       // Create a map for quick lookup: roomId -> memberInfo
       const memberMap = new Map(
         memberInfos.map(m => [m.room_id.toString(), m])
+      );
+      const memberCountMap = new Map(
+        memberCounts.map(m => [m._id.toString(), m.count])
       );
 
       // Enrich with user's role in room
@@ -75,6 +88,14 @@ class HistoryService {
 
         return {
           ...room,
+          host_name: room.host_id?.full_name || null,
+          participant_count: memberCountMap.get(room._id.toString()) || 0,
+          duration: room.ended_at
+            ? Math.floor((room.ended_at - (room.started_at || room.created_at)) / 1000)
+            : null,
+          require_approval: room.settings?.require_approval ?? false,
+          allow_chat: room.settings?.allow_chat ?? true,
+          max_participants: room.settings?.max_participants ?? 100,
           userRole,
           userStatus: memberInfo?.status || 'unknown',
           userJoinedAt: memberInfo?.joined_at,

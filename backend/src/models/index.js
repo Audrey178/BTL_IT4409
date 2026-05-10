@@ -5,5 +5,6 @@ import RoomMember from './RoomMember.js';
 import AttendanceLog from './AttendanceLog.js';
 import Message from './Message.js';
 import MeetingEvent from './MeetingEvent.js';
+import Recording from './Recording.js';
 
-export { User, Room, RoomMember, AttendanceLog, Message, MeetingEvent };
+export { User, Room, RoomMember, AttendanceLog, Message, MeetingEvent, Recording };

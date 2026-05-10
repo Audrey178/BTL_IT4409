@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import path from 'path';
 import swaggerUi from 'swagger-ui-express';
 import { errorHandler, notFoundHandler } from './middlewares/index.js';
 import apiRoutes from './routes/index.js';
@@ -13,7 +14,9 @@ const app = express();
 app.set('trust proxy', 1);
 
 // Security & Compression Middleware
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
 
 // CORS Configuration
 const corsOptions = {
@@ -26,6 +29,9 @@ app.use(cors(corsOptions));
 // Body Parser Middleware
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Serve uploaded meeting assets (recordings/thumbnails)
+app.use('/uploads', express.static(path.resolve(process.cwd(), process.env.UPLOAD_DIR || 'uploads')));
 
 // HTTP Logger Middleware
 app.use(httpLogger);

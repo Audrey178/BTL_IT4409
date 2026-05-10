@@ -164,6 +164,34 @@ export const messageValidation = {
 };
 
 // ============================================================================
+// RECORDING VALIDATORS
+// ============================================================================
+
+export const recordingValidation = {
+  create: Joi.object({
+    title: Joi.string().min(1).max(255).trim().optional(),
+    description: Joi.string().max(1000).trim().allow('', null).optional(),
+    file_url: Joi.string().uri().optional(),
+    thumbnail_url: Joi.string().uri().allow('', null).optional(),
+    mime_type: Joi.string().max(100).trim().optional(),
+    size_bytes: Joi.number().min(0).optional(),
+    duration_seconds: Joi.number().min(0).optional(),
+    status: Joi.string().valid('processing', 'ready', 'failed').optional(),
+    recorded_at: Joi.date().iso().optional(),
+    metadata: Joi.object().unknown(true).optional(),
+  }),
+
+  update: Joi.object({
+    title: Joi.string().min(1).max(255).trim().optional(),
+    description: Joi.string().max(1000).trim().allow('', null).optional(),
+    thumbnail_url: Joi.string().uri().allow('', null).optional(),
+    duration_seconds: Joi.number().min(0).allow(null).optional(),
+    status: Joi.string().valid('processing', 'ready', 'failed').optional(),
+    metadata: Joi.object().unknown(true).allow(null).optional(),
+  }).min(1),
+};
+
+// ============================================================================
 // PAGINATION VALIDATORS
 // ============================================================================
 
@@ -179,6 +207,13 @@ export const paginationValidation = {
   listEvents: Joi.object({
     page: Joi.number().min(1).default(1).optional(),
     limit: Joi.number().min(1).max(100).default(50).optional(),
+  }),
+
+  listRecordings: Joi.object({
+    page: Joi.number().min(1).default(1).optional(),
+    limit: Joi.number().min(1).max(100).default(20).optional(),
+    status: Joi.string().valid('processing', 'ready', 'failed').optional(),
+    roomCode: Joi.string().trim().optional(),
   }),
 };
 
@@ -267,5 +302,6 @@ export default {
   roomValidation,
   attendanceValidation,
   messageValidation,
+  recordingValidation,
   paginationValidation,
 };
