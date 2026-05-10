@@ -7,5 +7,6 @@ const { verifyToken } = require('../../middlewares/auth.middleware');
 router.post('/', verifyToken, roomController.createRoom);
 router.put('/:roomCode/end', verifyToken, roomController.endRoom);
 router.get('/:roomCode/messages', verifyToken, roomController.getChatHistory);
+router.get('/:roomCode/attendance', verifyToken, roomController.getAttendanceReport);
 
 module.exports = router;

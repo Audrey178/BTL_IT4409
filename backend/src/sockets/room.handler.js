@@ -1,7 +1,10 @@
 const Room = require('../models/room.model');
+const User = require('../models/user.model');
+const Attendance = require('../models/attendance.model');
 const { addUserToRoom, updateSocketRoom } = require('../services/redis.service');
 const { removeUserFromRoom } = require('../services/redis.service');
 const { updateMediaState } = require('../services/redis.service');
+const { calculateEuclideanDistance } = require('../utils/math.util');
 
 module.exports = (io, socket) => {
     
@@ -237,6 +240,75 @@ module.exports = (io, socket) => {
 
         } catch (error) {
             console.error('Lỗi khi hạ tay:', error);
+        }
+    });
+
+    // ==========================================
+    // LỆNH 7: AI ĐIỂM DANH KHUÔN MẶT
+    // ==========================================
+    socket.on('room:attend_face', async (payload) => {
+        try {
+            const { roomCode, live_face_embeddings } = payload;
+            const userId = socket.userId;
+
+            // 1. Kiểm tra đầu vào
+            if (!live_face_embeddings || !Array.isArray(live_face_embeddings)) {
+                return socket.emit('room:attend_failed', { message: 'Dữ liệu khuôn mặt bị lỗi!' });
+            }
+
+            // 2. Lấy vector gốc của người này từ Database
+            const user = await User.findById(userId).select('face_embeddings');
+            
+            if (!user || !user.face_embeddings || user.face_embeddings.length === 0) {
+                return socket.emit('room:attend_failed', { 
+                    message: 'Bạn chưa đăng ký khuôn mặt trên hệ thống!' 
+                });
+            }
+
+            // 3. Chạy thuật toán so sánh Euclid
+            const distance = calculateEuclideanDistance(user.face_embeddings, live_face_embeddings);
+            
+            // Ngưỡng 0.6 là chuẩn của hầu hết các mô hình (như dlib, face-api)
+            const THRESHOLD = 0.6; 
+
+            if (distance < THRESHOLD) {
+                // KẾT QUẢ: KHỚP!
+                
+                try {
+                    // Cố gắng lưu vào Database. Nếu trùng (bị lỗi duplicate key do file Model quy định), 
+                    // khối catch tĩnh lặng bên dưới sẽ bỏ qua để không làm nghẽn hệ thống.
+                    await Attendance.create({
+                        room_code: roomCode,
+                        user_id: userId,
+                        confidence_score: distance
+                    });
+                } catch (dbError) {
+                    // Bỏ qua lỗi 11000 (Duplicate Key) vì người này đã điểm danh trước đó rồi
+                    if (dbError.code !== 11000) console.error('Lỗi lưu điểm danh:', dbError);
+                }
+
+                socket.emit('room:attend_success', {
+                    message: 'Điểm danh thành công!',
+                    distance: distance.toFixed(4)
+                });
+
+                io.to(roomCode).emit('room:user_attended', {
+                    userId: userId,
+                    message: `Người dùng ${userId} đã điểm danh thành công.`
+                });
+
+                console.log(`👁️ User [${userId}] điểm danh thành công.`);
+            } else {
+                // KẾT QUẢ: KHÔNG KHỚP (Có thể là người khác ngồi trước máy, hoặc ảnh in)
+                socket.emit('room:attend_failed', {
+                    message: 'Khuôn mặt không khớp với dữ liệu đăng ký!',
+                    distance: distance.toFixed(4)
+                });
+                console.log(`⚠️ Nhận diện thất bại cho User [${userId}]. Độ lệch: ${distance.toFixed(4)}`);
+            }
+
+        } catch (error) {
+            console.error('Lỗi khi AI điểm danh:', error);
         }
     });
 };

@@ -4,6 +4,7 @@ const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 const authRoutes = require('./routes/v1/auth.route');
 const roomRoutes = require('./routes/v1/room.route');
+const userRoutes = require('./routes/v1/user.route');
 const app = express();
 
 // Middleware cơ bản
@@ -11,6 +12,7 @@ app.use(cors());
 app.use(express.json());
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/rooms', roomRoutes);
+app.use('/api/v1/users', userRoutes);
 
 const swaggerOptions = {
     definition: {

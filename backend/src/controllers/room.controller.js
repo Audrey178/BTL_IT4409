@@ -1,5 +1,7 @@
 const Room = require('../models/room.model');
 const Message = require('../models/message.model');
+const Attendance = require('../models/attendance.model');
+
 const { deleteRoomData } = require('../services/redis.service'); 
 
 // Hàm tạo chuỗi ngẫu nhiên (VD: abc-def-ghi)
@@ -103,4 +105,36 @@ const getChatHistory = async (req, res) => {
     }
 };
 
-module.exports = { createRoom, endRoom, getChatHistory };
+// ==========================================
+// API: XUẤT BÁO CÁO ĐIỂM DANH
+// ==========================================
+const getAttendanceReport = async (req, res) => {
+    try {
+        const { roomCode } = req.params;
+        const userId = req.user.id;
+
+        // BẢO MẬT: Phải kiểm tra xem người gọi API có đúng là Chủ phòng không?
+        const room = await Room.findOne({ room_code: roomCode });
+        if (!room) return res.status(404).json({ message: 'Phòng không tồn tại!' });
+        
+        if (room.host_id.toString() !== userId) {
+            return res.status(403).json({ message: 'Chỉ Chủ phòng mới được xem báo cáo điểm danh!' });
+        }
+
+        // Lấy danh sách điểm danh và NỐI BẢNG (populate) để lấy thêm tên, email của người đó
+        const report = await Attendance.find({ room_code: roomCode })
+            .populate('user_id', 'full_name email student_id') // Chọn các trường muốn hiển thị
+            .sort({ check_in_time: 1 }); // Xếp theo thứ tự ai điểm danh trước lên trước
+
+        res.status(200).json({
+            message: 'Truy xuất báo cáo thành công',
+            total_attended: report.length,
+            data: report
+        });
+
+    } catch (error) {
+        res.status(500).json({ message: 'Lỗi khi lấy báo cáo điểm danh', error: error.message });
+    }
+};
+
+module.exports = { createRoom, endRoom, getChatHistory, getAttendanceReport };
