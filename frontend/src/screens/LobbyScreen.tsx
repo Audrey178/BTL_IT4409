@@ -1,26 +1,82 @@
+import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import { useMedia } from "@/hooks/useMedia";
-import { useMediaStore } from "@/stores/mediaStore";
-import { getSocket } from "@/socket/socket";
 import {
   Mic,
+  MicOff,
   Video,
+  VideoOff,
   Settings,
   ChevronLeft,
   Bell,
   HelpCircle,
 } from "lucide-react";
+import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { useMedia } from "@/hooks/useMedia";
+import { useMediaStore } from "@/stores/mediaStore";
+
+type MeetingMediaPreferences = {
+  displayName: string;
+  isMuted: boolean;
+  isVideoOff: boolean;
+};
+
+type VideoFilterKey = "original" | "warm" | "mono" | "cool" | "golden";
+
+const VIDEO_FILTERS: Record<
+  VideoFilterKey,
+  { label: string; css: string; accent: string }
+> = {
+  original: { label: "Original", css: "none", accent: "bg-surface-container-highest" },
+  warm: { label: "Warm", css: "sepia(0.25) saturate(1.35) contrast(1.04) brightness(1.02)", accent: "bg-orange-200" },
+  mono: { label: "Mono", css: "grayscale(1) contrast(1.05)", accent: "bg-stone-300" },
+  cool: { label: "Cool", css: "saturate(1.15) hue-rotate(20deg) contrast(1.05)", accent: "bg-blue-100" },
+  golden: { label: "Golden", css: "sepia(0.18) saturate(1.55) brightness(1.08) contrast(1.03)", accent: "bg-rose-100" },
+};
 
 export function LobbyScreen() {
-  const { requestMedia } = useMedia();
-  const { localStream, isAudioMuted, isVideoMuted, toggleAudio, toggleVideo } = useMediaStore();
-  const videoRef = useRef<HTMLVideoElement>(null);
   const navigate = useNavigate();
+  const { requestMedia } = useMedia();
+  const {
+    localStream,
+    isAudioMuted,
+    isVideoMuted,
+    toggleAudio,
+    toggleVideo,
+  } = useMediaStore();
+  const [displayName, setDisplayName] = useState("");
+  const getInitialFilter = () => {
+    try {
+      const url = new URL(window.location.href);
+      const f = url.searchParams.get('filter');
+      if (f && (f === 'original' || f === 'warm' || f === 'mono' || f === 'cool' || f === 'golden')) {
+        return f as VideoFilterKey;
+      }
+    } catch {}
+    const saved = sessionStorage.getItem('selectedFilter');
+    if (saved && (saved === 'original' || saved === 'warm' || saved === 'mono' || saved === 'cool' || saved === 'golden')) {
+      return saved as VideoFilterKey;
+    }
+    return 'original' as VideoFilterKey;
+  };
+  const [selectedFilter, setSelectedFilter] = useState<VideoFilterKey>(getInitialFilter);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    // apply filter to preview video element
+    if (videoRef.current) {
+      videoRef.current.style.filter = VIDEO_FILTERS[selectedFilter].css;
+    }
+    // persist to sessionStorage and update URL
+    try {
+      sessionStorage.setItem('selectedFilter', selectedFilter);
+      const url = new URL(window.location.href);
+      url.searchParams.set('filter', selectedFilter);
+      window.history.replaceState({}, '', url.toString());
+    } catch {}
+  }, [selectedFilter]);
 
   useEffect(() => {
     requestMedia();
@@ -33,8 +89,20 @@ export function LobbyScreen() {
   }, [localStream]);
 
   const handleJoin = () => {
+    const preferences: MeetingMediaPreferences = {
+      displayName,
+      isMuted: isAudioMuted,
+      isVideoOff: isVideoMuted,
+    };
+
+    sessionStorage.setItem(
+      "meeting-media-preferences",
+      JSON.stringify(preferences)
+    );
+
     navigate("/meeting/HEARTH-2024-STUDIO");
   };
+
   return (
     <div className="min-h-screen flex flex-col bg-surface">
       {/* Top Nav */}
@@ -85,7 +153,7 @@ export function LobbyScreen() {
         </div>
       </nav>
 
-      <main className="flex-grow flex items-center justify-center p-8 lg:p-12">
+      <main className="grow flex items-center justify-center p-8 lg:p-12">
         <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
           {/* Left: Content */}
           <div className="lg:col-span-5 space-y-8">
@@ -109,6 +177,8 @@ export function LobbyScreen() {
                   Display Name
                 </label>
                 <Input
+                  value={displayName}
+                  onChange={(event) => setDisplayName(event.target.value)}
                   className="h-14 bg-surface-container-highest border-none rounded-2xl px-6 text-on-surface placeholder:text-on-surface-variant/50 focus-visible:ring-2 focus-visible:ring-primary"
                   placeholder="How should we call you?"
                 />
@@ -116,7 +186,7 @@ export function LobbyScreen() {
               <div className="pt-4">
                 <Button
                   onClick={handleJoin}
-                  className="w-full h-16 bg-gradient-to-r from-primary to-primary-container text-white rounded-full font-bold text-xl shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
+                  className="w-full h-16 bg-linear-to-r from-primary to-primary-container text-white rounded-full font-bold text-xl shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
                 >
                   Join Meeting
                 </Button>
@@ -157,22 +227,40 @@ export function LobbyScreen() {
                 </span>
               </div>
 
+              {/* Filter selector (pre-join) */}
+              <div className="absolute top-6 right-6 bg-surface-bright/80 backdrop-blur-md px-3 py-2 rounded-full flex items-center gap-2 border border-outline-variant/20">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/80 mr-2">Filter</label>
+                <select
+                  value={selectedFilter}
+                  onChange={(e) => setSelectedFilter(e.target.value as VideoFilterKey)}
+                  className="h-8 text-sm bg-white/90 rounded-md px-2 border border-outline-variant"
+                >
+                  {Object.keys(VIDEO_FILTERS).map((k) => (
+                    <option key={k} value={k}>{VIDEO_FILTERS[k as VideoFilterKey].label}</option>
+                  ))}
+                </select>
+              </div>
+
               {/* Controls */}
               <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6 px-8 py-4 bg-surface-bright/90 backdrop-blur-xl rounded-full border border-outline-variant/20 shadow-2xl">
-                <LobbyControl 
-                  icon={<Mic size={24} />} 
-                  label={isAudioMuted ? "Unmute" : "Mute"} 
-                  active={!isAudioMuted} 
+                <LobbyControl
+                  icon={isAudioMuted ? <MicOff size={24} /> : <Mic size={24} />}
+                  label={isAudioMuted ? "Unmute" : "Mute"}
+                  active={!isAudioMuted}
                   onClick={toggleAudio}
                 />
                 <LobbyControl
-                  icon={<Video size={24} />}
+                  icon={isVideoMuted ? <VideoOff size={24} /> : <Video size={24} />}
                   label={isVideoMuted ? "Start Video" : "Stop Video"}
                   active={!isVideoMuted}
                   onClick={toggleVideo}
                 />
                 <div className="w-px h-10 bg-outline-variant/30 mx-2" />
-                <LobbyControl icon={<Settings size={24} />} label="Setup" onClick={() => {}} />
+                <LobbyControl
+                  icon={<Settings size={24} />}
+                  label="Setup"
+                  onClick={() => {}}
+                />
               </div>
             </motion.div>
 
@@ -185,11 +273,9 @@ export function LobbyScreen() {
             >
               <div className="flex items-center gap-3">
                 <div className="flex -space-x-2">
-                  {[1, 2].map((i) => (
-                    <Avatar key={i} className="w-8 h-8 border-2 border-white">
-                      <AvatarImage
-                        src={`https://i.pravatar.cc/100?u=${i + 10}`}
-                      />
+                  {[1, 2].map((index) => (
+                    <Avatar key={index} className="w-8 h-8 border-2 border-white">
+                      <AvatarImage src={`https://i.pravatar.cc/100?u=${index + 10}`} />
                       <AvatarFallback>U</AvatarFallback>
                     </Avatar>
                   ))}
@@ -228,9 +314,22 @@ export function LobbyScreen() {
   );
 }
 
-function LobbyControl({ icon, label, active = false }: any) {
+function LobbyControl({
+  icon,
+  label,
+  active = false,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active?: boolean;
+  onClick?: () => void;
+}) {
   return (
-    <button className="flex flex-col items-center gap-1.5 group">
+    <button
+      onClick={onClick}
+      className="flex flex-col items-center gap-1.5 group"
+    >
       <div
         className={`w-14 h-14 rounded-full flex items-center justify-center transition-all active:scale-90 ${
           active

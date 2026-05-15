@@ -16,6 +16,7 @@ const signInSchema = z.object({
 type SignInFormValue = z.infer<typeof signInSchema>;
 
 export function LoginScreen() {
+  const { signIn } = useAuthStore();
   const navigate = useNavigate();
   const {
     register,
@@ -23,14 +24,12 @@ export function LoginScreen() {
     formState: { errors, isSubmitting },
   } = useForm<SignInFormValue>({ resolver: zodResolver(signInSchema) });
 
-  const { signIn } = useAuthStore();
-  
   const onSubmit = async (data: SignInFormValue) => {
     const { email, password } = data;
     await signIn(email, password);
     const token = useAuthStore.getState().accessToken;
     if (token) {
-      navigate("/"); // or "/dashboard"
+      navigate("/");
     }
   };
 
@@ -39,10 +38,7 @@ export function LoginScreen() {
       title="Welcome back."
       description="Sign in to continue your conversations and manage your digital hearth."
     >
-      <form
-        className="space-y-6"
-        onSubmit={handleSubmit(onSubmit)}
-      >
+      <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
         <div className="space-y-2">
           <label
             htmlFor="email"
@@ -89,7 +85,7 @@ export function LoginScreen() {
             </button>
           </div>
         </div>
-        <Button className="w-full h-14 bg-gradient-to-r from-primary to-primary-container text-white font-bold text-lg rounded-full shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200">
+        <Button className="w-full h-14 bg-linear-to-r from-primary to-primary-container text-white font-bold text-lg rounded-full shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200">
           Sign In
         </Button>
       </form>

@@ -1,11 +1,4 @@
-import { useState, useEffect, useRef } from "react";
-import { useParams } from "react-router-dom";
-import { useSocket } from "@/hooks/useSocket";
-import { useWebRTC } from "@/hooks/useWebRTC";
-import { useMediaStore } from "@/stores/mediaStore";
-import { useMeetingStore } from "@/stores/meetingStore";
-import { useAuthStore } from "@/stores/useAuthStore";
-import { ROOM_EVENTS } from "@/socket/events";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Mic,
@@ -16,7 +9,6 @@ import {
   PhoneOff,
   MessageSquare,
   Users,
-  MoreHorizontal,
   Bell,
   HelpCircle,
   X,
@@ -24,36 +16,226 @@ import {
   XCircle,
   Sparkles,
   CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { useParams } from "react-router-dom";
+import { useWebRTC } from "@/hooks/useWebRTC";
+import { useMediaStore } from "@/stores/mediaStore";
+import { useMeetingStore } from "@/stores/meetingStore";
+
+type MeetingMediaPreferences = {
+  isMuted: boolean;
+  isVideoOff: boolean;
+  displayName?: string;
+};
+
+type VideoFilterKey = "original" | "warm" | "mono" | "cool" | "golden";
+
+type FaceBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+const VIDEO_FILTERS: Record<
+  VideoFilterKey,
+  { label: string; css: string; accent: string }
+> = {
+  original: {
+    label: "Original",
+    css: "none",
+    accent: "bg-surface-container-highest",
+  },
+  warm: {
+    label: "Warm",
+    css: "sepia(0.25) saturate(1.35) contrast(1.04) brightness(1.02)",
+    accent: "bg-orange-200",
+  },
+  mono: {
+    label: "Mono",
+    css: "grayscale(1) contrast(1.05)",
+    accent: "bg-stone-300",
+  },
+  cool: {
+    label: "Cool",
+    css: "saturate(1.15) hue-rotate(20deg) contrast(1.05)",
+    accent: "bg-blue-100",
+  },
+  golden: {
+    label: "Golden",
+    css: "sepia(0.18) saturate(1.55) brightness(1.08) contrast(1.03)",
+    accent: "bg-rose-100",
+  },
+};
+
+type FaceDetectorInstance = {
+  detect: (
+    source: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
+  ) => Promise<Array<{ boundingBox: DOMRectReadOnly }>>;
+};
+
+type FaceDetectorConstructor = new (options?: {
+  fastMode?: boolean;
+  maxDetectedFaces?: number;
+}) => FaceDetectorInstance;
+
+function getInitialMediaPreferences(): MeetingMediaPreferences {
+  const fallback = { isMuted: false, isVideoOff: false, displayName: "" };
+
+  const savedPreferences = sessionStorage.getItem("meeting-media-preferences");
+  if (!savedPreferences) {
+    return fallback;
+  }
+
+  try {
+    const parsed = JSON.parse(savedPreferences);
+    return {
+      isMuted: Boolean(parsed.isMuted),
+      isVideoOff: Boolean(parsed.isVideoOff),
+      displayName: typeof parsed.displayName === "string" ? parsed.displayName : "",
+    };
+  } catch {
+    return fallback;
+  }
+}
 
 export function MeetingScreen() {
-  const { id: roomCode } = useParams<{ id: string }>();
-  const socket = useSocket();
-  const authUser = useAuthStore(state => state.user);
-  
-  // Signaling
-  useWebRTC(roomCode || null);
-  
-  const { localStream, isAudioMuted, isVideoMuted, toggleAudio, toggleVideo } = useMediaStore();
-  const { participants, messages } = useMeetingStore();
-
+  const [isMuted, setIsMuted] = useState(false);
+  const [isVideoOff, setIsVideoOff] = useState(false);
   const [showChat, setShowChat] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
+  const getInitialFilter = () => {
+    try {
+      const url = new URL(window.location.href);
+      const f = url.searchParams.get('filter');
+      if (f && (f === 'original' || f === 'warm' || f === 'mono' || f === 'cool' || f === 'golden')) {
+        return f as VideoFilterKey;
+      }
+    } catch {}
+    const saved = sessionStorage.getItem('selectedFilter');
+    if (saved && (saved === 'original' || saved === 'warm' || saved === 'mono' || saved === 'cool' || saved === 'golden')) {
+      return saved as VideoFilterKey;
+    }
+    return 'original' as VideoFilterKey;
+  };
+
+  const [selectedFilter, setSelectedFilter] = useState<VideoFilterKey>(getInitialFilter);
+  const [faceOverlayEnabled, setFaceOverlayEnabled] = useState(false);
+  const [faceDetectionSupported, setFaceDetectionSupported] = useState(false);
+  const [faceBoxes, setFaceBoxes] = useState<FaceBox[]>([]);
+  const selfPreviewRef = useRef<HTMLVideoElement | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isCameraReady, setIsCameraReady] = useState(false);
+  const [applyOutgoing, setApplyOutgoing] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const offscreenVideoRef = useRef<HTMLVideoElement | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const canvasStreamRef = useRef<MediaStream | null>(null);
+  const params = useParams();
+  const roomId = params.id ?? null;
+  const { replaceOutgoingTrack } = useWebRTC(roomId) as any;
+  const { localStream, isAudioMuted, isVideoMuted, toggleAudio, toggleVideo } = useMediaStore();
+  const presenterName = useMeetingStore((s) => s.participants.find((p: any) => p.isHost)?.fullName ?? 'Host');
+  const currentVideoFilter = VIDEO_FILTERS[selectedFilter].css;
 
   useEffect(() => {
-    if (socket && roomCode && authUser) {
-      socket.emit(ROOM_EVENTS.JOIN, { 
-        roomCode, 
-        userId: authUser._id, 
-        user: authUser 
-      });
+    // apply to self preview element
+    if (selfPreviewRef.current) {
+      selfPreviewRef.current.style.filter = VIDEO_FILTERS[selectedFilter].css;
     }
-  }, [socket, roomCode, authUser]);
+    // persist and update URL
+    try {
+      sessionStorage.setItem('selectedFilter', selectedFilter);
+      const url = new URL(window.location.href);
+      url.searchParams.set('filter', selectedFilter);
+      window.history.replaceState({}, '', url.toString());
+    } catch {}
+  }, [selectedFilter]);
+
+  const startCanvasPipeline = useCallback((filterCss: string) => {
+    if (!localStream || !replaceOutgoingTrack) return;
+
+    // Create offscreen video element
+    let v = offscreenVideoRef.current;
+    if (!v) {
+      v = document.createElement('video');
+      v.autoplay = true;
+      v.muted = true;
+      v.playsInline = true;
+      offscreenVideoRef.current = v;
+    }
+    v.srcObject = localStream;
+
+    // Create canvas
+    let canvas = canvasRef.current;
+    if (!canvas) {
+      canvas = document.createElement('canvas');
+      canvasRef.current = canvas;
+    }
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const draw = () => {
+      if (!v || v.readyState < 2) {
+        rafRef.current = requestAnimationFrame(draw);
+        return;
+      }
+      const w = v.videoWidth || 640;
+      const h = v.videoHeight || 480;
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      ctx.filter = filterCss === 'none' ? 'none' : filterCss;
+      ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+      rafRef.current = requestAnimationFrame(draw);
+    };
+
+    rafRef.current = requestAnimationFrame(draw);
+
+    const stream = (canvas as HTMLCanvasElement).captureStream(30);
+    canvasStreamRef.current = stream;
+
+    const track = stream.getVideoTracks()[0];
+    if (track) {
+      replaceOutgoingTrack(track);
+    }
+  }, [localStream, replaceOutgoingTrack]);
+
+  const stopCanvasPipeline = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    if (canvasStreamRef.current) {
+      canvasStreamRef.current.getTracks().forEach(t => t.stop());
+      canvasStreamRef.current = null;
+    }
+    if (replaceOutgoingTrack) {
+      // revert to original local video track
+      const orig = localStream?.getVideoTracks()?.[0] ?? null;
+      replaceOutgoingTrack(orig ?? null);
+    }
+  }, [localStream, replaceOutgoingTrack]);
+
+  useEffect(() => {
+    if (applyOutgoing) {
+      const filterCss = VIDEO_FILTERS[selectedFilter].css;
+      startCanvasPipeline(filterCss);
+    } else {
+      stopCanvasPipeline();
+    }
+    return () => {
+      // cleanup on unmount
+      stopCanvasPipeline();
+    };
+  }, [applyOutgoing, selectedFilter, startCanvasPipeline, stopCanvasPipeline]);
 
   return (
     <div className="h-screen flex flex-col bg-surface overflow-hidden">
@@ -93,7 +275,7 @@ export function MeetingScreen() {
               <AvatarFallback>EV</AvatarFallback>
             </Avatar>
             <span className="font-bold text-orange-900 text-sm">
-              Elena Vance
+              {presenterName}
             </span>
           </div>
         </div>
@@ -106,23 +288,34 @@ export function MeetingScreen() {
         >
           {/* Local User */}
           <VideoTile
-            name={authUser?.full_name || "You"}
-            stream={localStream}
-            isMuted={isAudioMuted}
-            isVideoOff={isVideoMuted}
-            isLocal={true}
+            name="Marcus Chen (Host)"
+            isHost
+            src="https://picsum.photos/seed/host/800/600"
           />
-          
-          {/* Remote Users */}
-          {participants.map(p => (
-            <VideoTile
-              key={p.id}
-              name={p.fullName}
-              stream={p.stream}
-              isMuted={p.isAudioMuted}
-              isVideoOff={p.isVideoMuted}
-            />
-          ))}
+          <VideoTile
+            name="Sarah Jenkins"
+            src="https://picsum.photos/seed/sarah/800/600"
+          />
+          <VideoTile
+            name="David Miller"
+            isMuted
+            src="https://picsum.photos/seed/david/800/600"
+          />
+          <div className="relative rounded-3xl overflow-hidden bg-stone-900 shadow-sm flex items-center justify-center">
+              <div className="absolute inset-0 opacity-50 bg-linear-to-br from-orange-900 to-stone-900 flex flex-col items-center justify-center text-center p-8">
+              <ScreenShare size={64} className="text-orange-200 mb-4" />
+              <h3 className="text-orange-50 font-bold text-xl">
+                Presentation in Progress
+              </h3>
+              <p className="text-orange-200/70 text-sm mt-2">
+                Sarah is sharing her screen
+              </p>
+            </div>
+            <div className="absolute bottom-4 left-4 flex items-center gap-2 px-3 py-1.5 bg-black/40 backdrop-blur-md rounded-full text-white text-xs">
+              <ScreenShare size={14} />
+              <span className="font-medium">Sarah's Screen</span>
+            </div>
+          </div>
         </div>
 
         {/* Chat Sidebar */}
@@ -181,6 +374,13 @@ export function MeetingScreen() {
                   </button>
                 </div>
               </div>
+              <div className="pt-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-semibold">Apply Filter to Outgoing Stream</label>
+                  <Switch checked={applyOutgoing} onCheckedChange={(v) => setApplyOutgoing(Boolean(v))} />
+                </div>
+                <p className="text-xs text-on-surface-variant mt-2">When enabled, selected studio filter is rendered to a canvas and sent to peers instead of the raw camera.</p>
+              </div>
             </motion.aside>
           )}
         </AnimatePresence>
@@ -192,7 +392,7 @@ export function MeetingScreen() {
               initial={{ opacity: 0, scale: 0.95, x: 20 }}
               animate={{ opacity: 1, scale: 1, x: 0 }}
               exit={{ opacity: 0, scale: 0.95, x: 20 }}
-              className="absolute top-6 right-6 w-80 max-h-[calc(100%-120px)] glass-panel rounded-[2.5rem] shadow-2xl border border-white/40 flex flex-col overflow-hidden z-[60]"
+              className="absolute top-6 right-6 w-80 max-h-[calc(100%-120px)] glass-panel rounded-[2.5rem] shadow-2xl border border-white/40 flex flex-col overflow-hidden z-60"
             >
               <div className="p-8 pb-4 flex justify-between items-center">
                 <h2 className="text-xl font-bold text-orange-950 tracking-tight">
@@ -209,38 +409,64 @@ export function MeetingScreen() {
                 <div className="space-y-8">
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60 mb-4">
-                      Focus & Backgrounds
+                      Video Filters
                     </p>
                     <div className="grid grid-cols-2 gap-4">
                       <FilterItem
                         label="Original"
-                        active
+                        active={selectedFilter === "original"}
                         icon={<XCircle size={24} />}
+                        onClick={() => setSelectedFilter("original")}
                       />
                       <FilterItem
-                        label="Soft Blur"
-                        src="https://picsum.photos/seed/blur/200/120"
-                        blur
+                        label="Warm"
+                        src="https://picsum.photos/seed/warm/200/120"
+                        active={selectedFilter === "warm"}
+                        onClick={() => setSelectedFilter("warm")}
                       />
                       <FilterItem
-                        label="Oak Studio"
-                        src="https://picsum.photos/seed/oak/200/120"
+                        label="Mono"
+                        src="https://picsum.photos/seed/mono/200/120"
+                        active={selectedFilter === "mono"}
+                        onClick={() => setSelectedFilter("mono")}
                       />
                       <FilterItem
-                        label="The Hearth"
-                        src="https://picsum.photos/seed/hearth/200/120"
+                        label="Cool"
+                        src="https://picsum.photos/seed/cool/200/120"
+                        active={selectedFilter === "cool"}
+                        onClick={() => setSelectedFilter("cool")}
                       />
                     </div>
                   </div>
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60 mb-4">
-                      Mood & Color
+                      Color Presets
                     </p>
                     <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
-                      <ColorFilter color="bg-orange-200" label="Warm" />
-                      <ColorFilter color="bg-stone-300" label="Mono" />
-                      <ColorFilter color="bg-blue-100" label="Cool" />
-                      <ColorFilter color="bg-rose-100" label="Golden" />
+                      <ColorFilter
+                        color={VIDEO_FILTERS.warm.accent}
+                        label="Warm"
+                        active={selectedFilter === "warm"}
+                        onClick={() => setSelectedFilter("warm")}
+                      />
+                      <ColorFilter
+                        color={VIDEO_FILTERS.mono.accent}
+                        label="Mono"
+                        active={selectedFilter === "mono"}
+                        onClick={() => setSelectedFilter("mono")}
+                      />
+                      <ColorFilter
+                        color={VIDEO_FILTERS.cool.accent}
+                        label="Cool"
+                        active={selectedFilter === "cool"}
+                        onClick={() => setSelectedFilter("cool")}
+                      />
+                      <ColorFilter
+                        color={VIDEO_FILTERS.golden.accent}
+                        label="Golden"
+                        active={selectedFilter === "golden"}
+                        onClick={() => setSelectedFilter("golden")}
+                      />
                     </div>
                   </div>
                 </div>
@@ -250,11 +476,20 @@ export function MeetingScreen() {
                   <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
                     <Sparkles size={18} className="text-primary" />
                   </div>
-                  <span className="text-sm font-bold text-orange-950">
-                    Auto-Touchup
-                  </span>
+                  <div>
+                    <span className="block text-sm font-bold text-orange-950">
+                      Face Tracking
+                    </span>
+                    <span className="block text-[10px] text-on-surface-variant/60">
+                      Experimental browser face detection
+                    </span>
+                  </div>
                 </div>
-                <Switch defaultChecked />
+                <Switch
+                  checked={faceOverlayEnabled}
+                  onCheckedChange={setFaceOverlayEnabled}
+                  disabled={!faceDetectionSupported}
+                />
               </div>
             </motion.div>
           )}
@@ -278,7 +513,7 @@ export function MeetingScreen() {
           <ControlButton
             icon={<ScreenShare size={24} />}
             label="Share Screen"
-            className="px-8 w-auto bg-gradient-to-r from-primary to-primary-container text-white shadow-lg shadow-primary/20 border-none"
+            className="px-8 w-auto bg-linear-to-r from-primary to-primary-container text-white shadow-lg shadow-primary/20 border-none"
           />
           <ControlButton
             icon={<MessageSquare size={24} />}
@@ -301,14 +536,62 @@ export function MeetingScreen() {
 
         {/* Self Preview Floating */}
         <div className="absolute right-8 bottom-8 w-48 aspect-video rounded-2xl overflow-hidden border-2 border-primary shadow-2xl">
-          <img
-            src="https://picsum.photos/seed/me/400/225"
-            alt="Self"
-            className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
-          />
+          {!cameraError ? (
+            <video
+              ref={selfPreviewRef}
+              autoPlay
+              muted
+              playsInline
+              style={{ filter: currentVideoFilter }}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full bg-surface-container-high flex items-center justify-center p-3 text-center">
+              <div>
+                <AlertCircle className="mx-auto text-error" size={18} />
+                <p className="text-[10px] mt-1 text-on-surface-variant">Camera blocked</p>
+              </div>
+            </div>
+          )}
+
+          {!isCameraReady && !cameraError && (
+            <div className="absolute inset-0 bg-surface/70 backdrop-blur-sm flex items-center justify-center text-[10px] font-bold tracking-widest uppercase text-on-surface-variant">
+              Loading...
+            </div>
+          )}
+
+          {isVideoOff && (
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center text-white text-center">
+              <div>
+                <VideoOff className="mx-auto mb-1" size={18} />
+                <p className="text-[10px] font-bold uppercase tracking-widest">Camera Off</p>
+              </div>
+            </div>
+          )}
+
+          {faceOverlayEnabled && faceDetectionSupported && faceBoxes.length > 0 && (
+            <div className="absolute inset-0 pointer-events-none">
+              {faceBoxes.map((box, index) => (
+                <div
+                  key={`${index}-${box.x}-${box.y}`}
+                  className="absolute rounded-2xl border-2 border-primary/80"
+                  style={{
+                    left: box.x,
+                    top: box.y,
+                    width: box.width,
+                    height: box.height,
+                  }}
+                >
+                  <span className="absolute -top-6 left-0 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-white shadow-lg">
+                    Face
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="absolute bottom-2 left-2 bg-black/40 backdrop-blur-md px-2 py-1 rounded-lg text-[10px] text-white font-bold">
-            You (Live)
+            {presenterName} {isVideoOff ? "(Hidden)" : "(Live)"}
           </div>
         </div>
       </div>
@@ -421,9 +704,9 @@ function ControlButton({
   );
 }
 
-function FilterItem({ label, active = false, src, icon, blur = false }: any) {
+function FilterItem({ label, active = false, src, icon, blur = false, onClick }: any) {
   return (
-    <button className="flex flex-col gap-2 text-left group">
+    <button onClick={onClick} className="flex flex-col gap-2 text-left group">
       <div
         className={`aspect-video w-full rounded-2xl overflow-hidden relative border-2 transition-all ${
           active
@@ -455,11 +738,11 @@ function FilterItem({ label, active = false, src, icon, blur = false }: any) {
   );
 }
 
-function ColorFilter({ color, label }: any) {
+function ColorFilter({ color, label, active = false, onClick }: any) {
   return (
-    <button className="flex-shrink-0 w-16 flex flex-col items-center gap-2 group">
+    <button onClick={onClick} className="shrink-0 w-16 flex flex-col items-center gap-2 group">
       <div
-        className={`w-12 h-12 rounded-full border-2 border-white shadow-sm transition-transform group-hover:scale-110 ${color}`}
+        className={`w-12 h-12 rounded-full border-2 border-white shadow-sm transition-transform group-hover:scale-110 ${color} ${active ? "ring-4 ring-primary/30 scale-110" : ""}`}
       />
       <span className="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">
         {label}

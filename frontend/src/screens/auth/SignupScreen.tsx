@@ -1,12 +1,13 @@
 import { AuthLayout } from "@/components/auth/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Eye, Apple } from "lucide-react";
+import { Eye, EyeOff, Apple } from "lucide-react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod"; // ket noi zod voi react hook form
 import { useNavigate } from "react-router";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { useState } from "react";
 
 const signUpSchema = z.object({
   fullname: z.string().min(1, "FullName must be have!"),
@@ -19,6 +20,7 @@ type SignUpFormValue = z.infer<typeof signUpSchema>;
 export function SignupScreen() {
   const { signUp } = useAuthStore();
   const navigate = useNavigate();
+  const [showPassword, setShowPassword] = useState(false);
   const {
     register,
     handleSubmit,
@@ -27,9 +29,12 @@ export function SignupScreen() {
 
   const onSubmit = async (data: SignUpFormValue) => {
     const { fullname, email, password } = data;
-    await signUp(fullname, email, password);
-
-    navigate("/signin");
+    try {
+      await signUp(fullname, email, password);
+      navigate("/signin");
+    } catch {
+      // Keep users on the form when signup fails.
+    }
   };
   return (
     <AuthLayout
@@ -88,14 +93,15 @@ export function SignupScreen() {
               id="password"
               className="h-14 rounded-xl border-none bg-surface-container-highest text-on-surface placeholder:text-outline focus-visible:ring-2 focus-visible:ring-primary/20"
               placeholder="••••••••"
-              type="password"
+              type={showPassword ? "text" : "password"}
               {...register("password")}
             />
             <button
               type="button"
+              onClick={() => setShowPassword((prev) => !prev)}
               className="absolute right-4 top-1/2 -translate-y-1/2 text-outline hover:text-primary transition-colors"
             >
-              <Eye size={20} />
+              {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
             </button>
           </div>
           {/* Error */}
@@ -103,8 +109,12 @@ export function SignupScreen() {
             <p className="text-xs text-red-500">{errors.password.message}</p>
           )}
         </div>
-        <Button className="w-full h-14 bg-gradient-to-r from-primary to-primary-container text-white font-bold text-lg rounded-full shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200">
-          Sign Up
+        <Button
+          type="submit"
+          disabled={isSubmitting}
+          className="w-full h-14 bg-linear-to-r from-primary to-primary-container text-white font-bold text-lg rounded-full shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+        >
+          {isSubmitting ? "Signing Up..." : "Sign Up"}
         </Button>
       </form>
 

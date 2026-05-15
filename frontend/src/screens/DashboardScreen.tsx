@@ -1,5 +1,4 @@
-import React from "react";
-import { useNavigate } from "react-router";
+import React, { useMemo, useState } from "react";
 import { motion } from "motion/react";
 import {
   LayoutDashboard,
@@ -18,35 +17,88 @@ import {
   MoreVertical,
   Star,
   Bot,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
+import { useNavigate } from "react-router";
 import { useAuthStore } from "@/stores/useAuthStore";
-import { toast } from "sonner";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+
+type MeetingWindow = "all" | "today" | "this-week" | "next-week";
+
+type MeetingItem = {
+  date: string;
+  month: string;
+  title: string;
+  time: string;
+  location: string;
+  participants: number;
+  active?: boolean;
+  window: Exclude<MeetingWindow, "all">;
+};
+
+const meetingFilters: Array<{ value: MeetingWindow; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "today", label: "Today" },
+  { value: "this-week", label: "This Week" },
+  { value: "next-week", label: "Next Week" },
+];
+
+const upcomingMeetings: MeetingItem[] = [
+  {
+    date: "02",
+    month: "Oct",
+    title: "Product Sync & Design Review",
+    time: "10:00 AM - 11:30 AM",
+    location: "Studio A",
+    participants: 4,
+    active: true,
+    window: "today",
+  },
+  {
+    date: "04",
+    month: "Oct",
+    title: "Q4 Strategy Brainstorm",
+    time: "2:00 PM - 3:30 PM",
+    location: "Digital Hearth 1",
+    participants: 12,
+    window: "this-week",
+  },
+  {
+    date: "09",
+    month: "Oct",
+    title: "Project 'Phoenix' Kickoff",
+    time: "09:00 AM - 10:00 AM",
+    location: "Main Hall",
+    participants: 2,
+    window: "next-week",
+  },
+];
 
 export function DashboardScreen() {
   const navigate = useNavigate();
-  const { logout } = useAuthStore();
+  const logout = useAuthStore((s) => s.logout);
+  const user = useAuthStore((s) => s.user);
+  const [meetingWindow, setMeetingWindow] = useState<MeetingWindow>("all");
+  const [meetingSearch, setMeetingSearch] = useState("");
 
-  const handleNewMeeting = () => {
-    navigate('/lobby');
-  };
+  const filteredMeetings = useMemo(() => {
+    const query = meetingSearch.trim().toLowerCase();
 
-  const handleLogout = async () => {
-    try {
-      logout();
-      toast.success("Logged out successfully");
-      navigate('/signin');
-    } catch (error) {
-      toast.error("Logout failed");
-      console.error(error);
-    }
-  };
+    return upcomingMeetings.filter((meeting) => {
+      const matchesWindow =
+        meetingWindow === "all" || meeting.window === meetingWindow;
+      const matchesQuery =
+        !query ||
+        [meeting.title, meeting.location, meeting.time, meeting.month, meeting.date]
+          .join(" ")
+          .toLowerCase()
+          .includes(query);
 
-  const handleJoinMeeting = (meetingId: string) => {
-    navigate(`/meeting/${meetingId}`);
-  };
+      return matchesWindow && matchesQuery;
+    });
+  }, [meetingSearch, meetingWindow]);
+
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
@@ -60,6 +112,9 @@ export function DashboardScreen() {
             <p className="text-xs text-on-surface-variant/70 font-medium">
               Professional Studio
             </p>
+            {user && (
+              <span className="block text-xs text-on-surface-variant mt-2">{user.email}</span>
+            )}
           </div>
         </div>
 
@@ -74,13 +129,25 @@ export function DashboardScreen() {
           <NavItem icon={<Archive size={20} />} label="Archives" />
         </nav>
 
-        <div className="px-6 mb-8">
+        <div className="px-6 mb-8 space-y-2">
           <Button
-            onClick={handleNewMeeting}
+            onClick={() => navigate("/lobby")}
             className="w-full h-12 bg-primary text-white rounded-full font-bold shadow-lg shadow-primary/20 flex items-center justify-center gap-2"
           >
             <Plus size={20} />
             New Meeting
+          </Button>
+          <Button
+            onClick={() => navigate("/signin")}
+            className="w-full h-12 bg-linear-to-r from-primary to-primary-container text-white font-bold rounded-full shadow-lg shadow-primary/20"
+          >
+            Login
+          </Button>
+          <Button
+            onClick={() => navigate("/signup")}
+            className="w-full h-12 bg-linear-to-r from-primary to-primary-container text-white font-bold rounded-full shadow-lg shadow-primary/20"
+          >
+            Signup
           </Button>
         </div>
 
@@ -94,7 +161,10 @@ export function DashboardScreen() {
             <span className="text-sm font-medium">Settings</span>
           </button>
           <button
-            onClick={handleLogout}
+            onClick={() => {
+              logout();
+              navigate("/signin");
+            }}
             className="flex items-center gap-4 text-error hover:opacity-80 transition-colors w-full pt-2"
           >
             <span className="text-sm font-bold">Logout</span>
@@ -118,8 +188,8 @@ export function DashboardScreen() {
             </p>
           </div>
           <Button
-            onClick={handleNewMeeting}
-            className="h-14 px-8 bg-gradient-to-r from-primary to-primary-container text-white rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3 group"
+            onClick={() => navigate("/lobby")}
+            className="h-14 px-8 bg-linear-to-r from-primary to-primary-container text-white rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3 group"
           >
             <Plus
               className="group-hover:rotate-90 transition-transform"
@@ -211,56 +281,82 @@ export function DashboardScreen() {
 
           {/* Right Column: Meetings */}
           <div className="col-span-12 lg:col-span-8 space-y-8">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-on-surface">
-                Upcoming Meetings
-              </h2>
-              <div className="flex gap-2">
-                <Badge className="bg-secondary-container text-on-secondary-container hover:bg-secondary-container px-4 py-1.5 rounded-full text-xs font-bold">
-                  Today
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className="text-on-surface-variant/60 border-outline-variant/20 px-4 py-1.5 rounded-full text-xs font-bold"
-                >
-                  This Week
-                </Badge>
+            <div className="space-y-4">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-on-surface">
+                    Upcoming Meetings
+                  </h2>
+                  <p className="text-sm text-on-surface-variant mt-1">
+                    {filteredMeetings.length} meeting
+                    {filteredMeetings.length === 1 ? "" : "s"} matched your
+                    filters.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-3 lg:min-w-md">
+                  <div className="flex items-center gap-3 rounded-full border border-outline-variant/15 bg-surface-container-lowest px-4 py-3 shadow-sm">
+                    <Search size={18} className="text-on-surface-variant/60" />
+                    <input
+                      value={meetingSearch}
+                      onChange={(event) => setMeetingSearch(event.target.value)}
+                      placeholder="Search meetings, rooms, time..."
+                      className="w-full bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/40 outline-none"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {meetingFilters.map((filter) => {
+                      const active = meetingWindow === filter.value;
+
+                      return (
+                        <button
+                          key={filter.value}
+                          onClick={() => setMeetingWindow(filter.value)}
+                          className={`rounded-full px-4 py-2 text-xs font-bold transition-all ${
+                            active
+                              ? "bg-secondary-container text-on-secondary-container shadow-sm"
+                              : "border border-outline-variant/20 bg-surface-container-low text-on-surface-variant hover:border-primary/30 hover:text-primary"
+                          }`}
+                        >
+                          {filter.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {filteredMeetings.length > 0 ? (
+                  filteredMeetings.map((meeting) => (
+                    <MeetingCard
+                      key={`${meeting.title}-${meeting.date}`}
+                      date={meeting.date}
+                      month={meeting.month}
+                      title={meeting.title}
+                      time={meeting.time}
+                      location={meeting.location}
+                      participants={meeting.participants}
+                      onJoin={() => navigate("/lobby")}
+                      active={meeting.active}
+                    />
+                  ))
+                ) : (
+                  <div className="rounded-3xl border border-dashed border-outline-variant/20 bg-surface-container-lowest p-8 text-center">
+                    <p className="text-lg font-bold text-on-surface">
+                      No meetings match this filter.
+                    </p>
+                    <p className="mt-2 text-sm text-on-surface-variant">
+                      Try a different search term or switch to another time
+                      range.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="space-y-4">
-              <MeetingCard
-                date="02"
-                month="Oct"
-                title="Product Sync & Design Review"
-                time="10:00 AM - 11:30 AM"
-                location="Studio A"
-                participants={4}
-                onJoin={() => handleJoinMeeting("HEARTH-2024-STUDIO")}
-                active
-              />
-              <MeetingCard
-                date="04"
-                month="Oct"
-                title="Q4 Strategy Brainstorm"
-                time="2:00 PM - 3:30 PM"
-                location="Digital Hearth 1"
-                participants={12}
-                onJoin={() => handleJoinMeeting("HEARTH-2024-Q4")}
-              />
-              <MeetingCard
-                date="09"
-                month="Oct"
-                title="Project 'Phoenix' Kickoff"
-                time="09:00 AM - 10:00 AM"
-                location="Main Hall"
-                participants={2}
-                onJoin={() => handleJoinMeeting("HEARTH-2024-PHOENIX")}
-              />
-            </div>
-
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
-              <div className="bg-gradient-to-br from-primary to-primary-container p-8 rounded-3xl text-white flex flex-col justify-between aspect-square md:aspect-auto">
+              <div className="bg-linear-to-br from-primary to-primary-container p-8 rounded-3xl text-white flex flex-col justify-between aspect-square md:aspect-auto">
                 <LayoutDashboard size={32} />
                 <div>
                   <h3 className="text-2xl font-bold">Total Meeting Time</h3>
