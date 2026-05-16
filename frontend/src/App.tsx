@@ -4,6 +4,7 @@ import { LobbyScreen } from "./screens/lobby/LobbyScreen";
 import { MeetingScreen } from "./screens/meeting/MeetingScreen";
 import { ScheduleScreen } from "./screens/schedule/ScheduleScreen";
 import { AdminDashboardScreen } from "./screens/admin/AdminDashboardScreen";
+import { RecordingScreen } from "./screens/RecordingScreen";
 import { SignupScreen } from "./screens/auth/SignupScreen";
 import { LoginScreen } from "./screens/auth/LoginScreen";
 import { ProfileScreen } from "./screens/auth/ProfileScreen";
@@ -34,6 +35,7 @@ export default function App() {
             <Route path="/schedule" element={<ScheduleScreen />} />
             <Route path="/lobby" element={<LobbyScreen />} />
             <Route path="/meeting/:id" element={<MeetingScreen />} />
+            <Route path="/recording" element={<RecordingScreen />} />
             <Route path="/profile" element={<ProfileScreen />} />
           </Route>
 

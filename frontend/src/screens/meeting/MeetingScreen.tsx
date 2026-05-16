@@ -7,13 +7,15 @@ import { useChatEvents } from "@/hooks/useChatEvents";
 import { useMediaStore } from "@/stores/mediaStore";
 import { useMeetingStore } from "@/stores/meetingStore";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { useRecordingStore } from "@/stores/recordingStore";
 import { ROOM_EVENTS, MEDIA_EVENTS } from "@/socket/events";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import {
-  Mic, MicOff, Video, VideoOff, ScreenShare, ScreenShareOff,
+  Circle, Mic, MicOff, Video, VideoOff, ScreenShare, ScreenShareOff,
   PhoneOff, MessageSquare, Users, X, XCircle,
   Sparkles, CheckCircle2, Badge, MonitorUp,
+  Square,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -103,6 +105,7 @@ export function MeetingScreen() {
     participants, isHost, waitingList, hostId,
     removeWaitingUser, screenSharingUserId, setScreenSharingUserId,
   } = useMeetingStore();
+  const setRecording = useRecordingStore((s) => s.setRecording);
   
   console.log("participants: ", participants);
   const messageCount = useMeetingStore((s) => s.messages.length);
@@ -112,8 +115,12 @@ export function MeetingScreen() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [isEndingMeeting, setIsEndingMeeting] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<VideoFilterKey>("original");
   const prevMessageCountRef = useRef(messageCount);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<BlobPart[]>([]);
+  const recordingStartedAtRef = useRef<number | null>(null);
 
   // Track unread messages when chat panel is closed
   useEffect(() => {
@@ -244,6 +251,97 @@ export function MeetingScreen() {
       socket.emit(MEDIA_EVENTS.SCREEN_SHARE_STOP, { roomCode, userId: myUserId });
     }
   }, [socket, roomCode, myUserId, authUser, isScreenSharing, screenSharingUserId, lkToggleScreenShare, setScreenSharingUserId]);
+
+  const startRecording = useCallback(() => {
+    if (isRecording) {
+      return;
+    }
+
+    if (!localStream) {
+      toast.error("Camera stream is not ready yet.");
+      return;
+    }
+
+    if (!window.MediaRecorder) {
+      toast.error("This browser does not support recording.");
+      return;
+    }
+
+    const supportedMimeTypes = [
+      "video/webm;codecs=vp9,opus",
+      "video/webm;codecs=vp8,opus",
+      "video/webm",
+    ];
+    const mimeType = supportedMimeTypes.find((type) => window.MediaRecorder!.isTypeSupported(type));
+
+    recordedChunksRef.current = [];
+    recordingStartedAtRef.current = Date.now();
+
+    const recorder = new MediaRecorder(localStream, mimeType ? { mimeType } : undefined);
+
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        recordedChunksRef.current.push(event.data);
+      }
+    };
+
+    recorder.onstop = () => {
+      const chunks = recordedChunksRef.current;
+      const startedAt = recordingStartedAtRef.current ?? Date.now();
+      const durationMs = Date.now() - startedAt;
+
+      if (!chunks.length) {
+        setIsRecording(false);
+        toast.error("No recording data was captured.");
+        return;
+      }
+
+      const blob = new Blob(chunks, {
+        type: mimeType ?? "video/webm",
+      });
+      const url = URL.createObjectURL(blob);
+
+      setRecording({
+        id: crypto.randomUUID(),
+        title: `Meeting recording ${new Date().toLocaleDateString()}`,
+        roomId: roomCode,
+        url,
+        mimeType: blob.type,
+        size: blob.size,
+        durationMs,
+        createdAt: new Date(startedAt).toISOString(),
+      });
+
+      setIsRecording(false);
+      navigate("/recording");
+    };
+
+    mediaRecorderRef.current = recorder;
+    recorder.start();
+    setIsRecording(true);
+    toast.success("Recording started.");
+  }, [isRecording, localStream, navigate, roomCode, setRecording]);
+
+  const stopRecording = useCallback(() => {
+    const recorder = mediaRecorderRef.current;
+
+    if (!recorder || recorder.state === "inactive") {
+      setIsRecording(false);
+      return;
+    }
+
+    recorder.stop();
+    mediaRecorderRef.current = null;
+    toast.success("Recording stopped.");
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (mediaRecorderRef.current?.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
 
   // Get screen share stream to display
   const screenShareStream = isMeSharing
@@ -400,6 +498,16 @@ export function MeetingScreen() {
             className={isScreenSharing
               ? "px-8 w-auto bg-error text-white shadow-lg shadow-error/20 border-none"
               : "px-8 w-auto bg-gradient-to-r from-primary to-primary-container text-white shadow-lg shadow-primary/20 border-none"
+            }
+          />
+          <ControlButton
+            icon={isRecording ? <Square size={24} /> : <Circle size={24} />}
+            label={isRecording ? "Stop Rec" : "Record"}
+            onClick={isRecording ? stopRecording : startRecording}
+            active={isRecording}
+            className={isRecording
+              ? "px-8 w-auto bg-error text-white shadow-lg shadow-error/20 border-none"
+              : "px-8 w-auto bg-surface-container-highest text-on-surface-variant hover:bg-orange-100"
             }
           />
           <ControlButton icon={<MessageSquare size={24} />} onClick={handleToggleChat} active={showChat} badge={unreadCount > 0 ? unreadCount : undefined} />
