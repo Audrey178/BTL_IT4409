@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
+  Circle,
+  Square,
   Mic,
   MicOff,
   Video,
@@ -22,10 +24,12 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router";
+import { toast } from "sonner";
 import { useWebRTC } from "@/hooks/useWebRTC";
 import { useMediaStore } from "@/stores/mediaStore";
 import { useMeetingStore } from "@/stores/meetingStore";
+import { useRecordingStore } from "@/stores/recordingStore";
 
 type MeetingMediaPreferences = {
   isMuted: boolean;
@@ -109,6 +113,7 @@ export function MeetingScreen() {
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [showChat, setShowChat] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const getInitialFilter = () => {
     try {
       const url = new URL(window.location.href);
@@ -136,11 +141,16 @@ export function MeetingScreen() {
   const offscreenVideoRef = useRef<HTMLVideoElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const canvasStreamRef = useRef<MediaStream | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<BlobPart[]>([]);
+  const recordingStartedAtRef = useRef<number | null>(null);
+  const navigate = useNavigate();
   const params = useParams();
   const roomId = params.id ?? null;
   const { replaceOutgoingTrack } = useWebRTC(roomId) as any;
   const { localStream, isAudioMuted, isVideoMuted, toggleAudio, toggleVideo } = useMediaStore();
   const presenterName = useMeetingStore((s) => s.participants.find((p: any) => p.isHost)?.fullName ?? 'Host');
+  const setRecording = useRecordingStore((s) => s.setRecording);
   const currentVideoFilter = VIDEO_FILTERS[selectedFilter].css;
 
   useEffect(() => {
@@ -236,6 +246,92 @@ export function MeetingScreen() {
       stopCanvasPipeline();
     };
   }, [applyOutgoing, selectedFilter, startCanvasPipeline, stopCanvasPipeline]);
+
+  const startRecording = useCallback(() => {
+    if (isRecording) {
+      return;
+    }
+
+    if (!localStream) {
+      toast.error("Camera stream is not ready yet.");
+      return;
+    }
+
+    if (!window.MediaRecorder) {
+      toast.error("This browser does not support recording.");
+      return;
+    }
+
+    const supportedMimeTypes = [
+      "video/webm;codecs=vp9,opus",
+      "video/webm;codecs=vp8,opus",
+      "video/webm",
+    ];
+    const mimeType = supportedMimeTypes.find((type) => window.MediaRecorder!.isTypeSupported(type));
+
+    recordedChunksRef.current = [];
+    recordingStartedAtRef.current = Date.now();
+
+    const recorder = new MediaRecorder(
+      localStream,
+      mimeType ? { mimeType } : undefined
+    );
+
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        recordedChunksRef.current.push(event.data);
+      }
+    };
+
+    recorder.onstop = () => {
+      const chunks = recordedChunksRef.current;
+      const startedAt = recordingStartedAtRef.current ?? Date.now();
+      const durationMs = Date.now() - startedAt;
+
+      if (!chunks.length) {
+        setIsRecording(false);
+        toast.error("No recording data was captured.");
+        return;
+      }
+
+      const blob = new Blob(chunks, {
+        type: mimeType ?? "video/webm",
+      });
+      const url = URL.createObjectURL(blob);
+
+      setRecording({
+        id: crypto.randomUUID(),
+        title: `Meeting recording ${new Date().toLocaleDateString()}`,
+        roomId,
+        url,
+        mimeType: blob.type,
+        size: blob.size,
+        durationMs,
+        createdAt: new Date(startedAt).toISOString(),
+      });
+
+      setIsRecording(false);
+      navigate("/recording");
+    };
+
+    mediaRecorderRef.current = recorder;
+    recorder.start();
+    setIsRecording(true);
+    toast.success("Recording started.");
+  }, [isRecording, localStream, navigate, roomId, setRecording]);
+
+  const stopRecording = useCallback(() => {
+    const recorder = mediaRecorderRef.current;
+
+    if (!recorder || recorder.state === "inactive") {
+      setIsRecording(false);
+      return;
+    }
+
+    recorder.stop();
+    mediaRecorderRef.current = null;
+    toast.success("Recording stopped.");
+  }, []);
 
   return (
     <div className="h-screen flex flex-col bg-surface overflow-hidden">
@@ -526,6 +622,15 @@ export function MeetingScreen() {
             onClick={() => setShowFilters(!showFilters)}
             active={showFilters}
           />
+          <button
+            onClick={isRecording ? stopRecording : startRecording}
+            className={`flex h-14 items-center gap-3 rounded-full border px-5 text-sm font-bold transition-all active:scale-90 ${isRecording ? "border-red-300 bg-red-500 text-white shadow-lg shadow-red-500/20" : "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"}`}
+          >
+            <span className={`flex h-9 w-9 items-center justify-center rounded-full ${isRecording ? "bg-white/15" : "bg-red-500 text-white"}`}>
+              {isRecording ? <Square size={16} /> : <Circle size={16} fill="currentColor" />}
+            </span>
+            {isRecording ? "Stop Record" : "Record"}
+          </button>
           <div className="w-px h-10 bg-outline-variant/30 mx-2" />
           <ControlButton
             icon={<PhoneOff size={24} />}

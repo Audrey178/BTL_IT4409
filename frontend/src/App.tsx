@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { DashboardScreen } from "./screens/DashboardScreen";
 import { LobbyScreen } from "./screens/LobbyScreen";
 import { MeetingScreen } from "./screens/MeetingScreen";
+import { RecordingScreen } from "./screens/RecordingScreen";
 import { AdminDashboardScreen } from "./screens/AdminDashboardScreen";
 import { SignupScreen } from "./screens/auth/SignupScreen";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
@@ -86,6 +87,15 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/recording"
+            element={
+              <ProtectedRoute>
+                <RecordingScreen />
+              </ProtectedRoute>
+            }
+          />
+          {/* Dev helpers removed */}
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
