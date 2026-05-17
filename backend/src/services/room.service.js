@@ -13,9 +13,8 @@
  * Tác giả: Meeting Team
  */
 
-import { v4 as uuidv4 } from 'uuid';
 import { Room, RoomMember, MeetingEvent } from '../models/index.js';
-import { getRedisClient, addToSet, removeFromSet, getSetMembers, deleteRedisKey, setWithExpire } from '../config/redis.js';
+import { getRedisClient, addToSet, removeFromSet, deleteRedisKey } from '../config/redis.js';
 import { HTTP_STATUS, ERROR_MESSAGES, ROOM_STATUS, USER_STATUS, EVENT_TYPE } from '../utils/constants.js';
 import logger from '../utils/logger.js';
 
@@ -160,11 +159,9 @@ class RoomService {
 
       await roomMember.save();
 
-      // Store in Redis
-      const redis = getRedisClient();
-      await addToSet(`room:${roomCode}:members`, userId.toString());
-
       if (roomMember.status === USER_STATUS.JOINED) {
+        await addToSet(`room:${roomCode}:members`, userId.toString());
+
         if (room.status === ROOM_STATUS.WAITING) {
           room.status = ROOM_STATUS.ACTIVE;
         }
@@ -269,6 +266,12 @@ class RoomService {
         { new: true }
       );
 
+      if (!roomMember) {
+        const error = new Error('User not found in room');
+        error.statusCode = HTTP_STATUS.NOT_FOUND;
+        throw error;
+      }
+
       await this.logEvent(room._id, userId, EVENT_TYPE.USER_REJECTED, 'User rejected');
 
       logger.info(`✓ User ${userId} rejected from room ${roomCode}`);
@@ -307,8 +310,12 @@ class RoomService {
         { new: true }
       );
 
-      // Remove from Redis
-      const redis = getRedisClient();
+      if (!roomMember) {
+        const error = new Error('User not found in room');
+        error.statusCode = HTTP_STATUS.NOT_FOUND;
+        throw error;
+      }
+
       await removeFromSet(`room:${roomCode}:members`, userId.toString());
 
       await this.logEvent(room._id, userId, EVENT_TYPE.USER_KICKED, 'User kicked from room');
@@ -355,8 +362,6 @@ class RoomService {
         { status: USER_STATUS.LEFT, left_at: new Date() }
       );
 
-      // Clean up Redis
-      const redis = getRedisClient();
       await deleteRedisKey(`room:${roomCode}:members`);
       await deleteRedisKey(`room:${roomCode}:host`);
 

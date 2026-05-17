@@ -75,6 +75,7 @@ export function useWebRTC(roomCode: string | null) {
       // Delay to ensure the receiver is ready, though normally trickle ICE works
       if (event.candidate) {
         socket.emit(WEBRTC_EVENTS.ICE_CANDIDATE, {
+          roomCode,
           to: userId,
           candidate: event.candidate,
         });
@@ -86,6 +87,7 @@ export function useWebRTC(roomCode: string | null) {
         return peer.setLocalDescription(offer);
       }).then(() => {
         socket.emit(WEBRTC_EVENTS.OFFER, {
+          roomCode,
           to: userId,
           offer: peer.localDescription
         });
@@ -93,7 +95,7 @@ export function useWebRTC(roomCode: string | null) {
     }
 
     return peer;
-  }, [localStream, socket, updateParticipantStream]);
+  }, [localStream, roomCode, socket, updateParticipantStream]);
 
   useEffect(() => {
     if (!roomCode) return;
@@ -131,6 +133,7 @@ export function useWebRTC(roomCode: string | null) {
         const answer = await peer.createAnswer();
         await peer.setLocalDescription(answer);
         socket.emit(WEBRTC_EVENTS.ANSWER, {
+          roomCode,
           to: from,
           answer: peer.localDescription
         });

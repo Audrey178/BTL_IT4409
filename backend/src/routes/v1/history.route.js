@@ -1,6 +1,7 @@
 import express from 'express';
 import historyController from '../../controllers/history.controller.js';
 import { authenticate } from '../../middlewares/auth.js';
+import { paginationValidation, validateQuery } from '../../utils/validators.js';
 
 const router = express.Router();
 
@@ -35,7 +36,7 @@ router.use(authenticate);
  *       200:
  *         description: User's room history
  */
-router.get('/rooms', historyController.getUserRoomHistory.bind(historyController));
+router.get('/rooms', validateQuery(paginationValidation.roomHistory), historyController.getUserRoomHistory.bind(historyController));
 
 /**
  * @swagger
@@ -65,7 +66,7 @@ router.get('/rooms', historyController.getUserRoomHistory.bind(historyController
  *       200:
  *         description: Chat message history
  */
-router.get('/rooms/:roomCode/messages', historyController.getRoomChatHistory.bind(historyController));
+router.get('/rooms/:roomCode/messages', validateQuery(paginationValidation.chatHistory), historyController.getRoomChatHistory.bind(historyController));
 
 /**
  * @swagger
@@ -95,7 +96,7 @@ router.get('/rooms/:roomCode/messages', historyController.getRoomChatHistory.bin
  *       200:
  *         description: Room audit log
  */
-router.get('/rooms/:roomCode/events', historyController.getRoomAuditLog.bind(historyController));
+router.get('/rooms/:roomCode/events', validateQuery(paginationValidation.listEvents), historyController.getRoomAuditLog.bind(historyController));
 
 /**
  * @swagger

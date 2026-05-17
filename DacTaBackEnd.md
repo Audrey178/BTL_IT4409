@@ -228,12 +228,9 @@ Trước khi merge:
 cd backend
 npm install
 npm run lint
-node --check src/server.js
+npm run verify
 ```
 
 ## 12. Known gaps
 
-- Chưa có automated test suite
 - Chưa có TURN server config production
-- Một số warning lint còn tồn tại
-- `meeting-backend/` vẫn còn trong repo và có nguy cơ drift nếu tiếp tục sửa song song

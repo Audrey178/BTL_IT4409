@@ -30,7 +30,7 @@ export const initializeSocket = (io, redisClient) => {
 
       if (recentTimes.length > 100) {
         logger.warn(`Rate limit exceeded for ${socket.userId} on event ${eventName}`);
-        return;
+        return next(new Error('Rate limit exceeded'));
       }
 
       next();
@@ -75,19 +75,36 @@ export const initializeSocket = (io, redisClient) => {
 
         if (socketData) {
           const { roomCode, userId: disconnectedUserId } = JSON.parse(socketData);
-          await redis.del(`socket:${socket.id}`);
-          await redis.del(`user:${disconnectedUserId}:socket`);
-          await redis.sRem(`room:${roomCode}:members`, disconnectedUserId);
 
+          // Emit room leave event FIRST (before cleanup)
           socket.to(roomCode).emit(SOCKET_EVENTS.ROOM_USER_LEFT, {
             userId: disconnectedUserId,
+            timestamp: new Date().toISOString(),
             message: 'A user left the room',
           });
 
-          logger.info(`User ${disconnectedUserId} left room ${roomCode}`);
+          // Then cleanup Redis with error handling
+          try {
+            await Promise.all([
+              redis.del(`socket:${socket.id}`),
+              redis.del(`user:${disconnectedUserId}:socket`),
+              redis.sRem(`room:${roomCode}:members`, disconnectedUserId),
+            ]);
+            logger.info(`User ${disconnectedUserId} disconnected from room ${roomCode}`);
+          } catch (cleanupError) {
+            logger.error(`Cleanup failed for user ${disconnectedUserId}:`, cleanupError.message);
+            // Don't re-throw - disconnect already happened
+          }
         }
       } catch (error) {
         logger.error('Socket disconnect handler error:', error);
+        // Fallback: at least emit disconnect event
+        if (socket.userId) {
+          socket.broadcast.emit(SOCKET_EVENTS.ERROR, {
+            message: 'User disconnected unexpectedly',
+            userId: socket.userId,
+          });
+        }
       }
     });
 

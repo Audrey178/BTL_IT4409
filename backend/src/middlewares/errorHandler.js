@@ -2,7 +2,7 @@ import { HTTP_STATUS, ERROR_MESSAGES } from '../utils/constants.js';
 import logger from '../utils/logger.js';
 
 // Global error handler middleware
-export const errorHandler = (err, req, res, next) => {
+export const errorHandler = (err, req, res, _next) => {
   logger.error('Error caught:', err);
 
   // Mongoose validation error

@@ -99,7 +99,7 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
 
 // Remove sensitive data before sending response
 userSchema.methods.toJSON = function () {
-  const { password_hash, ...rest } = this.toObject();
+  const { password_hash: _passwordHash, ...rest } = this.toObject();
   return rest;
 };
 

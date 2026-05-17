@@ -1,125 +1,97 @@
-/**
- * ============================================================================
- * MEETING PROJECT - BACKEND - XỬ LÝ SIGNALING WEBRTC
- * ============================================================================
- * 
- * Module này xử lý WebRTC Signaling:
- * - Trao đổi SDP Offer/Answer giữa các peers
- * - Gửi ICE candidates để tìm đường kết nối tối ưu
- * - Quản lý peer connection metadata
- * 
- * Quy trình:
- * 1. Peer A gửi offer -> Server chuyển tiếp tới Peer B
- * 2. Peer B gửi answer -> Server chuyển tiếp tới Peer A
- * 3. Cả 2 gửi ICE candidates -> Server chuyển tiếp
- * 
- * Tác giả: Meeting Team
- * Ngày tạo: 2026-04-08
- */
-
+import { Room, RoomMember } from '../models/index.js';
+import { SOCKET_EVENTS, USER_STATUS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
-import { SOCKET_EVENTS } from '../utils/constants.js';
 
-/**
- * Xử lý WebRTC Offer từ Peer A
- * 
- * Offer chứa thông tin định dạng media (codec, resolution, etc.)
- * của người gửi
- * 
- * @param {Object} socket - Socket.IO socket instance
- * @param {Object} data - { roomCode, targetUserId, offer }
- * @returns {Promise<void>}
- */
-export const handleWebRTCOffer = async (socket, data) => {
+const emitSocketError = (socket, message) => {
+  socket.emit(SOCKET_EVENTS.ERROR, { message });
+};
+
+const ensureCanSignal = async ({ socket, roomCode, recipientUserId }) => {
+  const fromUserId = socket.userId;
+  if (!fromUserId) {
+    throw new Error('Unauthorized socket');
+  }
+
+  if (!roomCode) {
+    throw new Error('roomCode is required for WebRTC signaling');
+  }
+
+  if (!recipientUserId) {
+    throw new Error('Target user ID is required for WebRTC signaling');
+  }
+
+  const room = await Room.findOne({ room_code: roomCode }).lean();
+  if (!room) {
+    throw new Error('Room not found');
+  }
+
+  const hostId = room.host_id.toString();
+  const participantIds = [fromUserId, recipientUserId];
+  const nonHostParticipantIds = participantIds.filter((id) => id.toString() !== hostId);
+  const memberships = await RoomMember.distinct('user_id', {
+    room_id: room._id,
+    user_id: { $in: nonHostParticipantIds },
+    status: USER_STATUS.JOINED,
+  });
+  const allowedIds = new Set([
+    hostId,
+    ...memberships.map((id) => id.toString()),
+  ]);
+
+  if (!participantIds.every((id) => allowedIds.has(id.toString()))) {
+    throw new Error('Both peers must be joined in the same room');
+  }
+
+  return fromUserId;
+};
+
+const forwardSignal = async (socket, data, eventName, payloadKey) => {
+  const recipientUserId = data.targetUserId || data.to;
+  const payload = data[payloadKey];
+
+  if (!payload) {
+    throw new Error(`Missing ${payloadKey} payload`);
+  }
+
+  const fromUserId = await ensureCanSignal({
+    socket,
+    roomCode: data.roomCode,
+    recipientUserId,
+  });
+
+  socket.to(`user:${recipientUserId}`).emit(eventName, {
+    from: fromUserId,
+    fromUserId,
+    targetUserId: recipientUserId,
+    roomCode: data.roomCode,
+    [payloadKey]: payload,
+  });
+};
+
+export const handleWebRTCOffer = async (socket, data = {}) => {
   try {
-    const { roomCode, targetUserId, to, offer } = data;
-    // Use JWT-authenticated userId from socket
-    const fromUserId = socket.userId;
-    const recipientUserId = targetUserId || to;
-
-    logger.debug(`📤 Forwarding WebRTC Offer in room ${roomCode} to user ${recipientUserId}`);
-
-    // Gửi offer tới peer nhận
-    socket.to(`user:${recipientUserId}`).emit(SOCKET_EVENTS.WEBRTC_OFFER, {
-      from: fromUserId,
-      fromUserId,
-      targetUserId: recipientUserId,
-      offer,
-    });
+    await forwardSignal(socket, data, SOCKET_EVENTS.WEBRTC_OFFER, 'offer');
   } catch (error) {
-    logger.error('❌ Lỗi trong handleWebRTCOffer:', error);
-    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Lỗi khi gửi WebRTC offer' });
+    logger.error('handleWebRTCOffer error:', error);
+    emitSocketError(socket, error.message || 'Failed to send WebRTC offer');
   }
 };
 
-/**
- * Xử lý WebRTC Answer từ Peer B
- * 
- * Answer chứa thông tin định dạng media của người nhận
- * để hoàn thành handshake
- * 
- * @param {Object} socket - Socket.IO socket instance
- * @param {Object} data - { roomCode, targetUserId, answer }
- * @returns {Promise<void>}
- */
-export const handleWebRTCAnswer = async (socket, data) => {
+export const handleWebRTCAnswer = async (socket, data = {}) => {
   try {
-    const { roomCode, targetUserId, to, answer } = data;
-    const recipientUserId = targetUserId || to;
-
-    logger.debug(`📥 Forwarding WebRTC Answer in room ${roomCode} to user ${recipientUserId}`);
-
-    // Use JWT-authenticated userId from socket, not unverified query param (SECURITY FIX)
-    const fromUserId = socket.userId;
-    if (!fromUserId) {
-      throw new Error('Unauthorized: User ID not found in socket authentication');
-    }
-
-    socket.to(`user:${recipientUserId}`).emit(SOCKET_EVENTS.WEBRTC_ANSWER, {
-      from: fromUserId,
-      fromUserId,
-      targetUserId: recipientUserId,
-      answer,
-    });
+    await forwardSignal(socket, data, SOCKET_EVENTS.WEBRTC_ANSWER, 'answer');
   } catch (error) {
-    logger.error('❌ Lỗi trong handleWebRTCAnswer:', error);
-    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Lỗi khi gửi WebRTC answer' });
+    logger.error('handleWebRTCAnswer error:', error);
+    emitSocketError(socket, error.message || 'Failed to send WebRTC answer');
   }
 };
 
-/**
- * Xử lý ICE Candidate
- * 
- * ICE (Interactive Connectivity Establishment) candidates là các
- * thuộc những mạng có thể sử dụng để kết nối các peers
- * 
- * @param {Object} socket - Socket.IO socket instance
- * @param {Object} data - { roomCode, targetUserId, candidate }
- * @returns {Promise<void>}
- */
-export const handleICECandidate = async (socket, data) => {
+export const handleICECandidate = async (socket, data = {}) => {
   try {
-    const { roomCode, targetUserId, to, candidate } = data;
-    const recipientUserId = targetUserId || to;
-
-    logger.debug(`🧊 Forwarding ICE Candidate in room ${roomCode} to user ${recipientUserId}`);
-
-    // Use JWT-authenticated userId from socket, not unverified query param (SECURITY FIX)
-    const fromUserId = socket.userId;
-    if (!fromUserId) {
-      throw new Error('Unauthorized: User ID not found in socket authentication');
-    }
-
-    socket.to(`user:${recipientUserId}`).emit(SOCKET_EVENTS.WEBRTC_ICE_CANDIDATE, {
-      from: fromUserId,
-      fromUserId,
-      targetUserId: recipientUserId,
-      candidate,
-    });
+    await forwardSignal(socket, data, SOCKET_EVENTS.WEBRTC_ICE_CANDIDATE, 'candidate');
   } catch (error) {
-    logger.error('❌ Lỗi trong handleICECandidate:', error);
-    // Không emit lỗi ngay vì ICE candidate thất bại không gây ảnh hưởng lớn
-    logger.warn(`⚠️  ICE candidate thất bại nhưng hệ thống tiếp tục`);
+    logger.warn('handleICECandidate rejected:', error.message);
+    emitSocketError(socket, error.message || 'Failed to send ICE candidate');
   }
 };
 

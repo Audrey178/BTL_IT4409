@@ -209,6 +209,17 @@ export const paginationValidation = {
     limit: Joi.number().min(1).max(100).default(50).optional(),
   }),
 
+  chatHistory: Joi.object({
+    page: Joi.number().integer().min(1).default(1).optional(),
+    limit: Joi.number().integer().min(1).max(100).default(50).optional(),
+  }),
+
+  roomHistory: Joi.object({
+    page: Joi.number().integer().min(1).default(1).optional(),
+    limit: Joi.number().integer().min(1).max(100).default(20).optional(),
+    status: Joi.string().valid('waiting', 'active', 'ended').optional(),
+  }),
+
   listRecordings: Joi.object({
     page: Joi.number().min(1).default(1).optional(),
     limit: Joi.number().min(1).max(100).default(20).optional(),

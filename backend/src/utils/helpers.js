@@ -2,11 +2,11 @@ import { v4 as uuidv4 } from 'uuid';
 
 export const generateRoomCode = () => {
   // Format: abc-xyz-def
-  const uuid = uuidv4().split('-')[0];
+  const uuidPart = uuidv4().split('-')[0];
   const part1 = Math.random().toString(36).substring(2, 5);
   const part2 = Math.random().toString(36).substring(2, 5);
   const part3 = Math.random().toString(36).substring(2, 5);
-  return `${part1}-${part2}-${part3}`;
+  return `${part1}-${part2}-${part3}-${uuidPart.substring(0, 3)}`;
 };
 
 export const generateSocketEventName = (namespace, action) => {
