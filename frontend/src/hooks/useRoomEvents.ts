@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { getSocket } from '@/socket/socket';
 import { ROOM_EVENTS, MEDIA_EVENTS } from '@/socket/events';
 import { useMeetingStore } from '@/stores/meetingStore';
+import { useMediaStore } from '@/stores/mediaStore';
 import { useAuthStore } from '@/stores/useAuthStore';
 import type { WaitingUser } from '@/types';
 
@@ -131,6 +132,8 @@ export function useRoomEvents(roomCode: string | null) {
     const handleRoomEnded = () => {
       toast.info('The meeting has ended');
       setStatus('ended');
+      // Cleanup media tracks (camera, mic, screen share)
+      useMediaStore.getState().cleanup();
       reset();
       navigate('/', { replace: true });
     };

@@ -185,13 +185,18 @@ export function useWebRTC(roomCode: string | null) {
     });
   }, []);
 
+  // Explicit cleanup — called by MeetingScreen on leave/end
+  const cleanupAllPeers = useCallback(() => {
+    peersRef.current.forEach(peer => peer.close());
+    peersRef.current.clear();
+  }, []);
+
   // Clean up all peers on unmount
   useEffect(() => {
     return () => {
-      peersRef.current.forEach(peer => peer.close());
-      peersRef.current.clear();
+      cleanupAllPeers();
     };
-  }, []);
+  }, [cleanupAllPeers]);
 
-  return { replaceVideoTrack };
+  return { replaceVideoTrack, cleanupAllPeers };
 }

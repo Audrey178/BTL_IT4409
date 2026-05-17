@@ -24,7 +24,7 @@
 import { SOCKET_EVENTS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
 import { getRedisClient } from '../config/redis.js';
-import { handleRoomJoin, handleApproveUser, handleRejectUser, handleUserLeft } from './room.handler.js';
+import { handleRoomJoin, handleApproveUser, handleRejectUser, handleUserLeft, handleEndMeeting } from './room.handler.js';
 import { handleWebRTCOffer, handleWebRTCAnswer, handleICECandidate } from './webrtc.handler.js';
 import { handleChatSend, handleChatHistory } from './chat.handler.js';
 import { handleMediaToggle, handleScreenShareStart, handleScreenShareStop } from './media.handler.js';
@@ -80,6 +80,14 @@ export const initializeSocket = (io, redisClient) => {
      */
     socket.on(SOCKET_EVENTS.ROOM_USER_LEFT, (data) => {
       handleUserLeft(socket, data);
+    });
+
+    /**
+     * Sự kiện: Host kết thúc cuộc họp cho tất cả
+     * Dữ liệu: { roomCode }
+     */
+    socket.on(SOCKET_EVENTS.ROOM_ENDED, (data) => {
+      handleEndMeeting(io, socket, data);
     });
 
     // =========================================================================

@@ -1,8 +1,16 @@
 import React from "react";
 
-const NavItem = ({ icon, label, active = false }) => {
+interface NavItemProps {
+  icon: React.ReactNode;
+  label: string;
+  active?: boolean;
+  onClick?: () => void;
+}
+
+const NavItem = ({ icon, label, active = false, onClick }: NavItemProps) => {
   return (
     <button
+      onClick={onClick}
       className={`flex items-center gap-4 w-full py-3 px-6 rounded-r-full transition-all duration-200 group ${
         active
           ? "bg-background text-primary font-bold shadow-sm"

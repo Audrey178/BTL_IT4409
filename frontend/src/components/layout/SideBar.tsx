@@ -11,7 +11,7 @@ import {
 import React from "react";
 import NavItem from "./NavItem";
 import { Button } from "@base-ui/react/button";
-import { Navigate, useNavigate } from "react-router";
+import { useNavigate, useLocation } from "react-router";
 import { useAuthStore } from "@/stores/useAuthStore";
 
 interface SideBarProps {
@@ -20,7 +20,11 @@ interface SideBarProps {
 
 const SideBar = ({ onNewMeeting }: SideBarProps) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { logout } = useAuthStore();
+
+  const isActive = (path: string) => location.pathname === path;
+
   return (
     <div>
       <aside className="h-screen w-64 fixed left-0 top-0 z-40 flex flex-col bg-surface-container-low border-r border-outline-variant/10">
@@ -40,9 +44,15 @@ const SideBar = ({ onNewMeeting }: SideBarProps) => {
           <NavItem
             icon={<LayoutDashboard size={20} />}
             label="Meetings"
-            active
+            active={isActive("/")}
+            onClick={() => navigate("/")}
           />
-          <NavItem icon={<CalendarIcon size={20} />} label="Schedule" />
+          <NavItem
+            icon={<CalendarIcon size={20} />}
+            label="Schedule"
+            active={isActive("/schedule")}
+            onClick={() => navigate("/schedule")}
+          />
           <NavItem icon={<MessageSquare size={20} />} label="Messages" />
           <NavItem icon={<Archive size={20} />} label="Archives" />
         </nav>

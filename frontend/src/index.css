@@ -59,6 +59,65 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
 
+/* FullCalendar design-system overrides */
+.fc-custom .fc-toolbar-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #1d1b18;
+}
+.fc-custom .fc-button {
+  background: #f3ede8 !important;
+  border: none !important;
+  color: #58423b !important;
+  font-weight: 700 !important;
+  border-radius: 9999px !important;
+  padding: 0.4rem 1rem !important;
+  box-shadow: none !important;
+  transition: background 0.15s;
+}
+.fc-custom .fc-button:hover {
+  background: #ede7e2 !important;
+}
+.fc-custom .fc-button-active,
+.fc-custom .fc-button:active {
+  background: #a4370f !important;
+  color: #fff !important;
+}
+.fc-custom .fc-daygrid-day-number {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #58423b;
+  padding: 6px 8px;
+}
+.fc-custom .fc-day-today {
+  background: #ffdbd0 !important;
+  border-radius: 0.75rem;
+}
+.fc-custom .fc-day-today .fc-daygrid-day-number {
+  color: #a4370f;
+}
+.fc-custom .fc-col-header-cell-cushion {
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #8c7169;
+}
+.fc-custom .fc-event {
+  border: none !important;
+  background: transparent !important;
+  padding: 1px 2px;
+}
+.fc-custom .fc-daygrid-day-frame {
+  padding: 4px;
+}
+.fc-custom td, .fc-custom th {
+  border-color: #dfc0b7 !important;
+}
+.fc-custom .fc-scrollgrid {
+  border-color: #dfc0b7 !important;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

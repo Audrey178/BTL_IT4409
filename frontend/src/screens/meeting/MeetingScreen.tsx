@@ -21,6 +21,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { WaitingRoomPanel } from "@/components/pages/meeting/WaitingRoomPanel";
 import { ChatPanel } from "@/components/pages/meeting/ChatPanel";
+import { EndMeetingDialog } from "@/components/pages/meeting/EndMeetingDialog";
+import { roomService } from "@/services/roomService";
 
 export function MeetingScreen() {
   const { id: roomCode } = useParams<{ id: string }>();
@@ -28,7 +30,7 @@ export function MeetingScreen() {
   const authUser = useAuthStore((state) => state.user);
   const navigate = useNavigate();
 
-  const { replaceVideoTrack } = useWebRTC(roomCode || null);
+  const { replaceVideoTrack, cleanupAllPeers } = useWebRTC(roomCode || null);
   useRoomEvents(roomCode || null);
   const { sendMessage } = useChatEvents(roomCode || null);
 
@@ -46,6 +48,8 @@ export function MeetingScreen() {
   const [showChat, setShowChat] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [showEndDialog, setShowEndDialog] = useState(false);
+  const [isEndingMeeting, setIsEndingMeeting] = useState(false);
   const prevMessageCountRef = useRef(messageCount);
 
   // Track unread messages when chat panel is closed
@@ -64,6 +68,49 @@ export function MeetingScreen() {
     if (next) setUnreadCount(0);
   }, [showChat]);
   const myUserId = authUser?._id;
+  const { reset } = useMeetingStore();
+  const { cleanup: cleanupMedia } = useMediaStore();
+
+  // =========================================================================
+  // LEAVE / END MEETING HANDLERS
+  // =========================================================================
+
+  const handleLeaveMeeting = useCallback(() => {
+    // 1. Emit socket leave event
+    socket.emit(ROOM_EVENTS.USER_LEFT, { roomCode, userId: myUserId });
+    // 2. Cleanup WebRTC peers
+    cleanupAllPeers();
+    // 3. Cleanup media tracks (camera, mic, screen share)
+    cleanupMedia();
+    // 4. Reset meeting store
+    reset();
+    // 5. Navigate home
+    toast.info('You have left the meeting');
+    navigate('/', { replace: true });
+  }, [socket, roomCode, myUserId, cleanupAllPeers, cleanupMedia, reset, navigate]);
+
+  const handleEndMeetingForAll = useCallback(async () => {
+    if (isEndingMeeting) return; // Double-click prevention
+    setIsEndingMeeting(true);
+    try {
+      // 1. Call REST API to update DB + cleanup Redis
+      await roomService.endRoom(roomCode!);
+      // 2. Broadcast room:ended via socket to all participants
+      socket.emit(ROOM_EVENTS.ENDED, { roomCode });
+      // 3. Cleanup WebRTC peers
+      cleanupAllPeers();
+      // 4. Cleanup media tracks
+      cleanupMedia();
+      // 5. Reset meeting store
+      reset();
+      // 6. Navigate home
+      toast.success('Meeting ended for all participants');
+      navigate('/', { replace: true });
+    } catch (error) {
+      toast.error('Failed to end meeting. Please try again.');
+      setIsEndingMeeting(false);
+    }
+  }, [isEndingMeeting, roomCode, socket, cleanupAllPeers, cleanupMedia, reset, navigate]);
 
   // Is someone (me or remote) sharing screen?
   const isAnyoneSharing = isScreenSharing || !!screenSharingUserId;
@@ -368,7 +415,7 @@ export function MeetingScreen() {
           <ControlButton
             icon={<PhoneOff size={24} />}
             className="bg-error text-white shadow-lg shadow-error/20 border-none hover:bg-error/90"
-            onClick={() => { }}
+            onClick={() => setShowEndDialog(true)}
           />
         </div>
 
@@ -389,6 +436,16 @@ export function MeetingScreen() {
           </div>
         )}
       </div>
+
+      {/* End Meeting Dialog */}
+      <EndMeetingDialog
+        open={showEndDialog}
+        onOpenChange={setShowEndDialog}
+        isHost={isHost}
+        onLeave={handleLeaveMeeting}
+        onEndForAll={handleEndMeetingForAll}
+        isLoading={isEndingMeeting}
+      />
     </div>
   );
 }

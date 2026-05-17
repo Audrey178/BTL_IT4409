@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
-import { roomService } from '@/services/roomService';
-import type { ScheduledMeeting } from '@/types';
-import { toast } from 'sonner';
+import { useState, useEffect, useCallback } from "react";
+import { roomService } from "@/services/roomService";
+import type { ScheduledMeeting } from "@/types";
+import { toast } from "sonner";
 
 export function useUpcomingMeetings() {
   const [meetings, setMeetings] = useState<ScheduledMeeting[]>([]);
@@ -16,7 +16,7 @@ export function useUpcomingMeetings() {
         setMeetings(res.rooms);
       }
     } catch (err: unknown) {
-      console.error('Failed to fetch scheduled meetings:', err);
+      console.error("Failed to fetch scheduled meetings:", err);
       // We don't want to show toast error on interval polling
     } finally {
       setLoading(false);

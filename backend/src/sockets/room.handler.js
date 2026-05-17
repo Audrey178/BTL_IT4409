@@ -324,4 +324,59 @@ export const handleUserLeft = async (socket, data) => {
 };
 
 
-export default { handleRoomJoin, handleApproveUser, handleRejectUser, handleUserLeft };
+/**
+ * Xử lý Host kết thúc cuộc họp cho tất cả
+ * 
+ * @param {Object} io - Socket.IO server instance
+ * @param {Object} socket - Socket.IO socket instance (host)
+ * @param {Object} data - { roomCode }
+ * @returns {Promise<void>}
+ */
+export const handleEndMeeting = async (io, socket, data) => {
+  try {
+    const { roomCode } = data;
+    const redis = getRedisClient();
+
+    logger.info(`🔴 Host kết thúc phòng ${roomCode}`);
+
+    // 1. Broadcast room:ended cho tất cả participant trong room (trừ host)
+    socket.to(roomCode).emit(SOCKET_EVENTS.ROOM_ENDED, {
+      message: 'The meeting has been ended by the host',
+    });
+
+    // 2. Notify waiting users (pending members chưa join room namespace)
+    const room = await Room.findOne({ room_code: roomCode });
+    if (room) {
+      const pendingMembers = await RoomMember.find({
+        room_id: room._id,
+        status: USER_STATUS.PENDING,
+      });
+
+      for (const member of pendingMembers) {
+        const waitingUserId = member.user_id.toString();
+        const waitingSocketId = await redis.get(`user:${waitingUserId}:socket`);
+        if (waitingSocketId) {
+          const waitingSocket = io.sockets.sockets.get(waitingSocketId);
+          if (waitingSocket) {
+            waitingSocket.emit(SOCKET_EVENTS.ROOM_ENDED, {
+              message: 'The meeting has been ended by the host',
+            });
+          }
+        }
+      }
+    }
+
+    // 3. Cleanup Redis keys cho host socket
+    await redis.del(`room:${roomCode}:host:socket`);
+
+    // 4. Host rời khỏi room namespace
+    socket.leave(roomCode);
+
+    logger.info(`✅ Phòng ${roomCode} đã kết thúc, tất cả đã được thông báo`);
+  } catch (error) {
+    logger.error('❌ Lỗi trong handleEndMeeting:', error);
+    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Lỗi khi kết thúc phòng' });
+  }
+};
+
+export default { handleRoomJoin, handleApproveUser, handleRejectUser, handleUserLeft, handleEndMeeting };

@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router";
 import { DashboardScreen } from "./screens/dashboard/DashboardScreen";
 import { LobbyScreen } from "./screens/lobby/LobbyScreen";
 import { MeetingScreen } from "./screens/meeting/MeetingScreen";
+import { ScheduleScreen } from "./screens/schedule/ScheduleScreen";
 import { AdminDashboardScreen } from "./screens/admin/AdminDashboardScreen";
 import { SignupScreen } from "./screens/auth/SignupScreen";
 import { LoginScreen } from "./screens/auth/LoginScreen";
@@ -30,6 +31,7 @@ export default function App() {
 
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<DashboardScreen />} />
+            <Route path="/schedule" element={<ScheduleScreen />} />
             <Route path="/lobby" element={<LobbyScreen />} />
             <Route path="/meeting/:id" element={<MeetingScreen />} />
             <Route path="/profile" element={<ProfileScreen />} />
