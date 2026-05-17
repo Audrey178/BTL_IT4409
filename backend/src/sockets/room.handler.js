@@ -16,7 +16,7 @@
  */
 
 import { getRedisClient } from '../config/redis.js';
-import { RoomMember, Room } from '../models/index.js';
+import { RoomMember, Room, User } from '../models/index.js';
 import { SOCKET_EVENTS, ROOM_STATUS, USER_STATUS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
 
@@ -29,7 +29,15 @@ import logger from '../utils/logger.js';
  */
 export const handleRoomJoin = async (socket, data) => {
   try {
-    const { userId, roomCode } = data;
+    // Use JWT-authenticated userId from socket instead of client-provided data
+    const userId = socket.userId;
+    const { roomCode } = data;
+    
+    if (!roomCode) {
+      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Room code is required' });
+      return;
+    }
+    
     const redis = getRedisClient();
 
     logger.info(`👤 Người dùng ${userId} yêu cầu vào phòng ${roomCode}`);
@@ -47,18 +55,25 @@ export const handleRoomJoin = async (socket, data) => {
       return;
     }
 
-    // 3. Thêm member vào Database
+    // 3. Kiểm tra user là host hay không
+    const isHost = room.host_id.toString() === userId;
+
+    // 4. Thêm/cập nhật member vào Database
+    const memberStatus = (isHost || !room.settings.require_approval)
+      ? USER_STATUS.JOINED
+      : USER_STATUS.PENDING;
     const member = await RoomMember.findOneAndUpdate(
       { room_id: room._id, user_id: userId },
       {
         room_id: room._id,
         user_id: userId,
-        joined_at: new Date(),
+        status: memberStatus,
+        joined_at: memberStatus === USER_STATUS.JOINED ? new Date() : null,
       },
       { upsert: true, new: true }
     ).populate("user_id");
 
-    // 4. Cập nhật Redis: Lưu socket -> user -> room mapping
+    // 5. Cập nhật Redis: Lưu socket -> user -> room mapping
     await redis.set(
       `socket:${socket.id}`,
       JSON.stringify({ userId, roomCode })
@@ -66,7 +81,34 @@ export const handleRoomJoin = async (socket, data) => {
     // Lưu ngược: userId -> socketId (để host có thể notify user sau khi approve)
     await redis.set(`user:${userId}:socket`, socket.id);
 
-    if (room.settings.require_approval) {
+    // 6. Host LUÔN join room ngay (bỏ qua approval)
+    if (isHost) {
+      await redis.sAdd(`room:${roomCode}:members`, userId);
+      socket.join(roomCode);
+      await redis.set(`room:${roomCode}:host:socket`, socket.id);
+
+      // Lấy existing participants
+      const memberIds = await redis.sMembers(`room:${roomCode}:members`);
+      const existingParticipants = [];
+      for (const mId of memberIds) {
+        if (mId === userId) continue;
+        const rm = await RoomMember.findOne({
+          room_id: room._id,
+          user_id: mId,
+        }).populate('user_id', 'full_name email');
+        if (rm && rm.user_id) {
+          existingParticipants.push({
+            userId: rm.user_id._id.toString(),
+            userName: rm.user_id.full_name,
+          });
+        }
+      }
+
+      socket.emit(SOCKET_EVENTS.ROOM_USER_JOINED, {
+        success: true,
+        existingParticipants,
+      });
+    } else if (room.settings.require_approval) {
       // ====================================================================
       // CẦN DUYỆT: KHÔNG join room namespace ngay — chờ host approve
       // ====================================================================
@@ -75,7 +117,7 @@ export const handleRoomJoin = async (socket, data) => {
         memberId: member._id,
       });
 
-      const hostSocketId = await redis.get(`room:${roomCode}:host:socket`);
+      const hostSocketId = await redis.get(`user:${room.host_id.toString()}:socket`);
       if (hostSocketId) {
         socket.to(hostSocketId).emit(SOCKET_EVENTS.ROOM_REQUEST_APPROVAL, {
           userId: member.user_id._id,
@@ -88,11 +130,6 @@ export const handleRoomJoin = async (socket, data) => {
       // ====================================================================
       // KHÔNG CẦN DUYỆT: join room namespace ngay
       // ====================================================================
-      // Nếu là host thì lưu socket vào redis
-      if (room.host_id.toString() === userId) {
-        await redis.set(`room:${roomCode}:host:socket`, socket.id);
-      }
-
       // Lấy existing participants TRƯỚC khi join room
       const memberIds = await redis.sMembers(`room:${roomCode}:members`);
       const existingParticipants = [];
@@ -126,15 +163,6 @@ export const handleRoomJoin = async (socket, data) => {
         success: true,
         existingParticipants,
       });
-    }
-
-    // Host luôn join room ngay (không cần approval)
-    if (room.host_id.toString() === userId && room.settings.require_approval) {
-      await redis.sAdd(`room:${roomCode}:members`, userId);
-      socket.join(roomCode);
-      await redis.set(`room:${roomCode}:host:socket`, socket.id);
-
-      socket.emit(SOCKET_EVENTS.ROOM_USER_JOINED, { success: true });
     }
 
     logger.info(`✅ Người dùng ${userId} đã xử lý join phòng ${roomCode}`);
@@ -249,6 +277,7 @@ export const handleApproveUser = async (io, socket, data) => {
 export const handleRejectUser = async (socket, data) => {
   try {
     const { roomCode, memberId } = data;
+    const redis = getRedisClient();
 
     const member = await RoomMember.findByIdAndUpdate(
       memberId,
@@ -260,9 +289,6 @@ export const handleRejectUser = async (socket, data) => {
       socket.emit(SOCKET_EVENTS.ERROR, { message: 'Không tìm thấy thành viên' });
       return;
     }
-
-    // Tìm socket của user bị reject để notify trực tiếp
-    const redis = getRedisClient();
     const rejectedUserId = member.user_id.toString();
     const rejectedSocketId = await redis.get(`user:${rejectedUserId}:socket`);
     if (rejectedSocketId) {
@@ -300,7 +326,7 @@ export const handleUserLeft = async (socket, data) => {
 
     const member = await RoomMember.findOneAndUpdate(
       { room_id: room._id, user_id: userId },
-      { status: USER_STATUS.LEFT },
+      { status: USER_STATUS.LEFT, left_at: new Date() },
       { new: true }
     ).populate('user_id', 'full_name email avatar');
 
@@ -308,6 +334,13 @@ export const handleUserLeft = async (socket, data) => {
 
     // Xóa user khỏi Set thành viên phòng
     await redis.sRem(`room:${roomCode}:members`, userId);
+
+    // Cleanup Redis socket mappings (tránh disconnect handler double-fire)
+    await redis.del(`socket:${socket.id}`);
+    await redis.del(`user:${userId}:socket`);
+
+    // Rời khỏi room namespace
+    socket.leave(roomCode);
 
     // Phát thông báo tới tất cả trong phòng
     socket.to(roomCode).emit(SOCKET_EVENTS.ROOM_USER_LEFT, {

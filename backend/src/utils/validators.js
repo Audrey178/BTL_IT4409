@@ -73,6 +73,12 @@ export const roomValidation = {
       .trim()
       .optional()
       .messages({ 'string.max': 'Description cannot exceed 1000 characters' }),
+    require_approval: Joi.boolean().optional(),
+    allow_chat: Joi.boolean().optional(),
+    max_participants: Joi.number()
+      .min(2)
+      .max(500)
+      .optional(),
     settings: Joi.object({
       require_approval: Joi.boolean().optional(),
       allow_chat: Joi.boolean().optional(),
@@ -206,7 +212,7 @@ export const validate = (schema) => {
         });
       }
 
-      req.validated = value;
+      req.body = value;
       next();
     } catch (err) {
       logger.error('Validation middleware error:', err);

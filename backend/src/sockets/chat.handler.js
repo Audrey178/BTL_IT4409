@@ -36,18 +36,40 @@ import logger from '../utils/logger.js';
  */
 export const handleChatSend = async (socket, data) => {
   try {
-    const { roomCode, content, type = MESSAGE_TYPE.TEXT, senderName, senderAvatar } = data;
-    const userId = socket.handshake.query.userId;
+    const { roomCode, content, type = MESSAGE_TYPE.TEXT } = data;
+    // Use JWT-authenticated userId from socket instead of client-provided values
+    const userId = socket.userId;
+    
+    // Fetch actual user data from database to prevent spoofing
+    const { User } = await import('../models/index.js');
+    const user = await User.findById(userId).lean();
+    if (!user) {
+      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Không tìm thấy người dùng' });
+      return;
+    }
+    
+    const senderName = user.full_name;
+    const senderAvatar = user.avatar || null;
 
-    if (!content || content.trim().length === 0) {
-      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Nội dung tin nhắn không được trống' });
+    const { Room, RoomMember } = await import('../models/index.js');
+    const room = await Room.findOne({ room_code: roomCode }).lean();
+    if (!room) {
+      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Phòng không tồn tại' });
       return;
     }
 
-    // Kiểm tra và lấy thông tin Room
-    const room = await Room.findOne({ room_code: roomCode });
-    if (!room) {
-      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Phòng không tồn tại' });
+    const isMember = await RoomMember.exists({
+      room_id: room._id,
+      user_id: userId,
+      status: { $in: ['joined', 'pending'] },
+    });
+    if (!isMember) {
+      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Unauthorized to send message to this room' });
+      return;
+    }
+
+    if (!content || content.trim().length === 0) {
+      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Nội dung tin nhắn không được trống' });
       return;
     }
 
@@ -106,7 +128,7 @@ export const handleChatSend = async (socket, data) => {
 export const handleChatHistory = async (socket, data) => {
   try {
     const { roomCode, page = 1, limit = 50 } = data;
-
+    const { Room } = await import('../models/index.js');
     const skip = (page - 1) * limit;
 
     // Kiểm tra và lấy thông tin Room

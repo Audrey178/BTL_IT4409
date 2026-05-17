@@ -37,6 +37,7 @@ export const SOCKET_EVENTS = {
   ROOM_REQUEST_APPROVAL: 'room:request_approval',
   ROOM_APPROVE_USER: 'room:approve_user',
   ROOM_REJECT_USER: 'room:reject_user',
+  ROOM_USER_REJECTED: 'room:user_rejected',
   ROOM_USER_JOINED: 'room:user_joined',
   ROOM_USER_LEFT: 'room:user_left',
   ROOM_USER_KICKED: 'room:user_kicked',

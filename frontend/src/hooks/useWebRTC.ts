@@ -15,9 +15,10 @@ const ICE_SERVERS = {
 export function useWebRTC(roomCode: string | null) {
   const socket = getSocket();
   const { localStream } = useMediaStore();
-  const { addParticipant, updateParticipantStream, participants } = useMeetingStore();
+  const { addParticipant, updateParticipantStream, participants, removeParticipant } = useMeetingStore();
   const myUserId = useAuthStore((s) => s.user?._id);
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+  const outgoingTrackRef = useRef<MediaStreamTrack | null>(null);
 
   const createPeer = useCallback((userId: string, isInitiator: boolean) => {
     // Nếu đã có peer cho user này, close cũ trước
@@ -30,13 +31,16 @@ export function useWebRTC(roomCode: string | null) {
     const peer = new RTCPeerConnection(ICE_SERVERS);
     peersRef.current.set(userId, peer);
 
-    // Determine which stream to send: screen share or camera
-    const { screenStream, isScreenSharing } = useMediaStore.getState();
-    const streamToSend = isScreenSharing && screenStream ? screenStream : localStream;
-
-    if (streamToSend) {
-      streamToSend.getTracks().forEach(track => {
-        peer.addTrack(track, streamToSend);
+    if (localStream) {
+      // If there's an overridden outgoing video track (canvas pipeline), add it instead of the raw local video track
+      const outVideoTrack = outgoingTrackRef.current;
+      localStream.getTracks().forEach(track => {
+        if (track.kind === 'video' && outVideoTrack) {
+          const outStream = new MediaStream([outVideoTrack]);
+          peer.addTrack(outVideoTrack, outStream);
+        } else {
+          peer.addTrack(track, localStream);
+        }
       });
     }
 
@@ -68,7 +72,33 @@ export function useWebRTC(roomCode: string | null) {
     return peer;
   }, [localStream, socket, updateParticipantStream]);
 
-  // Khởi tạo connection với các participants ĐÃ CÓ TRONG STORE (được set bởi LobbyScreen)
+  const replaceOutgoingTrack = useCallback((newTrack: MediaStreamTrack | null) => {
+    outgoingTrackRef.current = newTrack;
+    peersRef.current.forEach((peer) => {
+      try {
+        const sender = peer.getSenders().find(s => s.track && s.track.kind === 'video');
+        const fallbackTrack = localStream?.getVideoTracks()?.[0] ?? null;
+
+        if (sender) {
+          if (newTrack) {
+            sender.replaceTrack(newTrack);
+          } else {
+            sender.replaceTrack(fallbackTrack);
+          }
+          return;
+        }
+
+        // If no sender exists (e.g. peer was created before camera track was ready), add one now.
+        const trackToAdd = newTrack ?? fallbackTrack;
+        if (trackToAdd) {
+          peer.addTrack(trackToAdd, new MediaStream([trackToAdd]));
+        }
+      } catch (err) {
+        console.error('Error replacing outgoing track for peer', err);
+      }
+    });
+  }, [localStream]);
+
   useEffect(() => {
     if (!roomCode || !myUserId) return;
 
@@ -173,19 +203,8 @@ export function useWebRTC(roomCode: string | null) {
       socket.off(WEBRTC_EVENTS.ANSWER, handleAnswer);
       socket.off(WEBRTC_EVENTS.ICE_CANDIDATE, handleIceCandidate);
     };
-  }, [socket, createPeer, addParticipant, myUserId, roomCode]);
+  }, [socket, createPeer, addParticipant, removeParticipant, roomCode, myUserId]);
 
-  // Replace video track on all peer connections (for screen share)
-  const replaceVideoTrack = useCallback((newTrack: MediaStreamTrack) => {
-    peersRef.current.forEach((peer) => {
-      const sender = peer.getSenders().find(s => s.track?.kind === 'video');
-      if (sender) {
-        sender.replaceTrack(newTrack);
-      }
-    });
-  }, []);
-
-  // Explicit cleanup — called by MeetingScreen on leave/end
   const cleanupAllPeers = useCallback(() => {
     peersRef.current.forEach(peer => peer.close());
     peersRef.current.clear();
@@ -198,5 +217,9 @@ export function useWebRTC(roomCode: string | null) {
     };
   }, [cleanupAllPeers]);
 
-  return { replaceVideoTrack, cleanupAllPeers };
+  return {
+    replaceVideoTrack: replaceOutgoingTrack,
+    replaceOutgoingTrack,
+    cleanupAllPeers,
+  };
 }

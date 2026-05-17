@@ -72,4 +72,5 @@ export interface JoinRoomResponse {
   roomId: string;
 }
 
+
 export type ScheduledMeeting = Room;

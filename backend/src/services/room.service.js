@@ -65,7 +65,19 @@ class RoomService {
    */
   async createRoom(hostId, data) {
     try {
-      const { title, description, settings } = data;
+      const {
+        title,
+        description,
+        settings,
+        require_approval,
+        allow_chat,
+        max_participants,
+      } = data;
+      const normalizedSettings = {
+        require_approval: settings?.require_approval ?? require_approval ?? false,
+        allow_chat: settings?.allow_chat ?? allow_chat ?? true,
+        max_participants: settings?.max_participants ?? max_participants ?? 100,
+      };
 
       // Generate unique room code
       const roomCode = this.generateRoomCode();
@@ -195,6 +207,16 @@ class RoomService {
       const redis = getRedisClient();
       await addToSet(`room:${roomCode}:members`, userId.toString());
 
+      if (roomMember.status === USER_STATUS.JOINED) {
+        if (room.status === ROOM_STATUS.WAITING) {
+          room.status = ROOM_STATUS.ACTIVE;
+        }
+        if (!room.started_at) {
+          room.started_at = new Date();
+        }
+        await room.save();
+      }
+
       logger.info(`✓ User ${userId} requested to join room ${roomCode}`);
 
       return {
@@ -243,6 +265,14 @@ class RoomService {
         error.statusCode = HTTP_STATUS.NOT_FOUND;
         throw error;
       }
+
+      if (room.status === ROOM_STATUS.WAITING) {
+        room.status = ROOM_STATUS.ACTIVE;
+      }
+      if (!room.started_at) {
+        room.started_at = new Date();
+      }
+      await room.save();
 
       await this.logEvent(room._id, userId, EVENT_TYPE.USER_APPROVED, 'User approved to join');
 
@@ -357,6 +387,9 @@ class RoomService {
 
       room.status = ROOM_STATUS.ENDED;
       room.ended_at = new Date();
+      if (!room.started_at) {
+        room.started_at = room.created_at;
+      }
       await room.save();
 
       // Mark all members as left
@@ -413,12 +446,17 @@ class RoomService {
   }
 
   /**
-   * Generate unique room code
-   * @returns {String} Room code (format: xxx-yyy-zzz)
+   * Generate unique room code - improved security with longer, random alphanumeric
+   * @returns {String} Room code (format: XXX-YYY-ZZZ in alphanumeric)
    */
   generateRoomCode() {
-    const uuid = uuidv4().replace(/-/g, '').substring(0, 9);
-    return `${uuid.substring(0, 3)}-${uuid.substring(3, 6)}-${uuid.substring(6, 9)}`;
+    // Generate 12-character random alphanumeric code (resistant to brute force)
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = '';
+    for (let i = 0; i < 12; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return `${code.substring(0, 4)}-${code.substring(4, 8)}-${code.substring(8, 12)}`;
   }
 
   /**

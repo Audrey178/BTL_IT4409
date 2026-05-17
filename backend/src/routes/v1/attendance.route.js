@@ -135,6 +135,17 @@ router.get('/:roomCode/stats', attendanceController.getRoomAttendanceStats.bind(
  *       200:
  *         description: User's attendance history
  */
-router.get('/history', attendanceController.getUserAttendanceHistory.bind(attendanceController));
+// SECURITY FIX: Validate pagination parameters to prevent injection attacks
+const validatePagination = (req, res, next) => {
+  const { page = 1, limit = 50 } = req.query;
+  const pageNum = Math.max(1, parseInt(page) || 1);
+  const limitNum = Math.min(Math.max(1, parseInt(limit) || 50), 100);
+  
+  req.query.page = pageNum;
+  req.query.limit = limitNum;
+  next();
+};
+
+router.get('/history', validatePagination, attendanceController.getUserAttendanceHistory.bind(attendanceController));
 
 export default router;

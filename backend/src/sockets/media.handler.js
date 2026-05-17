@@ -84,3 +84,4 @@ export const handleScreenShareStop = (socket, data) => {
 };
 
 export default { handleMediaToggle, handleScreenShareStart, handleScreenShareStop };
+

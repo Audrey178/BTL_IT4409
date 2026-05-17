@@ -125,12 +125,16 @@ export function MeetingScreen() {
     ? `${authUser?.full_name || "You"} (You, presenting)`
     : sharingParticipant?.fullName || "Someone";
 
+  const meetingStatus = useMeetingStore((s) => s.status);
+
   useEffect(() => {
-    if (!hostId) {
+    // Only redirect if we were previously in-room and hostId became null
+    // (e.g. store was reset). Don't redirect on initial mount when store hasn't hydrated.
+    if (!hostId && meetingStatus === 'idle') {
       navigate(`/lobby?code=${roomCode}`);
-      socket.emit(ROOM_EVENTS.USER_LEFT, { roomId: roomCode, userId: myUserId });
+      socket.emit(ROOM_EVENTS.USER_LEFT, { roomCode, userId: myUserId });
     }
-  }, [roomCode, hostId]);
+  }, [roomCode, hostId, meetingStatus]);
 
   // Wrapped toggle handlers — emit socket event after toggle
   const handleToggleAudio = useCallback(() => {
