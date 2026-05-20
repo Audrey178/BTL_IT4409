@@ -25,7 +25,7 @@ import { SOCKET_EVENTS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
 import { getRedisClient } from '../config/redis.js';
 import { handleRoomJoin, handleApproveUser, handleRejectUser, handleUserLeft, handleEndMeeting } from './room.handler.js';
-import { handleWebRTCOffer, handleWebRTCAnswer, handleICECandidate } from './webrtc.handler.js';
+// WebRTC signaling removed — now handled by LiveKit Cloud SFU
 import { handleChatSend, handleChatHistory } from './chat.handler.js';
 import { handleMediaToggle, handleScreenShareStart, handleScreenShareStop } from './media.handler.js';
 
@@ -91,32 +91,8 @@ export const initializeSocket = (io, redisClient) => {
     });
 
     // =========================================================================
-    // WEBRTC SIGNALING
+    // WEBRTC SIGNALING — Removed (handled by LiveKit Cloud SFU)
     // =========================================================================
-
-    /**
-     * Sự kiện: WebRTC Offer (Peer A gửi)
-     * Dữ liệu: { to (targetUserId), offer }
-     */
-    socket.on(SOCKET_EVENTS.WEBRTC_OFFER, (data) => {
-      handleWebRTCOffer(socket, data);
-    });
-
-    /**
-     * Sự kiện: WebRTC Answer (Peer B gửi)
-     * Dữ liệu: { to (targetUserId), answer }
-     */
-    socket.on(SOCKET_EVENTS.WEBRTC_ANSWER, (data) => {
-      handleWebRTCAnswer(socket, data);
-    });
-
-    /**
-     * Sự kiện: ICE Candidate (cả hai peer gửi)
-     * Dữ liệu: { to (targetUserId), candidate }
-     */
-    socket.on(SOCKET_EVENTS.WEBRTC_ICE_CANDIDATE, (data) => {
-      handleICECandidate(socket, data);
-    });
 
     // =========================================================================
     // CHAT REALTIME

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useSocket } from "@/hooks/useSocket";
-import { useWebRTC } from "@/hooks/useWebRTC";
+import { useLiveKit } from "@/hooks/useLiveKit";
 import { useRoomEvents } from "@/hooks/useRoomEvents";
 import { useChatEvents } from "@/hooks/useChatEvents";
 import { useMediaStore } from "@/stores/mediaStore";
@@ -23,6 +23,59 @@ import { WaitingRoomPanel } from "@/components/pages/meeting/WaitingRoomPanel";
 import { ChatPanel } from "@/components/pages/meeting/ChatPanel";
 import { EndMeetingDialog } from "@/components/pages/meeting/EndMeetingDialog";
 import { roomService } from "@/services/roomService";
+import FilterPanel from "@/components/pages/meeting/FilterPanel";
+
+type VideoFilterKey = "original" | "warm" | "mono" | "cool" | "golden";
+
+type FaceBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+const VIDEO_FILTERS: Record<
+  VideoFilterKey,
+  { label: string; css: string; accent: string }
+> = {
+  original: {
+    label: "Original",
+    css: "none",
+    accent: "bg-surface-container-highest",
+  },
+  warm: {
+    label: "Warm",
+    css: "sepia(0.25) saturate(1.35) contrast(1.04) brightness(1.02)",
+    accent: "bg-orange-200",
+  },
+  mono: {
+    label: "Mono",
+    css: "grayscale(1) contrast(1.05)",
+    accent: "bg-stone-300",
+  },
+  cool: {
+    label: "Cool",
+    css: "saturate(1.15) hue-rotate(20deg) contrast(1.05)",
+    accent: "bg-blue-100",
+  },
+  golden: {
+    label: "Golden",
+    css: "sepia(0.18) saturate(1.55) brightness(1.08) contrast(1.03)",
+    accent: "bg-rose-100",
+  },
+};
+
+type FaceDetectorInstance = {
+  detect: (
+    source: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
+  ) => Promise<Array<{ boundingBox: DOMRectReadOnly }>>;
+};
+
+type FaceDetectorConstructor = new (options?: {
+  fastMode?: boolean;
+  maxDetectedFaces?: number;
+}) => FaceDetectorInstance;
+
 
 export function MeetingScreen() {
   const { id: roomCode } = useParams<{ id: string }>();
@@ -30,13 +83,19 @@ export function MeetingScreen() {
   const authUser = useAuthStore((state) => state.user);
   const navigate = useNavigate();
 
-  const { replaceVideoTrack, cleanupAllPeers } = useWebRTC(roomCode || null);
+  const {
+    isConnected,
+    toggleCamera: lkToggleCamera,
+    toggleMicrophone: lkToggleMicrophone,
+    toggleScreenShare: lkToggleScreenShare,
+    disconnect: lkDisconnect,
+  } = useLiveKit(roomCode || null);
   useRoomEvents(roomCode || null);
   const { sendMessage } = useChatEvents(roomCode || null);
 
   const {
     localStream, isAudioMuted, isVideoMuted, toggleAudio, toggleVideo,
-    screenStream, isScreenSharing, setScreenStream, setIsScreenSharing,
+    screenStream, isScreenSharing,
   } = useMediaStore();
 
   const {
@@ -50,6 +109,7 @@ export function MeetingScreen() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [isEndingMeeting, setIsEndingMeeting] = useState(false);
+  const [selectedFilter, setSelectedFilter] = useState<VideoFilterKey>("original");
   const prevMessageCountRef = useRef(messageCount);
 
   // Track unread messages when chat panel is closed
@@ -78,8 +138,8 @@ export function MeetingScreen() {
   const handleLeaveMeeting = useCallback(() => {
     // 1. Emit socket leave event
     socket.emit(ROOM_EVENTS.USER_LEFT, { roomCode, userId: myUserId });
-    // 2. Cleanup WebRTC peers
-    cleanupAllPeers();
+    // 2. Disconnect from LiveKit room
+    lkDisconnect();
     // 3. Cleanup media tracks (camera, mic, screen share)
     cleanupMedia();
     // 4. Reset meeting store
@@ -87,7 +147,7 @@ export function MeetingScreen() {
     // 5. Navigate home
     toast.info('You have left the meeting');
     navigate('/', { replace: true });
-  }, [socket, roomCode, myUserId, cleanupAllPeers, cleanupMedia, reset, navigate]);
+  }, [socket, roomCode, myUserId, lkDisconnect, cleanupMedia, reset, navigate]);
 
   const handleEndMeetingForAll = useCallback(async () => {
     if (isEndingMeeting) return; // Double-click prevention
@@ -97,8 +157,8 @@ export function MeetingScreen() {
       await roomService.endRoom(roomCode!);
       // 2. Broadcast room:ended via socket to all participants
       socket.emit(ROOM_EVENTS.ENDED, { roomCode });
-      // 3. Cleanup WebRTC peers
-      cleanupAllPeers();
+      // 3. Disconnect from LiveKit room
+      lkDisconnect();
       // 4. Cleanup media tracks
       cleanupMedia();
       // 5. Reset meeting store
@@ -110,7 +170,7 @@ export function MeetingScreen() {
       toast.error('Failed to end meeting. Please try again.');
       setIsEndingMeeting(false);
     }
-  }, [isEndingMeeting, roomCode, socket, cleanupAllPeers, cleanupMedia, reset, navigate]);
+  }, [isEndingMeeting, roomCode, socket, lkDisconnect, cleanupMedia, reset, navigate]);
 
   // Is someone (me or remote) sharing screen?
   const isAnyoneSharing = isScreenSharing || !!screenSharingUserId;
@@ -137,78 +197,55 @@ export function MeetingScreen() {
   }, [roomCode, hostId, meetingStatus]);
 
   // Wrapped toggle handlers — emit socket event after toggle
-  const handleToggleAudio = useCallback(() => {
-    toggleAudio();
+  const handleToggleAudio = useCallback(async () => {
+    await lkToggleMicrophone();
     const newMuted = !useMediaStore.getState().isAudioMuted;
+    toggleAudio();
     socket.emit(MEDIA_EVENTS.TOGGLE, {
       roomCode, userId: myUserId,
       isAudioMuted: newMuted,
       isVideoMuted: useMediaStore.getState().isVideoMuted,
     });
-  }, [socket, roomCode, myUserId, toggleAudio]);
+  }, [socket, roomCode, myUserId, toggleAudio, lkToggleMicrophone]);
 
-  const handleToggleVideo = useCallback(() => {
-    toggleVideo();
+  const handleToggleVideo = useCallback(async () => {
+    await lkToggleCamera();
     const newMuted = !useMediaStore.getState().isVideoMuted;
+    toggleVideo();
     socket.emit(MEDIA_EVENTS.TOGGLE, {
       roomCode, userId: myUserId,
       isAudioMuted: useMediaStore.getState().isAudioMuted,
       isVideoMuted: newMuted,
     });
-  }, [socket, roomCode, myUserId, toggleVideo]);
+  }, [socket, roomCode, myUserId, toggleVideo, lkToggleCamera]);
 
   // Screen share handlers
-  const handleStartScreenShare = useCallback(async () => {
-    if (screenSharingUserId) {
+  const handleToggleScreenShare = useCallback(async () => {
+    if (!isScreenSharing && screenSharingUserId) {
       toast.error("Someone else is already sharing their screen");
       return;
     }
-    try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-      setScreenStream(stream);
-      setIsScreenSharing(true);
+
+    const success = await lkToggleScreenShare();
+    if (!success) return; // User cancelled picker
+
+    if (!isScreenSharing) {
+      // Started sharing
       setScreenSharingUserId(myUserId || null);
-
-      const videoTrack = stream.getVideoTracks()[0];
-      if (videoTrack) {
-        replaceVideoTrack(videoTrack);
-        videoTrack.onended = () => handleStopScreenShare();
-      }
-
       socket.emit(MEDIA_EVENTS.SCREEN_SHARE_START, {
         roomCode, userId: myUserId, userName: authUser?.full_name,
       });
-    } catch {
-      // User cancelled the picker
+    } else {
+      // Stopped sharing
+      setScreenSharingUserId(null);
+      socket.emit(MEDIA_EVENTS.SCREEN_SHARE_STOP, { roomCode, userId: myUserId });
     }
-  }, [socket, roomCode, myUserId, authUser, screenSharingUserId, replaceVideoTrack, setScreenStream, setIsScreenSharing, setScreenSharingUserId]);
-
-  const handleStopScreenShare = useCallback(() => {
-    const { screenStream: ss } = useMediaStore.getState();
-    if (ss) {
-      ss.getTracks().forEach((t) => t.stop());
-    }
-    setScreenStream(null);
-    setIsScreenSharing(false);
-    setScreenSharingUserId(null);
-
-    // Replace back to camera track
-    const { localStream: ls } = useMediaStore.getState();
-    const camTrack = ls?.getVideoTracks()[0];
-    if (camTrack) replaceVideoTrack(camTrack);
-
-    socket.emit(MEDIA_EVENTS.SCREEN_SHARE_STOP, { roomCode, userId: myUserId });
-  }, [socket, roomCode, myUserId, replaceVideoTrack, setScreenStream, setIsScreenSharing, setScreenSharingUserId]);
-
-  const handleToggleScreenShare = useCallback(() => {
-    if (isScreenSharing) handleStopScreenShare();
-    else handleStartScreenShare();
-  }, [isScreenSharing, handleStartScreenShare, handleStopScreenShare]);
+  }, [socket, roomCode, myUserId, authUser, isScreenSharing, screenSharingUserId, lkToggleScreenShare, setScreenSharingUserId]);
 
   // Get screen share stream to display
   const screenShareStream = isMeSharing
     ? screenStream
-    : sharingParticipant?.stream || null;
+    : sharingParticipant?.screenStream || null;
 
   return (
     <div className="h-screen flex flex-col bg-surface overflow-hidden">
@@ -253,7 +290,7 @@ export function MeetingScreen() {
               <span className="text-xs text-primary/60">· Presentation audio</span>
             </div>
             <Button
-              onClick={handleStopScreenShare}
+              onClick={handleToggleScreenShare}
               variant="destructive"
               size="sm"
               className="rounded-full px-6 font-bold text-xs"
@@ -328,63 +365,14 @@ export function MeetingScreen() {
             ))}
           </div>
         )}
-
         {/* Chat Sidebar */}
         <AnimatePresence>
           {showChat && roomCode && (
             <ChatPanel roomCode={roomCode} onClose={() => setShowChat(false)} sendMessage={sendMessage} />
           )}
         </AnimatePresence>
-
         {/* Filters Panel */}
-        <AnimatePresence>
-          {showFilters && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, x: 20 }}
-              animate={{ opacity: 1, scale: 1, x: 0 }}
-              exit={{ opacity: 0, scale: 0.95, x: 20 }}
-              className="absolute top-6 right-6 w-80 max-h-[calc(100%-120px)] glass-panel rounded-[2.5rem] shadow-2xl border border-white/40 flex flex-col overflow-hidden z-[60]"
-            >
-              <div className="p-8 pb-4 flex justify-between items-center">
-                <h2 className="text-xl font-bold text-orange-950 tracking-tight">Studio Filters</h2>
-                <button onClick={() => setShowFilters(false)} className="text-on-surface-variant hover:text-primary transition-colors">
-                  <X size={20} />
-                </button>
-              </div>
-              <ScrollArea className="flex-1 px-8 pb-8">
-                <div className="space-y-8">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60 mb-4">Focus & Backgrounds</p>
-                    <div className="grid grid-cols-2 gap-4">
-                      <FilterItem label="Original" active icon={<XCircle size={24} />} />
-                      <FilterItem label="Soft Blur" src="https://picsum.photos/seed/blur/200/120" blur />
-                      <FilterItem label="Oak Studio" src="https://picsum.photos/seed/oak/200/120" />
-                      <FilterItem label="The Hearth" src="https://picsum.photos/seed/hearth/200/120" />
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60 mb-4">Mood & Color</p>
-                    <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
-                      <ColorFilter color="bg-orange-200" label="Warm" />
-                      <ColorFilter color="bg-stone-300" label="Mono" />
-                      <ColorFilter color="bg-blue-100" label="Cool" />
-                      <ColorFilter color="bg-rose-100" label="Golden" />
-                    </div>
-                  </div>
-                </div>
-              </ScrollArea>
-              <div className="bg-surface-container-low p-6 flex items-center justify-between mt-auto border-t border-outline-variant/10">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <Sparkles size={18} className="text-primary" />
-                  </div>
-                  <span className="text-sm font-bold text-orange-950">Auto-Touchup</span>
-                </div>
-                <Switch defaultChecked />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <FilterPanel showFilters={showFilters} setShowFilters={setShowFilters} selectedFilter={selectedFilter} setSelectedFilter={setSelectedFilter} />
       </div>
 
       {/* Controls Bar */}
@@ -534,33 +522,4 @@ function ControlButton({ icon, label, active = false, badge, className, onClick 
   );
 }
 
-function FilterItem({ label, active = false, src, icon, blur = false }: {
-  label: string; active?: boolean; src?: string; icon?: React.ReactNode; blur?: boolean;
-}) {
-  return (
-    <button className="flex flex-col gap-2 text-left group">
-      <div className={`aspect-video w-full rounded-2xl overflow-hidden relative border-2 transition-all ${
-        active ? "border-primary ring-4 ring-primary-fixed" : "border-transparent hover:border-outline-variant"
-      } ${!src ? "bg-surface-container-highest flex items-center justify-center" : ""}`}>
-        {src ? <img src={src} alt={label} className={`w-full h-full object-cover ${blur ? "blur-[2px]" : ""}`} /> : icon}
-        {active && (
-          <div className="absolute inset-0 bg-primary/10 flex items-center justify-center">
-            <CheckCircle2 className="text-primary" size={24} />
-          </div>
-        )}
-      </div>
-      <span className={`text-[10px] font-bold px-1 uppercase tracking-widest ${active ? "text-primary" : "text-on-surface-variant/60"}`}>
-        {label}
-      </span>
-    </button>
-  );
-}
 
-function ColorFilter({ color, label }: { color: string; label: string }) {
-  return (
-    <button className="flex-shrink-0 w-16 flex flex-col items-center gap-2 group">
-      <div className={`w-12 h-12 rounded-full border-2 border-white shadow-sm transition-transform group-hover:scale-110 ${color}`} />
-      <span className="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">{label}</span>
-    </button>
-  );
-}

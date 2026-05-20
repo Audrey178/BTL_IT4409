@@ -22,6 +22,8 @@ interface MeetingState {
   removeParticipant: (userId: string) => void;
   updateParticipantStream: (userId: string, stream: MediaStream) => void;
   updateParticipantMedia: (userId: string, patch: { isAudioMuted?: boolean; isVideoMuted?: boolean }) => void;
+  updateParticipantScreenStream: (userId: string, stream: MediaStream) => void;
+  clearParticipantScreenStream: (userId: string) => void;
 
   addMessage: (msg: ChatMessage) => void;
   setMessages: (msgs: ChatMessage[]) => void;
@@ -80,6 +82,18 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   updateParticipantMedia: (userId, patch) => set((state) => ({
     participants: state.participants.map(p =>
       p.id === userId ? { ...p, ...patch } : p
+    )
+  })),
+
+  updateParticipantScreenStream: (userId, screenStream) => set((state) => ({
+    participants: state.participants.map(p =>
+      p.id === userId ? { ...p, screenStream } : p
+    )
+  })),
+
+  clearParticipantScreenStream: (userId) => set((state) => ({
+    participants: state.participants.map(p =>
+      p.id === userId ? { ...p, screenStream: undefined } : p
     )
   })),
 

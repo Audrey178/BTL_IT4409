@@ -6,6 +6,7 @@ export interface Participant {
   isVideoMuted: boolean;
   isScreenSharing?: boolean;
   stream?: MediaStream;
+  screenStream?: MediaStream;
 }
 
 export interface WaitingUser {

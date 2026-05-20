@@ -24,6 +24,7 @@ export function useRoomEvents(roomCode: string | null) {
     removeParticipant,
     updateParticipantMedia,
     setScreenSharingUserId,
+    clearParticipantScreenStream,
     setStatus,
     reset,
   } = useMeetingStore();
@@ -57,7 +58,7 @@ export function useRoomEvents(roomCode: string | null) {
       isSelf?: boolean;
       existingParticipants?: Array<{ userId: string; userName: string }>;
     }) => {
-      // isSelf: cho approved user — useWebRTC xử lý WebRTC peers,
+      // isSelf: cho approved user — useLiveKit xử lý LiveKit connection,
       // ở đây chỉ cập nhật status
       if (data.isSelf) {
         setStatus('in-room');
@@ -165,6 +166,7 @@ export function useRoomEvents(roomCode: string | null) {
 
     const handleScreenShareStop = (data: { userId: string }) => {
       setScreenSharingUserId(null);
+      clearParticipantScreenStream(data.userId);
     };
 
     socket.on(ROOM_EVENTS.REQUEST_APPROVAL, handleRequestApproval);
@@ -198,6 +200,7 @@ export function useRoomEvents(roomCode: string | null) {
     removeParticipant,
     updateParticipantMedia,
     setScreenSharingUserId,
+    clearParticipantScreenStream,
     setStatus,
     reset,
     navigate,

@@ -15,11 +15,8 @@ export const ROOM_EVENTS = {
   ERROR: 'error',
 } as const;
 
-export const WEBRTC_EVENTS = {
-  OFFER: 'webrtc:offer',
-  ANSWER: 'webrtc:answer',
-  ICE_CANDIDATE: 'webrtc:ice_candidate',
-} as const;
+// WebRTC events removed — signaling now handled by LiveKit Cloud SFU
+
 
 export const CHAT_EVENTS = {
   SEND: 'chat:send',

@@ -3,6 +3,7 @@ import authRoutes from './auth.route.js';
 import roomRoutes from './room.route.js';
 import attendanceRoutes from './attendance.route.js';
 import historyRoutes from './history.route.js';
+import livekitRoutes from './livekit.route.js';
 
 const router = express.Router();
 
@@ -11,6 +12,7 @@ router.use('/auth', authRoutes);
 router.use('/rooms', roomRoutes);
 router.use('/attendance', attendanceRoutes);
 router.use('/history', historyRoutes);
+router.use('/livekit', livekitRoutes);
 
 /**
  * @swagger
