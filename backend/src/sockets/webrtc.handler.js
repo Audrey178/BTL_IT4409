@@ -1,123 +1,97 @@
-/**
- * ============================================================================
- * MEETING PROJECT - BACKEND - XỬ LÝ SIGNALING WEBRTC
- * ============================================================================
- * 
- * Module này xử lý WebRTC Signaling:
- * - Trao đổi SDP Offer/Answer giữa các peers
- * - Gửi ICE candidates để tìm đường kết nối tối ưu
- * - Quản lý peer connection metadata
- * 
- * Quy trình:
- * 1. Peer A gửi offer -> Server chuyển tiếp tới Peer B
- * 2. Peer B gửi answer -> Server chuyển tiếp tới Peer A
- * 3. Cả 2 gửi ICE candidates -> Server chuyển tiếp
- * 
- * QUAN TRỌNG: Tất cả signaling đều là UNICAST (1-to-1), KHÔNG broadcast.
- * Lookup socketId từ Redis bằng userId, gửi trực tiếp.
- * 
- * Tác giả: Meeting Team
- * Ngày tạo: 2026-04-08
- */
-
+import { Room, RoomMember } from '../models/index.js';
+import { SOCKET_EVENTS, USER_STATUS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
-import { SOCKET_EVENTS } from '../utils/constants.js';
-import { getRedisClient } from '../config/redis.js';
 
-/**
- * Tìm socketId từ userId qua Redis
- */
-async function getSocketIdForUser(userId) {
-  const redis = getRedisClient();
-  return await redis.get(`user:${userId}:socket`);
-}
+const emitSocketError = (socket, message) => {
+  socket.emit(SOCKET_EVENTS.ERROR, { message });
+};
 
-/**
- * Xử lý WebRTC Offer từ Peer A → chuyển tiếp tới Peer B
- * 
- * @param {Object} socket - Socket.IO socket instance
- * @param {Object} data - { to (targetUserId), offer, roomCode? }
- * @returns {Promise<void>}
- */
-export const handleWebRTCOffer = async (socket, data) => {
+const ensureCanSignal = async ({ socket, roomCode, recipientUserId }) => {
+  const fromUserId = socket.userId;
+  if (!fromUserId) {
+    throw new Error('Unauthorized socket');
+  }
+
+  if (!roomCode) {
+    throw new Error('roomCode is required for WebRTC signaling');
+  }
+
+  if (!recipientUserId) {
+    throw new Error('Target user ID is required for WebRTC signaling');
+  }
+
+  const room = await Room.findOne({ room_code: roomCode }).lean();
+  if (!room) {
+    throw new Error('Room not found');
+  }
+
+  const hostId = room.host_id.toString();
+  const participantIds = [fromUserId, recipientUserId];
+  const nonHostParticipantIds = participantIds.filter((id) => id.toString() !== hostId);
+  const memberships = await RoomMember.distinct('user_id', {
+    room_id: room._id,
+    user_id: { $in: nonHostParticipantIds },
+    status: USER_STATUS.JOINED,
+  });
+  const allowedIds = new Set([
+    hostId,
+    ...memberships.map((id) => id.toString()),
+  ]);
+
+  if (!participantIds.every((id) => allowedIds.has(id.toString()))) {
+    throw new Error('Both peers must be joined in the same room');
+  }
+
+  return fromUserId;
+};
+
+const forwardSignal = async (socket, data, eventName, payloadKey) => {
+  const recipientUserId = data.targetUserId || data.to;
+  const payload = data[payloadKey];
+
+  if (!payload) {
+    throw new Error(`Missing ${payloadKey} payload`);
+  }
+
+  const fromUserId = await ensureCanSignal({
+    socket,
+    roomCode: data.roomCode,
+    recipientUserId,
+  });
+
+  socket.to(`user:${recipientUserId}`).emit(eventName, {
+    from: fromUserId,
+    fromUserId,
+    targetUserId: recipientUserId,
+    roomCode: data.roomCode,
+    [payloadKey]: payload,
+  });
+};
+
+export const handleWebRTCOffer = async (socket, data = {}) => {
   try {
-    const { to, offer, roomCode } = data;
-    // userId lưu trong socket.data khi connect
-    const fromUserId = socket.data.userId || socket.handshake.query.userId || socket.id;
-
-    logger.debug(`📤 WebRTC Offer: ${fromUserId} → ${to}`);
-
-    // Unicast: tìm socketId của target user, gửi trực tiếp
-    const targetSocketId = await getSocketIdForUser(to);
-    if (targetSocketId) {
-      socket.to(targetSocketId).emit(SOCKET_EVENTS.WEBRTC_OFFER, {
-        from: fromUserId,
-        offer,
-      });
-    } else {
-      logger.warn(`⚠️  WebRTC Offer: Không tìm thấy socket của user ${to}`);
-    }
+    await forwardSignal(socket, data, SOCKET_EVENTS.WEBRTC_OFFER, 'offer');
   } catch (error) {
-    logger.error('❌ Lỗi trong handleWebRTCOffer:', error);
-    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Lỗi khi gửi WebRTC offer' });
+    logger.error('handleWebRTCOffer error:', error);
+    emitSocketError(socket, error.message || 'Failed to send WebRTC offer');
   }
 };
 
-/**
- * Xử lý WebRTC Answer từ Peer B → chuyển tiếp tới Peer A
- * 
- * @param {Object} socket - Socket.IO socket instance
- * @param {Object} data - { to (targetUserId), answer, roomCode? }
- * @returns {Promise<void>}
- */
-export const handleWebRTCAnswer = async (socket, data) => {
+export const handleWebRTCAnswer = async (socket, data = {}) => {
   try {
-    const { to, answer, roomCode } = data;
-    const fromUserId = socket.data.userId || socket.handshake.query.userId || socket.id;
-
-    logger.debug(`📥 WebRTC Answer: ${fromUserId} → ${to}`);
-
-    const targetSocketId = await getSocketIdForUser(to);
-    if (targetSocketId) {
-      socket.to(targetSocketId).emit(SOCKET_EVENTS.WEBRTC_ANSWER, {
-        from: fromUserId,
-        answer,
-      });
-    } else {
-      logger.warn(`⚠️  WebRTC Answer: Không tìm thấy socket của user ${to}`);
-    }
+    await forwardSignal(socket, data, SOCKET_EVENTS.WEBRTC_ANSWER, 'answer');
   } catch (error) {
-    logger.error('❌ Lỗi trong handleWebRTCAnswer:', error);
-    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Lỗi khi gửi WebRTC answer' });
+    logger.error('handleWebRTCAnswer error:', error);
+    emitSocketError(socket, error.message || 'Failed to send WebRTC answer');
   }
 };
 
-/**
- * Xử lý ICE Candidate → chuyển tiếp tới peer
- * 
- * @param {Object} socket - Socket.IO socket instance
- * @param {Object} data - { to (targetUserId), candidate, roomCode? }
- * @returns {Promise<void>}
- */
-export const handleICECandidate = async (socket, data) => {
+export const handleICECandidate = async (socket, data = {}) => {
   try {
-    const { to, candidate, roomCode } = data;
-    const fromUserId = socket.data.userId || socket.handshake.query.userId || socket.id;
-
-    logger.debug(`🧊 ICE Candidate: ${fromUserId} → ${to}`);
-
-    const targetSocketId = await getSocketIdForUser(to);
-    if (targetSocketId) {
-      socket.to(targetSocketId).emit(SOCKET_EVENTS.WEBRTC_ICE_CANDIDATE, {
-        from: fromUserId,
-        candidate,
-      });
-    } else {
-      // ICE candidate thất bại không nghiêm trọng — connection vẫn có thể hoạt động
-      logger.debug(`⚠️  ICE: Không tìm thấy socket của user ${to}`);
-    }
+    await forwardSignal(socket, data, SOCKET_EVENTS.WEBRTC_ICE_CANDIDATE, 'candidate');
   } catch (error) {
-    logger.error('❌ Lỗi trong handleICECandidate:', error);
+    logger.warn('handleICECandidate rejected:', error.message);
+    emitSocketError(socket, error.message || 'Failed to send ICE candidate');
   }
 };
 

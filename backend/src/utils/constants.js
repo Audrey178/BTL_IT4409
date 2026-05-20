@@ -91,6 +91,8 @@ export const EVENT_TYPE = {
   ROOM_ENDED: 'room_ended',
   USER_APPROVED: 'user_approved',
   USER_REJECTED: 'user_rejected',
+  RECORDING_CREATED: 'recording_created',
+  RECORDING_DELETED: 'recording_deleted',
 };
 
 export default {

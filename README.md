@@ -4,7 +4,6 @@ Nền tảng họp trực tuyến realtime gồm:
 
 - `frontend/`: React 19 + Vite + TypeScript + Zustand + Socket.IO client.
 - `backend/`: Express + MongoDB + Redis + Socket.IO + Swagger.
-- `meeting-backend/`: snapshot cũ của backend, không nên dùng làm source chính.
 
 Repo hiện dùng `backend/` làm backend canonical. Frontend và tài liệu dưới đây đã được đồng bộ theo cấu trúc này.
 
@@ -25,8 +24,6 @@ Các hạng mục vẫn còn là scope tiếp theo nếu muốn production-grade
 - Tự động test end-to-end.
 - TURN server thật cho WebRTC production.
 - CI pipeline.
-- token refresh persistence / blacklist khi logout.
-- tách `meeting-backend/` ra khỏi repo hoặc archive rõ ràng.
 
 ## 2. Kiến trúc
 

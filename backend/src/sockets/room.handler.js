@@ -1,119 +1,87 @@
-/**
- * ============================================================================
- * MEETING PROJECT - BACKEND - XỬ LÝ SỰ KIỆN ROOM (PHÒNG HỌP)
- * ============================================================================
- * 
- * Module này xử lý toàn bộ logic Socket.IO liên quan tới Phòng họp:
- * - Người dùng yêu cầu vào phòng (room:join)
- * - Duyệt/Từ chối người tham gia (room:approve_user, room:reject_user)
- * - Quản lý danh sách thành viên
- * - Xử lý các sự kiện rời khỏi phòng
- * 
- * Kiến trúc: Handler này được gọi từ sockets/index.js
- * 
- * Tác giả: Meeting Team
- * Ngày tạo: 2026-04-08
- */
-
 import { getRedisClient } from '../config/redis.js';
 import { RoomMember, Room, User } from '../models/index.js';
 import { SOCKET_EVENTS, ROOM_STATUS, USER_STATUS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
 
-/**
- * Xử lý sự kiện người dùng yêu cầu vào phòng
- * 
- * @param {Object} socket - Socket.IO socket instance
- * @param {Object} data - { userId, roomCode }
- * @returns {Promise<void>}
- */
-export const handleRoomJoin = async (socket, data) => {
+const emitSocketError = (socket, message) => {
+  socket.emit(SOCKET_EVENTS.ERROR, { message });
+};
+
+const getRoomForHostAction = async (socket, roomCode) => {
+  if (!roomCode) {
+    emitSocketError(socket, 'Room code is required');
+    return null;
+  }
+
+  const room = await Room.findOne({ room_code: roomCode });
+  if (!room) {
+    emitSocketError(socket, 'Room not found');
+    return null;
+  }
+
+  if (room.host_id.toString() !== socket.userId?.toString()) {
+    emitSocketError(socket, 'Only room host can perform this action');
+    return null;
+  }
+
+  return room;
+};
+
+const getUserPayload = async (userId) => {
+  const user = await User.findById(userId).select('full_name email avatar').lean();
+  if (!user) return null;
+
+  return {
+    _id: user._id.toString(),
+    full_name: user.full_name,
+    email: user.email,
+    avatar: user.avatar || null,
+  };
+};
+
+export const handleRoomJoin = async (socket, data = {}) => {
   try {
-    // Use JWT-authenticated userId from socket instead of client-provided data
     const userId = socket.userId;
     const { roomCode } = data;
-    
+
     if (!roomCode) {
-      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Room code is required' });
+      emitSocketError(socket, 'Room code is required');
       return;
     }
-    
+
     const redis = getRedisClient();
-
-    logger.info(`👤 Người dùng ${userId} yêu cầu vào phòng ${roomCode}`);
-
-    // 1. Kiểm tra phòng có tồn tại không
     const room = await Room.findOne({ room_code: roomCode });
     if (!room) {
-      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Phòng không tồn tại' });
+      emitSocketError(socket, 'Room not found');
       return;
     }
 
-    // 2. Nếu phòng đã kết thúc, từ chối
     if (room.status === ROOM_STATUS.ENDED) {
-      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Phòng đã kết thúc' });
+      emitSocketError(socket, 'Room has ended');
       return;
     }
 
-    // 3. Kiểm tra user là host hay không
-    const isHost = room.host_id.toString() === userId;
-
-    // 4. Thêm/cập nhật member vào Database
-    const memberStatus = (isHost || !room.settings.require_approval)
-      ? USER_STATUS.JOINED
-      : USER_STATUS.PENDING;
+    const shouldJoinImmediately = !room.settings.require_approval;
     const member = await RoomMember.findOneAndUpdate(
       { room_id: room._id, user_id: userId },
       {
         room_id: room._id,
         user_id: userId,
-        status: memberStatus,
-        joined_at: memberStatus === USER_STATUS.JOINED ? new Date() : null,
+        status: shouldJoinImmediately ? USER_STATUS.JOINED : USER_STATUS.PENDING,
+        joined_at: shouldJoinImmediately ? new Date() : null,
+        left_at: null,
       },
       { upsert: true, new: true }
     ).populate("user_id");
 
-    // 5. Cập nhật Redis: Lưu socket -> user -> room mapping
-    await redis.set(
-      `socket:${socket.id}`,
-      JSON.stringify({ userId, roomCode })
-    );
-    // Lưu ngược: userId -> socketId (để host có thể notify user sau khi approve)
+    await redis.set(`socket:${socket.id}`, JSON.stringify({ userId, roomCode }));
     await redis.set(`user:${userId}:socket`, socket.id);
 
-    // 6. Host LUÔN join room ngay (bỏ qua approval)
-    if (isHost) {
-      await redis.sAdd(`room:${roomCode}:members`, userId);
-      socket.join(roomCode);
-      await redis.set(`room:${roomCode}:host:socket`, socket.id);
+    const userPayload = await getUserPayload(userId);
 
-      // Lấy existing participants
-      const memberIds = await redis.sMembers(`room:${roomCode}:members`);
-      const existingParticipants = [];
-      for (const mId of memberIds) {
-        if (mId === userId) continue;
-        const rm = await RoomMember.findOne({
-          room_id: room._id,
-          user_id: mId,
-        }).populate('user_id', 'full_name email');
-        if (rm && rm.user_id) {
-          existingParticipants.push({
-            userId: rm.user_id._id.toString(),
-            userName: rm.user_id.full_name,
-          });
-        }
-      }
-
-      socket.emit(SOCKET_EVENTS.ROOM_USER_JOINED, {
-        success: true,
-        existingParticipants,
-      });
-    } else if (room.settings.require_approval) {
-      // ====================================================================
-      // CẦN DUYỆT: KHÔNG join room namespace ngay — chờ host approve
-      // ====================================================================
+    if (!shouldJoinImmediately) {
       socket.emit(SOCKET_EVENTS.ROOM_PENDING, {
-        message: 'Yêu cầu vào phòng đang chờ duyệt',
+        message: 'Join request is pending approval',
         memberId: member._id,
       });
 
@@ -123,81 +91,68 @@ export const handleRoomJoin = async (socket, data) => {
           userId: member.user_id._id,
           userName: member.user_id.full_name,
           memberId: member._id,
-          message: `${member.user_id.full_name} yêu cầu vào phòng`,
+          user: userPayload,
+          message: 'A user requested to join the room',
         });
       }
-    } else {
-      // ====================================================================
-      // KHÔNG CẦN DUYỆT: join room namespace ngay
-      // ====================================================================
-      // Lấy existing participants TRƯỚC khi join room
-      const memberIds = await redis.sMembers(`room:${roomCode}:members`);
-      const existingParticipants = [];
-      for (const mId of memberIds) {
-        if (mId === userId) continue;
-        const rm = await RoomMember.findOne({
-          room_id: room._id,
-          user_id: mId,
-        }).populate('user_id', 'full_name email');
-        if (rm && rm.user_id) {
-          existingParticipants.push({
-            userId: rm.user_id._id.toString(),
-            userName: rm.user_id.full_name,
-          });
-        }
-      }
-
-      // Thêm vào members set + join room
-      await redis.sAdd(`room:${roomCode}:members`, userId);
-      socket.join(roomCode);
-
-      // Thông báo cho những người ĐANG trong phòng (trừ bản thân)
-      socket.to(roomCode).emit(SOCKET_EVENTS.ROOM_USER_JOINED, {
-        userId,
-        userName: member.user_id.full_name,
-        message: `Một người dùng đã vào phòng`,
-      });
-
-      // Gửi cho bản thân kèm existing participants
-      socket.emit(SOCKET_EVENTS.ROOM_USER_JOINED, {
-        success: true,
-        existingParticipants,
-      });
+      return;
     }
 
-    logger.info(`✅ Người dùng ${userId} đã xử lý join phòng ${roomCode}`);
+    await redis.sAdd(`room:${roomCode}:members`, userId);
+    socket.join(roomCode);
+
+    if (room.status === ROOM_STATUS.WAITING) {
+      room.status = ROOM_STATUS.ACTIVE;
+    }
+    if (!room.started_at) {
+      room.started_at = new Date();
+    }
+    await room.save();
+
+    socket.to(roomCode).emit(SOCKET_EVENTS.ROOM_USER_JOINED, {
+      userId,
+      user: userPayload,
+      message: 'A user joined the room',
+    });
+
+    socket.emit(SOCKET_EVENTS.ROOM_USER_JOINED, {
+      success: true,
+      userId,
+      user: userPayload,
+    });
+
+    logger.info(`User ${userId} joined room ${roomCode}`);
   } catch (error) {
-    logger.error('❌ Lỗi trong handleRoomJoin:', error);
-    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Lỗi khi vào phòng' });
+    logger.error('handleRoomJoin error:', error);
+    emitSocketError(socket, 'Failed to join room');
   }
 };
 
-/**
- * Xử lý Host duyệt người tham gia
- * 
- * io được truyền từ index.js để có thể join approved user vào room
- * 
- * @param {Object} io - Socket.IO server instance
- * @param {Object} socket - Socket.IO socket instance (host)
- * @param {Object} data - { roomCode, memberId }
- * @returns {Promise<void>}
- */
-export const handleApproveUser = async (io, socket, data) => {
+export const handleApproveUser = async (socket, data = {}) => {
   try {
     const { roomCode, memberId } = data;
     const redis = getRedisClient();
+    const room = await getRoomForHostAction(socket, roomCode);
+    if (!room) return;
 
-    // Cập nhật status thành JOINED
-    const member = await RoomMember.findByIdAndUpdate(
-      memberId,
-      { status: USER_STATUS.JOINED, joined_at: new Date() },
+    const member = await RoomMember.findOneAndUpdate(
+      { _id: memberId, room_id: room._id },
+      { status: USER_STATUS.JOINED, joined_at: new Date(), left_at: null },
       { new: true }
-    ).populate('user_id', 'full_name email');
+    ).populate('user_id', 'full_name email avatar');
 
     if (!member) {
-      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Không tìm thấy thành viên' });
+      emitSocketError(socket, 'Member not found in room');
       return;
     }
+
+    if (room.status === ROOM_STATUS.WAITING) {
+      room.status = ROOM_STATUS.ACTIVE;
+    }
+    if (!room.started_at) {
+      room.started_at = new Date();
+    }
+    await room.save();
 
     const approvedUserId = member.user_id._id.toString();
     logger.info(`Người dùng ${member.user_id.full_name} đã được duyệt vào phòng ${roomCode}`);
@@ -209,100 +164,77 @@ export const handleApproveUser = async (io, socket, data) => {
       approvedSocket = io.sockets.sockets.get(approvedSocketId);
     }
 
-    // 2. Lấy danh sách existing participants TRƯỚC khi thêm approved user
-    const room = await Room.findOne({ room_code: roomCode });
-    const memberIds = await redis.sMembers(`room:${roomCode}:members`);
-    const existingParticipants = [];
-    for (const mId of memberIds) {
-      if (mId === approvedUserId) continue;
-      const rm = await RoomMember.findOne({
-        room_id: room?._id,
-        user_id: mId,
-      }).populate('user_id', 'full_name email');
-      if (rm && rm.user_id) {
-        existingParticipants.push({
-          userId: rm.user_id._id.toString(),
-          userName: rm.user_id.full_name,
-        });
-      }
-    }
-
-    // 3. Thêm approved user vào Redis members set
     await redis.sAdd(`room:${roomCode}:members`, approvedUserId);
 
-    const payload = {
-      userId: approvedUserId,
-      userName: member.user_id.full_name,
-      message: `${member.user_id.full_name} đã được duyệt vào phòng`,
+    const userPayload = {
+      _id: approvedUserId,
+      full_name: member.user_id.full_name,
+      email: member.user_id.email,
+      avatar: member.user_id.avatar || null,
     };
 
-    // 4. Notify HOST (socket.emit → chính host nhận)
-    socket.emit(SOCKET_EVENTS.ROOM_USER_JOINED, payload);
+    socket.to(roomCode).emit(SOCKET_EVENTS.ROOM_USER_JOINED, {
+      userId: approvedUserId,
+      user: userPayload,
+      message: `${member.user_id.full_name} joined the room`,
+    });
 
-    // 5. Notify người KHÁC trong room (approved user CHƯA join room nên không nhận duplicate)
-    socket.to(roomCode).emit(SOCKET_EVENTS.ROOM_USER_JOINED, payload);
-
-    // 6. Emit riêng cho approved user: isSelf + existingParticipants
-    if (approvedSocket) {
-      approvedSocket.emit(SOCKET_EVENTS.ROOM_USER_JOINED, {
-        ...payload,
-        isSelf: true,
-        existingParticipants,
+    if (approvedSocketId) {
+      socket.to(approvedSocketId).emit(SOCKET_EVENTS.ROOM_USER_JOINED, {
+        userId: approvedUserId,
+        user: userPayload,
+        message: 'You have been approved to join the room',
       });
       logger.info(`📤 Đã notify approved user ${approvedUserId} với ${existingParticipants.length} existing participants`);
     } else {
       logger.warn(`⚠️  Không tìm thấy socket của user ${approvedUserId}`);
     }
 
-    // 7. SAU KHI emit xong → join approved user vào room cho các event tương lai
-    if (approvedSocket) {
-      approvedSocket.join(roomCode);
-      logger.info(`📥 Socket ${approvedSocketId} đã join room namespace ${roomCode}`);
-    }
-
-    logger.info(`✅ Host đã duyệt người dùng ${approvedUserId} vào phòng ${roomCode}`);
+    logger.info(`Host ${socket.userId} approved ${approvedUserId} for room ${roomCode}`);
   } catch (error) {
-    logger.error('❌ Lỗi trong handleApproveUser:', error);
-    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Lỗi khi duyệt người' });
+    logger.error('handleApproveUser error:', error);
+    emitSocketError(socket, 'Failed to approve user');
   }
 };
 
-/**
- * Xử lý Host từ chối người tham gia
- * 
- * @param {Object} socket - Socket.IO socket instance
- * @param {Object} data - { roomCode, memberId }
- * @returns {Promise<void>}
- */
-export const handleRejectUser = async (socket, data) => {
+export const handleRejectUser = async (socket, data = {}) => {
   try {
     const { roomCode, memberId } = data;
     const redis = getRedisClient();
+    const room = await getRoomForHostAction(socket, roomCode);
+    if (!room) return;
 
-    const member = await RoomMember.findByIdAndUpdate(
-      memberId,
-      { status: USER_STATUS.REJECTED },
+    const member = await RoomMember.findOneAndUpdate(
+      { _id: memberId, room_id: room._id },
+      { status: USER_STATUS.REJECTED, left_at: new Date() },
       { new: true }
     );
 
     if (!member) {
-      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Không tìm thấy thành viên' });
+      emitSocketError(socket, 'Member not found in room');
       return;
     }
-    const rejectedUserId = member.user_id.toString();
-    const rejectedSocketId = await redis.get(`user:${rejectedUserId}:socket`);
+
+    const rejectedSocketId = await redis.get(`user:${member.user_id.toString()}:socket`);
+
+    socket.to(roomCode).emit(SOCKET_EVENTS.ROOM_USER_REJECTED, {
+      memberId,
+      userId: member.user_id.toString(),
+      message: 'Join request was rejected',
+    });
+
     if (rejectedSocketId) {
       socket.to(rejectedSocketId).emit(SOCKET_EVENTS.ROOM_USER_REJECTED, {
         memberId,
-        userId: rejectedUserId,
-        message: 'Yêu cầu vào phòng đã bị từ chối',
+        userId: member.user_id.toString(),
+        message: 'Your join request was rejected',
       });
     }
 
-    logger.info(`❌ Host từ chối người dùng vào phòng ${roomCode}`);
+    logger.info(`Host ${socket.userId} rejected member ${memberId} for room ${roomCode}`);
   } catch (error) {
-    logger.error('❌ Lỗi trong handleRejectUser:', error);
-    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Lỗi khi từ chối người' });
+    logger.error('handleRejectUser error:', error);
+    emitSocketError(socket, 'Failed to reject user');
   }
 };
 

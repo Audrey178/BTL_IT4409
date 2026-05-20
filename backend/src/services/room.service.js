@@ -13,9 +13,8 @@
  * Tác giả: Meeting Team
  */
 
-import { v4 as uuidv4 } from 'uuid';
 import { Room, RoomMember, MeetingEvent } from '../models/index.js';
-import { getRedisClient, addToSet, removeFromSet, getSetMembers, deleteRedisKey, setWithExpire } from '../config/redis.js';
+import { getRedisClient, addToSet, removeFromSet, deleteRedisKey } from '../config/redis.js';
 import { HTTP_STATUS, ERROR_MESSAGES, ROOM_STATUS, USER_STATUS, EVENT_TYPE } from '../utils/constants.js';
 import logger from '../utils/logger.js';
 
@@ -111,7 +110,7 @@ class RoomService {
 
       return {
         success: true,
-        room: room.toJSON(),
+        room: this.mapRoom(room),
       };
     } catch (error) {
       logger.error('Create room error:', error);
@@ -141,7 +140,7 @@ class RoomService {
         throw error;
       }
 
-      return room.toJSON();
+      return this.mapRoom(room);
     } catch (error) {
       logger.error('Get room info error:', error);
       throw error;
@@ -203,11 +202,9 @@ class RoomService {
 
       await roomMember.save();
 
-      // Store in Redis
-      const redis = getRedisClient();
-      await addToSet(`room:${roomCode}:members`, userId.toString());
-
       if (roomMember.status === USER_STATUS.JOINED) {
+        await addToSet(`room:${roomCode}:members`, userId.toString());
+
         if (room.status === ROOM_STATUS.WAITING) {
           room.status = ROOM_STATUS.ACTIVE;
         }
@@ -312,6 +309,12 @@ class RoomService {
         { new: true }
       );
 
+      if (!roomMember) {
+        const error = new Error('User not found in room');
+        error.statusCode = HTTP_STATUS.NOT_FOUND;
+        throw error;
+      }
+
       await this.logEvent(room._id, userId, EVENT_TYPE.USER_REJECTED, 'User rejected');
 
       logger.info(`✓ User ${userId} rejected from room ${roomCode}`);
@@ -350,8 +353,12 @@ class RoomService {
         { new: true }
       );
 
-      // Remove from Redis
-      const redis = getRedisClient();
+      if (!roomMember) {
+        const error = new Error('User not found in room');
+        error.statusCode = HTTP_STATUS.NOT_FOUND;
+        throw error;
+      }
+
       await removeFromSet(`room:${roomCode}:members`, userId.toString());
 
       await this.logEvent(room._id, userId, EVENT_TYPE.USER_KICKED, 'User kicked from room');
@@ -398,15 +405,13 @@ class RoomService {
         { status: USER_STATUS.LEFT, left_at: new Date() }
       );
 
-      // Clean up Redis
-      const redis = getRedisClient();
       await deleteRedisKey(`room:${roomCode}:members`);
       await deleteRedisKey(`room:${roomCode}:host`);
 
       await this.logEvent(room._id, hostId, EVENT_TYPE.ROOM_ENDED, 'Room ended by host');
 
       logger.info(`✓ Room ended: ${roomCode}`);
-      return { success: true, room: room.toJSON() };
+      return { success: true, room: this.mapRoom(room) };
     } catch (error) {
       logger.error('End room error:', error);
       throw error;
@@ -437,6 +442,9 @@ class RoomService {
         participants: participants.map(p => ({
           ...p.toJSON(),
           user: p.user_id?.toJSON() || null,
+          id: p.user_id?._id?.toString() || p.user_id?.toString(),
+          fullName: p.user_id?.full_name || null,
+          avatar: p.user_id?.avatar || null,
         })),
       };
     } catch (error) {
@@ -478,6 +486,19 @@ class RoomService {
     } catch (error) {
       logger.error('Log event error:', error);
     }
+  }
+
+  mapRoom(room) {
+    const raw = typeof room.toJSON === 'function' ? room.toJSON() : room;
+    const host = raw.host_id;
+
+    return {
+      ...raw,
+      host_name: host?.full_name || raw.host_name || null,
+      require_approval: raw.settings?.require_approval ?? false,
+      allow_chat: raw.settings?.allow_chat ?? true,
+      max_participants: raw.settings?.max_participants ?? 100,
+    };
   }
 }
 

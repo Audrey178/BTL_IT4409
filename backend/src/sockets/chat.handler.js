@@ -58,10 +58,15 @@ export const handleChatSend = async (socket, data) => {
       return;
     }
 
+    if (room.settings?.allow_chat === false) {
+      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Chat is disabled for this room' });
+      return;
+    }
+
     const isMember = await RoomMember.exists({
       room_id: room._id,
       user_id: userId,
-      status: { $in: ['joined', 'pending'] },
+      status: 'joined',
     });
     if (!isMember) {
       socket.emit(SOCKET_EVENTS.ERROR, { message: 'Unauthorized to send message to this room' });
@@ -127,16 +132,28 @@ export const handleChatSend = async (socket, data) => {
  */
 export const handleChatHistory = async (socket, data) => {
   try {
-    const { roomCode, page = 1, limit = 50 } = data;
-    const { Room } = await import('../models/index.js');
-    const skip = (page - 1) * limit;
-
-    // Kiểm tra và lấy thông tin Room
-    const room = await Room.findOne({ room_code: roomCode });
+    const { roomCode } = data;
+    const page = Math.max(1, parseInt(data.page, 10) || 1);
+    const limit = Math.min(Math.max(1, parseInt(data.limit, 10) || 50), 100);
+    const { Room, RoomMember } = await import('../models/index.js');
+    const room = await Room.findOne({ room_code: roomCode }).lean();
     if (!room) {
       socket.emit(SOCKET_EVENTS.ERROR, { message: 'Phòng không tồn tại' });
       return;
     }
+
+    const isHost = room.host_id.toString() === socket.userId?.toString();
+    const isMember = await RoomMember.exists({
+      room_id: room._id,
+      user_id: socket.userId,
+      status: { $in: ['joined', 'left'] },
+    });
+    if (!isHost && !isMember) {
+      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Unauthorized to view chat history' });
+      return;
+    }
+
+    const skip = (page - 1) * limit;
 
     // Lấy tin nhắn từ MongoDB
     const messages = await Message.find({ room_id: room._id })

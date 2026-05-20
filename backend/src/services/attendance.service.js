@@ -13,7 +13,7 @@
  */
 
 import { User, AttendanceLog, Room, RoomMember } from '../models/index.js';
-import { HTTP_STATUS, ERROR_MESSAGES, USER_STATUS, EVENT_TYPE } from '../utils/constants.js';
+import { HTTP_STATUS, ERROR_MESSAGES, USER_STATUS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
 
 class AttendanceService {
@@ -94,6 +94,20 @@ class AttendanceService {
         const error = new Error('User is not joined in this room');
         error.statusCode = HTTP_STATUS.FORBIDDEN;
         throw error;
+      }
+
+      const activeLog = await AttendanceLog.findOne({
+        room_id: room._id,
+        user_id: userId,
+        check_out_time: null,
+      });
+
+      if (activeLog) {
+        return {
+          success: true,
+          message: 'User is already checked in',
+          attendanceLog: activeLog.toJSON(),
+        };
       }
 
       // Create attendance log

@@ -2,6 +2,7 @@ import { HTTP_STATUS, ERROR_MESSAGES } from '../utils/constants.js';
 import { verifyAccessToken } from '../utils/jwt.js';
 import logger from '../utils/logger.js';
 import { User } from '../models/index.js';
+import { getRedisClient } from '../config/redis.js';
 
 // JWT Authentication Middleware
 export const authenticate = async (req, res, next) => {
@@ -21,6 +22,21 @@ export const authenticate = async (req, res, next) => {
         success: false,
         message: ERROR_MESSAGES.TOKEN_INVALID,
       });
+    }
+
+    // Check if token has been blacklisted (on logout)
+    try {
+      const redis = getRedisClient();
+      const isBlacklisted = await redis.get(`token:blacklist:access:${token}`);
+      if (isBlacklisted) {
+        return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+          success: false,
+          message: 'Token has been revoked',
+        });
+      }
+    } catch (redisError) {
+      logger.warn('Redis blacklist check failed, continuing:', redisError.message);
+      // Continue anyway - Redis failure shouldn't block auth
     }
 
     // Fetch user from database to ensure it still exists

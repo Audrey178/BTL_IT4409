@@ -105,20 +105,19 @@ class AuthController {
 
   /**
    * POST /api/v1/auth/logout
+   * Blacklist refresh token in Redis
    */
   async logout(req, res) {
     try {
-      // Client handles token removal
-      // Backend could implement token blacklist if needed
-      res.status(HTTP_STATUS.OK).json({
-        success: true,
-        message: 'Logged out successfully',
-      });
+      const { refresh_token } = req.body;
+      const accessToken = req.headers.authorization?.replace('Bearer ', '');
+      const result = await authService.logout(refresh_token, accessToken);
+      res.status(HTTP_STATUS.OK).json(result);
     } catch (error) {
       logger.error('Logout controller error:', error);
       res.status(HTTP_STATUS.INTERNAL_ERROR).json({
         success: false,
-        message: error.message,
+        message: 'Logout failed',
       });
     }
   }

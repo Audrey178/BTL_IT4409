@@ -8,7 +8,8 @@
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "lint": "eslint src --fix",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test",
+    "verify": "node scripts/verify.js"
   },
   "keywords": [
     "meeting",
@@ -29,6 +30,7 @@
     "livekit-server-sdk": "^2.15.3",
     "mongodb-memory-server": "^10.1.4",
     "mongoose": "^7.7.0",
+    "multer": "^2.1.1",
     "pino": "^8.17.2",
     "pino-http": "^8.6.1",
     "pino-pretty": "^13.1.3",

@@ -157,23 +157,37 @@ export const initializeSocket = (io, redisClient) => {
         // Xóa mapping socket -> user
         const socketData = await redis.get(`socket:${socket.id}`);
         if (socketData) {
-          const { roomCode, userId } = JSON.parse(socketData);
+          const { roomCode, userId: disconnectedUserId } = JSON.parse(socketData);
 
-          // Xóa từ Redis
-          await redis.del(`socket:${socket.id}`);
-          await redis.del(`user:${userId}:socket`);
-          await redis.sRem(`room:${roomCode}:members`, userId);
-
-          // Thông báo tới những người còn lại
+          // Emit room leave event FIRST (before cleanup)
           socket.to(roomCode).emit(SOCKET_EVENTS.ROOM_USER_LEFT, {
-            userId,
+            userId: disconnectedUserId,
+            timestamp: new Date().toISOString(),
             message: 'Một người dùng đã rời khỏi phòng',
           });
 
-          logger.info(`👋 Người dùng ${userId} rời khỏi phòng ${roomCode}`);
+          // Then cleanup Redis with error handling
+          try {
+            await Promise.all([
+              redis.del(`socket:${socket.id}`),
+              redis.del(`user:${disconnectedUserId}:socket`),
+              redis.sRem(`room:${roomCode}:members`, disconnectedUserId),
+            ]);
+            logger.info(`Người dùng ${disconnectedUserId} đã rời khỏi phòng ${roomCode}`);
+          } catch (cleanupError) {
+            logger.error(`Xóa dữ liệu không thành công cho người dùng ${disconnectedUserId}:`, cleanupError.message);
+            // Don't re-throw - disconnect already happened
+          }
         }
       } catch (error) {
-        logger.error('❌ Lỗi trong DISCONNECT handler:', error);
+        logger.error('Lỗi trong Socket disconnect handler:', error);
+        // Fallback: at least emit disconnect event
+        if (socket.userId) {
+          socket.broadcast.emit(SOCKET_EVENTS.ERROR, {
+            message: 'Người dùng đã ngắt kết nối đột ngột',
+            userId: socket.userId,
+          });
+        }
       }
     });
 
