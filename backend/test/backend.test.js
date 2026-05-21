@@ -183,12 +183,19 @@ describe('backend smoke and regression tests', () => {
     assert.equal(join.body.status, 'pending');
 
     const emitted = [];
+    const io = {
+      sockets: {
+        sockets: {
+          get: () => socket,
+        },
+      },
+    };
     const socket = {
       userId: guest.user._id,
       emit: (event, payload) => emitted.push({ event, payload }),
     };
 
-    await handleApproveUser(socket, { roomCode, memberId: join.body.roomMember._id });
+    await handleApproveUser(io, socket, { roomCode, memberId: join.body.roomMember._id });
 
     const member = await RoomMember.findById(join.body.roomMember._id).lean();
     assert.equal(member.status, 'pending');

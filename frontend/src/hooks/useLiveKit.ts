@@ -42,9 +42,6 @@ export function useLiveKit(roomCode: string | null) {
 
   const {
     setLocalStream,
-    isAudioMuted,
-    isVideoMuted,
-    isScreenSharing,
     setIsScreenSharing,
     setScreenStream,
   } = useMediaStore();
@@ -108,6 +105,13 @@ export function useLiveKit(roomCode: string | null) {
       ) {
         // Build a combined stream with all subscribed camera + mic tracks
         const combinedStream = buildParticipantStream(participant);
+
+        // Đảm bảo track vừa subscribe được bao gồm trong stream (đề phòng race condition)
+        const hasTrack = combinedStream.getTracks().some(t => t.id === track.mediaStreamTrack.id);
+        if (!hasTrack) {
+          combinedStream.addTrack(track.mediaStreamTrack);
+        }
+
         updateParticipantStream(participant.identity, combinedStream);
       }
     };
@@ -127,6 +131,12 @@ export function useLiveKit(roomCode: string | null) {
       } else {
         // Rebuild the stream without the removed track
         const remainingStream = buildParticipantStream(participant);
+        if (_track) {
+          const trackInStream = remainingStream.getTracks().find(t => t.id === _track.mediaStreamTrack.id);
+          if (trackInStream) {
+            remainingStream.removeTrack(trackInStream);
+          }
+        }
         updateParticipantStream(participant.identity, remainingStream);
       }
     };
@@ -335,7 +345,6 @@ function buildParticipantStream(participant: RemoteParticipant): MediaStream {
   participant.trackPublications.forEach((pub) => {
     if (
       pub.track &&
-      pub.isSubscribed &&
       (pub.source === Track.Source.Camera || pub.source === Track.Source.Microphone)
     ) {
       tracks.push(pub.track.mediaStreamTrack);

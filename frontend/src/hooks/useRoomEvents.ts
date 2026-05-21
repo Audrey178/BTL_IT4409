@@ -62,7 +62,6 @@ export function useRoomEvents(roomCode: string | null) {
       // ở đây chỉ cập nhật status
       if (data.isSelf) {
         setStatus('in-room');
-
         // Add existing participants vào store
         if (data.existingParticipants) {
           data.existingParticipants.forEach(p => {
@@ -72,10 +71,11 @@ export function useRoomEvents(roomCode: string | null) {
               isActive: true,
               isAudioMuted: false,
               isVideoMuted: false,
+
             });
           });
         }
-        toast.success('Bạn đã được chấp nhận vào phòng!');
+        toast.success(data.message || 'Bạn đã tham gia phòng họp!');
         return;
       }
 

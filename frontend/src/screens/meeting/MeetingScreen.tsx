@@ -78,7 +78,8 @@ type FaceDetectorConstructor = new (options?: {
 
 
 export function MeetingScreen() {
-  const { id: roomCode } = useParams<{ id: string }>();
+  const { id } = useParams<{ id: string }>();
+  const roomCode = id?.toUpperCase();
   const socket = useSocket();
   const authUser = useAuthStore((state) => state.user);
   const navigate = useNavigate();
@@ -102,6 +103,8 @@ export function MeetingScreen() {
     participants, isHost, waitingList, hostId,
     removeWaitingUser, screenSharingUserId, setScreenSharingUserId,
   } = useMeetingStore();
+  
+  console.log("participants: ", participants);
   const messageCount = useMeetingStore((s) => s.messages.length);
 
   const [showChat, setShowChat] = useState(false);
@@ -413,18 +416,19 @@ export function MeetingScreen() {
 
         {/* Self Preview Floating — hide during presentation mode */}
         {!isAnyoneSharing && (
-          <div className="absolute right-8 bottom-8 w-48 aspect-video rounded-2xl overflow-hidden border-2 border-primary shadow-2xl">
-            {localStream && !isVideoMuted ? (
-              <SelfPreviewVideo stream={localStream} />
-            ) : (
-              <div className="w-full h-full bg-stone-900 flex items-center justify-center">
-                <Avatar className="w-12 h-12">
-                  <AvatarFallback className="bg-surface-container-highest text-on-surface-variant text-lg">
-                    {authUser?.full_name?.[0]?.toUpperCase() || "U"}
-                  </AvatarFallback>
-                </Avatar>
-              </div>
-            )}
+          <div className="absolute right-8 bottom-8 w-48 aspect-video rounded-2xl overflow-hidden border-2 border-primary shadow-2xl bg-stone-900">
+            {/* Local Video Preview */}
+            <div className={`absolute inset-0 w-full h-full transition-opacity duration-500 ${localStream && !isVideoMuted ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
+              {localStream && <SelfPreviewVideo stream={localStream} />}
+            </div>
+            {/* Avatar Fallback */}
+            <div className={`absolute inset-0 w-full h-full flex items-center justify-center transition-opacity duration-500 ${localStream && !isVideoMuted ? "opacity-0 pointer-events-none" : "opacity-100 pointer-events-auto"}`}>
+              <Avatar className="w-12 h-12">
+                <AvatarFallback className="bg-surface-container-highest text-on-surface-variant text-lg">
+                  {authUser?.full_name?.[0]?.toUpperCase() || "U"}
+                </AvatarFallback>
+              </Avatar>
+            </div>
           </div>
         )}
       </div>
@@ -447,7 +451,10 @@ export function MeetingScreen() {
 function ScreenShareVideo({ stream }: { stream: MediaStream }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   useEffect(() => {
-    if (videoRef.current) videoRef.current.srcObject = stream;
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(err => console.warn("Screen share play error:", err));
+    }
   }, [stream]);
   return <video ref={videoRef} autoPlay playsInline className="w-full h-full object-contain bg-black" />;
 }
@@ -455,7 +462,10 @@ function ScreenShareVideo({ stream }: { stream: MediaStream }) {
 function SelfPreviewVideo({ stream }: { stream: MediaStream }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   useEffect(() => {
-    if (videoRef.current) videoRef.current.srcObject = stream;
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(err => console.warn("Self preview play error:", err));
+    }
   }, [stream]);
   return <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover -scale-x-100" />;
 }
@@ -468,23 +478,41 @@ function VideoTile({
   isVideoOff?: boolean; isHost?: boolean; isLocal?: boolean; compact?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+
   useEffect(() => {
-    if (videoRef.current && !isVideoOff) videoRef.current.srcObject = stream ?? null;
+    if (videoRef.current) {
+      if (isVideoOff) {
+        videoRef.current.pause();
+      } else {
+        videoRef.current.srcObject = stream ?? null;
+        if (stream) {
+          videoRef.current.play().catch((err) => {
+            console.warn("VideoTile play error:", err);
+          });
+        }
+      }
+    }
   }, [stream, isVideoOff]);
 
   return (
     <div className={`relative overflow-hidden bg-stone-900 shadow-sm group transition-all duration-500 flex flex-col justify-center items-center ${
       compact ? "rounded-2xl aspect-video" : "rounded-[2.5rem]"
     } ${isHost && !compact ? "scale-[1.02] border-2 border-primary/20" : ""}`}>
-      {stream && !isVideoOff ? (
+      
+      {/* Video Container (always in DOM, smooth transition) */}
+      <div className={`absolute inset-0 w-full h-full transition-opacity duration-500 ${stream && !isVideoOff ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
         <video ref={videoRef} autoPlay playsInline muted={isLocal} className="w-full h-full object-cover -scale-x-100" />
-      ) : (
+      </div>
+
+      {/* Avatar Fallback Container (always in DOM, smooth transition) */}
+      <div className={`absolute inset-0 w-full h-full flex items-center justify-center transition-opacity duration-500 ${stream && !isVideoOff ? "opacity-0 pointer-events-none" : "opacity-100 pointer-events-auto"}`}>
         <Avatar className={compact ? "w-10 h-10" : "w-24 h-24"}>
           <AvatarFallback className={`bg-surface-container-highest text-on-surface-variant ${compact ? "text-lg" : "text-4xl"}`}>
             {name?.[0]?.toUpperCase() || "G"}
           </AvatarFallback>
         </Avatar>
-      )}
+      </div>
+      
       <div className={`absolute bottom-3 left-3 flex items-center gap-2 px-3 py-1.5 bg-black/40 backdrop-blur-md rounded-full text-white border border-white/10 ${
         compact ? "text-[10px]" : "text-sm bottom-6 left-6 gap-3 px-4 py-2"
       }`}>

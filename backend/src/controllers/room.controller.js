@@ -49,7 +49,9 @@ class RoomController {
   async getRoomInfo(req, res) {
     try {
       const { roomCode } = req.params;
+      logger.info(`Get room info request for room code: ${roomCode}`);
       const room = await roomService.getRoomInfo(roomCode);
+      logger.info('Room info:', room);
       res.status(HTTP_STATUS.OK).json({
         success: true,
         room,

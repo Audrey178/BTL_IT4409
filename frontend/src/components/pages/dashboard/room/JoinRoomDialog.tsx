@@ -53,7 +53,7 @@ export function JoinRoomDialog({ open, onOpenChange }: JoinRoomDialogProps) {
     setError(null);
 
     try {
-      const res = await roomService.getRoomInfo(roomCode.toLowerCase());
+      const res = await roomService.getRoomInfo(roomCode.toUpperCase());
       if (res.success && res.room) {
         onOpenChange(false);
         setRoomCode('');

@@ -44,7 +44,7 @@ const VIDEO_FILTERS: Record<
 
 export function LobbyScreen() {
   const [searchParams] = useSearchParams();
-  const roomCode = searchParams.get("code");
+  const roomCode = searchParams.get("code")?.toUpperCase() || null;
 
   const { requestMedia } = useMedia();
   const { localStream, isAudioMuted, isVideoMuted, toggleAudio, toggleVideo } =
@@ -241,6 +241,7 @@ export function LobbyScreen() {
     try {
       // Call REST API to register join
       const res = await roomService.joinRoom(roomCode);
+      console.log('res', res);
       const { roomMember } = res;
       setMemberId(roomMember._id);
       if (res.status === "pending") {
