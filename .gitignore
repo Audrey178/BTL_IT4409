@@ -34,3 +34,8 @@ Thumbs.db
 # Temporary
 tmp/
 temp/
+
+CLAUDE.md
+.claude/
+implementation_plan.md
+plan.md

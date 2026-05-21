@@ -47,6 +47,20 @@ router.post('/', validate(roomValidation.create), roomController.createRoom.bind
 
 /**
  * @swagger
+ * /rooms:
+ *   get:
+ *     summary: Get all rooms for current user
+ *     tags: [Rooms]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of rooms
+ */
+router.get('/', roomController.getMyRooms.bind(roomController));
+
+/**
+ * @swagger
  * /rooms/{roomCode}:
  *   get:
  *     summary: Get room information

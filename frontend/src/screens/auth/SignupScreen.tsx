@@ -1,12 +1,13 @@
 import { AuthLayout } from "@/components/auth/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Eye, Apple } from "lucide-react";
+import { Eye, Apple, EyeOff } from "lucide-react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod"; // ket noi zod voi react hook form
 import { useNavigate } from "react-router";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { useState } from "react";
 
 const signUpSchema = z.object({
   fullname: z.string().min(1, "FullName must be have!"),
@@ -19,17 +20,30 @@ type SignUpFormValue = z.infer<typeof signUpSchema>;
 export function SignupScreen() {
   const { signUp } = useAuthStore();
   const navigate = useNavigate();
+  const [isHide, setIsHide] = useState(true);
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<SignUpFormValue>({ resolver: zodResolver(signUpSchema) });
 
   const onSubmit = async (data: SignUpFormValue) => {
     const { fullname, email, password } = data;
-    await signUp(fullname, email, password);
-
-    navigate("/signin");
+    const { success, error } = await signUp(fullname, email, password);
+    if (success) {
+      navigate("/signin");
+    } else {
+      if (error?.errors && Array.isArray(error.errors)) {
+        error.errors.forEach((err: any) => {
+          if (err.field) {
+            setError(err.field as any, { message: err.message });
+          }
+        });
+      } else if (error?.message) {
+        setError("root.serverError", { message: error.message });
+      }
+    }
   };
   return (
     <AuthLayout
@@ -37,6 +51,11 @@ export function SignupScreen() {
       description="Create an account to start hosting warm, meaningful conversations in your own digital studio."
     >
       <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
+        {errors.root?.serverError && (
+          <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-sm text-center">
+            {errors.root.serverError.message}
+          </div>
+        )}
         <div className="space-y-2">
           <label
             htmlFor="fullname"
@@ -88,14 +107,17 @@ export function SignupScreen() {
               id="password"
               className="h-14 rounded-xl border-none bg-surface-container-highest text-on-surface placeholder:text-outline focus-visible:ring-2 focus-visible:ring-primary/20"
               placeholder="••••••••"
-              type="password"
+              type={isHide ? "password" : "text"}
               {...register("password")}
             />
             <button
               type="button"
               className="absolute right-4 top-1/2 -translate-y-1/2 text-outline hover:text-primary transition-colors"
+              onClick={() => {
+                setIsHide((prev) => !prev);
+              }}
             >
-              <Eye size={20} />
+              {isHide ? <EyeOff size={20} /> : <Eye size={20} />}
             </button>
           </div>
           {/* Error */}
@@ -103,8 +125,12 @@ export function SignupScreen() {
             <p className="text-xs text-red-500">{errors.password.message}</p>
           )}
         </div>
-        <Button className="w-full h-14 bg-gradient-to-r from-primary to-primary-container text-white font-bold text-lg rounded-full shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200">
-          Sign Up
+        <Button
+          disabled={isSubmitting}
+          type="submit"
+          className="w-full h-14 bg-gradient-to-r from-primary to-primary-container text-white font-bold text-lg rounded-full shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+        >
+          {isSubmitting ? "Signing up..." : "Sign Up"}
         </Button>
       </form>
 

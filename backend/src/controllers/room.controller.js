@@ -28,12 +28,30 @@ class RoomController {
   }
 
   /**
+   * GET /api/v1/rooms - Lấy danh sách phòng của user
+   */
+  async getMyRooms(req, res) {
+    try {
+      const result = await roomService.getMyRooms(req.userId);
+      res.status(HTTP_STATUS.OK).json(result);
+    } catch (error) {
+      logger.error('Get my rooms error:', error);
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+
+  /**
    * GET /api/v1/rooms/:roomCode - Lấy thông tin phòng
    */
   async getRoomInfo(req, res) {
     try {
       const { roomCode } = req.params;
+      logger.info(`Get room info request for room code: ${roomCode}`);
       const room = await roomService.getRoomInfo(roomCode);
+      logger.info('Room info:', room);
       res.status(HTTP_STATUS.OK).json({
         success: true,
         room,

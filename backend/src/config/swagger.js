@@ -17,11 +17,11 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: 'http://localhost:3000/api',
+        url: 'http://localhost:3000/api/v1',
         description: 'Development Server',
       },
       {
-        url: 'https://api.meetingproject.com/api',
+        url: 'https://api.meetingproject.com/api/v1',
         description: 'Production Server',
       },
     ],

@@ -20,6 +20,43 @@ import logger from '../utils/logger.js';
 
 class RoomService {
   /**
+   * Lấy danh sách phòng của người dùng
+   */
+  async getMyRooms(userId) {
+    try {
+      const hostRooms = await Room.find({ 
+        host_id: userId,
+        status: { $ne: ROOM_STATUS.ENDED } 
+      }).populate('host_id', '_id full_name email avatar').lean();
+
+      const memberEntries = await RoomMember.find({ user_id: userId });
+      const memberRoomIds = memberEntries.map(e => e.room_id);
+
+      const participantRooms = await Room.find({
+        _id: { $in: memberRoomIds, $nin: hostRooms.map(r => r._id) },
+        status: { $ne: ROOM_STATUS.ENDED }
+      }).populate('host_id', '_id full_name email avatar').lean();
+
+      const allRooms = [...hostRooms, ...participantRooms];
+
+      allRooms.sort((a, b) => {
+        if (!a.started_at && !b.started_at) return new Date(b.created_at) - new Date(a.created_at);
+        if (!a.started_at) return 1;
+        if (!b.started_at) return -1;
+        return new Date(a.started_at) - new Date(b.started_at);
+      });
+
+      return {
+        success: true,
+        rooms: allRooms
+      };
+    } catch (error) {
+      logger.error('Get my rooms error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Tạo phòng họp mới
    * @param {String} hostId - User ID of host
    * @param {Object} data - { title, description, settings }
@@ -52,7 +89,7 @@ class RoomService {
         description: description || '',
         status: ROOM_STATUS.WAITING,
         settings: normalizedSettings,
-        started_at: null,
+        started_at: data.started_at || null,
         ended_at: null,
       });
 
@@ -84,7 +121,8 @@ class RoomService {
    */
   async getRoomInfo(roomCode) {
     try {
-      const room = await Room.findOne({ room_code: roomCode }).populate('host_id', '-password_hash');
+      const normalizedCode = roomCode ? roomCode.toUpperCase() : '';
+      const room = await Room.findOne({ room_code: normalizedCode }).populate('host_id', '-password_hash');
 
       if (!room) {
         const error = new Error(ERROR_MESSAGES.ROOM_NOT_FOUND);
@@ -114,7 +152,8 @@ class RoomService {
    */
   async requestJoinRoom(roomCode, userId) {
     try {
-      const room = await Room.findOne({ room_code: roomCode });
+      const normalizedCode = roomCode ? roomCode.toUpperCase() : '';
+      const room = await Room.findOne({ room_code: normalizedCode });
       if (!room) {
         const error = new Error(ERROR_MESSAGES.ROOM_NOT_FOUND);
         error.statusCode = HTTP_STATUS.NOT_FOUND;
@@ -142,25 +181,27 @@ class RoomService {
       // Check if user already in room
       let roomMember = await RoomMember.findOne({ room_id: room._id, user_id: userId });
 
+      const isHost = room.host_id.toString() === userId.toString();
+
       if (roomMember) {
         // If previously left, rejoin
-        roomMember.status = room.settings.require_approval ? USER_STATUS.PENDING : USER_STATUS.JOINED;
-        roomMember.joined_at = room.settings.require_approval ? null : new Date();
+        roomMember.status = isHost ? USER_STATUS.JOINED : (room.settings.require_approval ? USER_STATUS.PENDING : USER_STATUS.JOINED);
+        roomMember.joined_at = isHost ? new Date() : (room.settings.require_approval ? null : new Date());
         roomMember.left_at = null;
       } else {
         // Create new room member entry
         roomMember = new RoomMember({
           room_id: room._id,
           user_id: userId,
-          status: room.settings.require_approval ? USER_STATUS.PENDING : USER_STATUS.JOINED,
-          joined_at: room.settings.require_approval ? null : new Date(),
+          status: isHost ? USER_STATUS.JOINED : (room.settings.require_approval ? USER_STATUS.PENDING : USER_STATUS.JOINED),
+          joined_at: isHost ? new Date() : (room.settings.require_approval ? null : new Date()),
         });
       }
 
       await roomMember.save();
 
       if (roomMember.status === USER_STATUS.JOINED) {
-        await addToSet(`room:${roomCode}:members`, userId.toString());
+        await addToSet(`room:${normalizedCode}:members`, userId.toString());
 
         if (room.status === ROOM_STATUS.WAITING) {
           room.status = ROOM_STATUS.ACTIVE;
@@ -171,7 +212,7 @@ class RoomService {
         await room.save();
       }
 
-      logger.info(`✓ User ${userId} requested to join room ${roomCode}`);
+      logger.info(`✓ User ${userId} requested to join room ${normalizedCode}`);
 
       return {
         success: true,
@@ -194,7 +235,8 @@ class RoomService {
    */
   async approveUser(roomCode, hostId, userId) {
     try {
-      const room = await Room.findOne({ room_code: roomCode });
+      const normalizedCode = roomCode ? roomCode.toUpperCase() : '';
+      const room = await Room.findOne({ room_code: normalizedCode });
       if (!room) {
         const error = new Error(ERROR_MESSAGES.ROOM_NOT_FOUND);
         error.statusCode = HTTP_STATUS.NOT_FOUND;
@@ -230,7 +272,7 @@ class RoomService {
 
       await this.logEvent(room._id, userId, EVENT_TYPE.USER_APPROVED, 'User approved to join');
 
-      logger.info(`✓ User ${userId} approved to join room ${roomCode}`);
+      logger.info(`✓ User ${userId} approved to join room ${normalizedCode}`);
       return { success: true, roomMember: roomMember.toJSON() };
     } catch (error) {
       logger.error('Approve user error:', error);
@@ -247,7 +289,8 @@ class RoomService {
    */
   async rejectUser(roomCode, hostId, userId) {
     try {
-      const room = await Room.findOne({ room_code: roomCode });
+      const normalizedCode = roomCode ? roomCode.toUpperCase() : '';
+      const room = await Room.findOne({ room_code: normalizedCode });
       if (!room) {
         const error = new Error(ERROR_MESSAGES.ROOM_NOT_FOUND);
         error.statusCode = HTTP_STATUS.NOT_FOUND;
@@ -274,7 +317,7 @@ class RoomService {
 
       await this.logEvent(room._id, userId, EVENT_TYPE.USER_REJECTED, 'User rejected');
 
-      logger.info(`✓ User ${userId} rejected from room ${roomCode}`);
+      logger.info(`✓ User ${userId} rejected from room ${normalizedCode}`);
       return { success: true, roomMember: roomMember.toJSON() };
     } catch (error) {
       logger.error('Reject user error:', error);
@@ -291,7 +334,8 @@ class RoomService {
    */
   async kickUser(roomCode, hostId, userId) {
     try {
-      const room = await Room.findOne({ room_code: roomCode });
+      const normalizedCode = roomCode ? roomCode.toUpperCase() : '';
+      const room = await Room.findOne({ room_code: normalizedCode });
       if (!room) {
         const error = new Error(ERROR_MESSAGES.ROOM_NOT_FOUND);
         error.statusCode = HTTP_STATUS.NOT_FOUND;
@@ -316,11 +360,11 @@ class RoomService {
         throw error;
       }
 
-      await removeFromSet(`room:${roomCode}:members`, userId.toString());
+      await removeFromSet(`room:${normalizedCode}:members`, userId.toString());
 
       await this.logEvent(room._id, userId, EVENT_TYPE.USER_KICKED, 'User kicked from room');
 
-      logger.info(`✓ User ${userId} kicked from room ${roomCode}`);
+      logger.info(`✓ User ${userId} kicked from room ${normalizedCode}`);
       return { success: true, roomMember: roomMember.toJSON() };
     } catch (error) {
       logger.error('Kick user error:', error);
@@ -336,7 +380,8 @@ class RoomService {
    */
   async endRoom(roomCode, hostId) {
     try {
-      const room = await Room.findOne({ room_code: roomCode });
+      const normalizedCode = roomCode ? roomCode.toUpperCase() : '';
+      const room = await Room.findOne({ room_code: normalizedCode });
       if (!room) {
         const error = new Error(ERROR_MESSAGES.ROOM_NOT_FOUND);
         error.statusCode = HTTP_STATUS.NOT_FOUND;
@@ -362,12 +407,12 @@ class RoomService {
         { status: USER_STATUS.LEFT, left_at: new Date() }
       );
 
-      await deleteRedisKey(`room:${roomCode}:members`);
-      await deleteRedisKey(`room:${roomCode}:host`);
+      await deleteRedisKey(`room:${normalizedCode}:members`);
+      await deleteRedisKey(`room:${normalizedCode}:host`);
 
       await this.logEvent(room._id, hostId, EVENT_TYPE.ROOM_ENDED, 'Room ended by host');
 
-      logger.info(`✓ Room ended: ${roomCode}`);
+      logger.info(`✓ Room ended: ${normalizedCode}`);
       return { success: true, room: this.mapRoom(room) };
     } catch (error) {
       logger.error('End room error:', error);
@@ -382,7 +427,8 @@ class RoomService {
    */
   async getRoomParticipants(roomCode) {
     try {
-      const room = await Room.findOne({ room_code: roomCode });
+      const normalizedCode = roomCode ? roomCode.toUpperCase() : '';
+      const room = await Room.findOne({ room_code: normalizedCode });
       if (!room) {
         const error = new Error(ERROR_MESSAGES.ROOM_NOT_FOUND);
         error.statusCode = HTTP_STATUS.NOT_FOUND;
@@ -415,13 +461,13 @@ class RoomService {
    * @returns {String} Room code (format: XXX-YYY-ZZZ in alphanumeric)
    */
   generateRoomCode() {
-    // Generate 12-character random alphanumeric code (resistant to brute force)
+    // Generate 9-character random alphanumeric code (resistant to brute force)
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let code = '';
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 9; i++) {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-    return `${code.substring(0, 4)}-${code.substring(4, 8)}-${code.substring(8, 12)}`;
+    return `${code.substring(0, 3)}-${code.substring(3, 6)}-${code.substring(6, 9)}`;
   }
 
   /**

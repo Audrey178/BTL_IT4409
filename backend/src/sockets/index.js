@@ -1,78 +1,161 @@
+/**
+ * ============================================================================
+ * MEETING PROJECT - BACKEND - SOCKET.IO INITIALIZATION
+ * ============================================================================
+ * 
+ * File này là điểm vào chính cho tất cả xử lý Socket.IO (WebSocket).
+ * Nơi đây:
+ * - Khởi tạo Socket.IO server
+ * - Đăng ký toàn bộ event handlers
+ * - Quản lý kết nối/ngắt kết nối
+ * - Xử lý lỗi realtime
+ * 
+ * Các handler được tổ chức theo tính năng:
+ * - room.handler.js: Quản lý phòng (join, approve, kick, etc.)
+ * - webrtc.handler.js: WebRTC Signaling (offer, answer, ICE)
+ * - chat.handler.js: Chat realtime
+ * 
+ * Kiến trúc: Observer Pattern với Socket.IO
+ * 
+ * Tác giả: Meeting Team
+ * Ngày tạo: 2026-04-08
+ */
+
 import { SOCKET_EVENTS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
 import { getRedisClient } from '../config/redis.js';
-import { handleRoomJoin, handleApproveUser, handleRejectUser } from './room.handler.js';
-import { handleWebRTCOffer, handleWebRTCAnswer, handleICECandidate } from './webrtc.handler.js';
+import { handleRoomJoin, handleApproveUser, handleRejectUser, handleUserLeft, handleEndMeeting } from './room.handler.js';
+// WebRTC signaling removed — now handled by LiveKit Cloud SFU
 import { handleChatSend, handleChatHistory } from './chat.handler.js';
+import { handleMediaToggle, handleScreenShareStart, handleScreenShareStop } from './media.handler.js';
 
+/**
+ * Khởi tạo tất cả Socket.IO event handlers
+ * 
+ * @param {Object} io - Socket.IO instance
+ * @param {Object} redisClient - Redis client instance
+ * @returns {void}
+ */
 export const initializeSocket = (io, redisClient) => {
-  logger.info('Initializing Socket.IO...');
+  logger.info('🔌 Đang khởi tạo Socket.IO...');
 
   io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
-    const userId = socket.userId;
-    const socketId = socket.id;
-    const eventLimits = new Map();
+    // Lưu userId vào socket.data để các handler truy cập
+    const userId = socket.handshake.query.userId || socket.id;
+    socket.data.userId = userId;
+    logger.info(`✅ Kết nối mới: Socket ${socket.id} | Người dùng: ${userId}`);
 
-    logger.info(`Socket connected: ${socketId} | User: ${userId}`);
-    socket.join(`user:${userId}`);
-    redisClient.set(`user:${userId}:socket`, socket.id).catch((error) => {
-      logger.warn(`Unable to persist user socket mapping for ${userId}: ${error.message}`);
-    });
+    // =========================================================================
+    // QUẢN LÝ PHÒNG HỌP
+    // =========================================================================
 
-    socket.use((packet, next) => {
-      const [eventName] = packet;
-      const now = Date.now();
-      const key = `${socket.id}:${eventName}`;
-      const times = eventLimits.get(key) || [];
-      const recentTimes = times.filter((time) => now - time < 10000);
-      recentTimes.push(now);
-      eventLimits.set(key, recentTimes);
-
-      if (recentTimes.length > 100) {
-        logger.warn(`Rate limit exceeded for ${socket.userId} on event ${eventName}`);
-        return next(new Error('Rate limit exceeded'));
-      }
-
-      next();
-    });
-
+    /**
+     * Sự kiện: Người dùng yêu cầu vào phòng
+     * Dữ liệu: { userId, roomCode }
+     */
     socket.on(SOCKET_EVENTS.ROOM_JOIN, (data) => {
       handleRoomJoin(socket, data);
     });
 
+    /**
+     * Sự kiện: Host duyệt người tham gia
+     * Dữ liệu: { roomCode, memberId }
+     * Truyền io để handler có thể join approved user vào room
+     */
     socket.on(SOCKET_EVENTS.ROOM_APPROVE_USER, (data) => {
-      handleApproveUser(socket, data);
+      handleApproveUser(io, socket, data);
     });
 
+    /**
+     * Sự kiện: Host từ chối người tham gia
+     * Dữ liệu: { roomCode, memberId }
+     */
     socket.on(SOCKET_EVENTS.ROOM_REJECT_USER, (data) => {
       handleRejectUser(socket, data);
     });
 
-    socket.on(SOCKET_EVENTS.WEBRTC_OFFER, (data) => {
-      handleWebRTCOffer(socket, data);
+    /**
+     * Sự kiện: Người dùng rời khỏi phòng
+     * Dữ liệu: { roomCode, userId }
+     */
+    socket.on(SOCKET_EVENTS.ROOM_USER_LEFT, (data) => {
+      handleUserLeft(socket, data);
     });
 
-    socket.on(SOCKET_EVENTS.WEBRTC_ANSWER, (data) => {
-      handleWebRTCAnswer(socket, data);
+    /**
+     * Sự kiện: Host kết thúc cuộc họp cho tất cả
+     * Dữ liệu: { roomCode }
+     */
+    socket.on(SOCKET_EVENTS.ROOM_ENDED, (data) => {
+      handleEndMeeting(io, socket, data);
     });
 
-    socket.on(SOCKET_EVENTS.WEBRTC_ICE_CANDIDATE, (data) => {
-      handleICECandidate(socket, data);
-    });
+    // =========================================================================
+    // WEBRTC SIGNALING — Removed (handled by LiveKit Cloud SFU)
+    // =========================================================================
 
+    // =========================================================================
+    // CHAT REALTIME
+    // =========================================================================
+
+    /**
+     * Sự kiện: Gửi tin nhắn
+     * Dữ liệu: { roomCode, content, type, senderName, senderAvatar }
+     */
     socket.on(SOCKET_EVENTS.CHAT_SEND, (data) => {
       handleChatSend(socket, data);
     });
 
+    /**
+     * Sự kiện: Yêu cầu lịch sử chat
+     * Dữ liệu: { roomCode, page, limit }
+     */
     socket.on(SOCKET_EVENTS.CHAT_HISTORY, (data) => {
       handleChatHistory(socket, data);
     });
 
+    // =========================================================================
+    // QUẢN LÝ KẾT NỐI
+    // =========================================================================
+
+    // =========================================================================
+    // MEDIA EVENTS (MIC/CAM TOGGLE + SCREEN SHARE)
+    // =========================================================================
+
+    /**
+     * Sự kiện: Toggle mic/cam
+     * Dữ liệu: { roomCode, userId, isAudioMuted, isVideoMuted }
+     */
+    socket.on(SOCKET_EVENTS.MEDIA_TOGGLE, (data) => {
+      handleMediaToggle(socket, data);
+    });
+
+    /**
+     * Sự kiện: Bắt đầu screen share
+     * Dữ liệu: { roomCode, userId, userName }
+     */
+    socket.on(SOCKET_EVENTS.MEDIA_SCREEN_SHARE_START, (data) => {
+      handleScreenShareStart(socket, data);
+    });
+
+    /**
+     * Sự kiện: Dừng screen share
+     * Dữ liệu: { roomCode, userId }
+     */
+    socket.on(SOCKET_EVENTS.MEDIA_SCREEN_SHARE_STOP, (data) => {
+      handleScreenShareStop(socket, data);
+    });
+
+    /**
+     * Sự kiện: Người dùng ngắt kết nối
+     * Cleanup: Xóa Redis keys, cập nhật database
+     */
     socket.on(SOCKET_EVENTS.DISCONNECT, async () => {
       try {
         const redis = getRedisClient();
-        const socketData = await redis.get(`socket:${socket.id}`);
 
+        // Xóa mapping socket -> user
+        const socketData = await redis.get(`socket:${socket.id}`);
         if (socketData) {
           const { roomCode, userId: disconnectedUserId } = JSON.parse(socketData);
 
@@ -80,7 +163,7 @@ export const initializeSocket = (io, redisClient) => {
           socket.to(roomCode).emit(SOCKET_EVENTS.ROOM_USER_LEFT, {
             userId: disconnectedUserId,
             timestamp: new Date().toISOString(),
-            message: 'A user left the room',
+            message: 'Một người dùng đã rời khỏi phòng',
           });
 
           // Then cleanup Redis with error handling
@@ -90,30 +173,34 @@ export const initializeSocket = (io, redisClient) => {
               redis.del(`user:${disconnectedUserId}:socket`),
               redis.sRem(`room:${roomCode}:members`, disconnectedUserId),
             ]);
-            logger.info(`User ${disconnectedUserId} disconnected from room ${roomCode}`);
+            logger.info(`Người dùng ${disconnectedUserId} đã rời khỏi phòng ${roomCode}`);
           } catch (cleanupError) {
-            logger.error(`Cleanup failed for user ${disconnectedUserId}:`, cleanupError.message);
+            logger.error(`Xóa dữ liệu không thành công cho người dùng ${disconnectedUserId}:`, cleanupError.message);
             // Don't re-throw - disconnect already happened
           }
         }
       } catch (error) {
-        logger.error('Socket disconnect handler error:', error);
+        logger.error('Lỗi trong Socket disconnect handler:', error);
         // Fallback: at least emit disconnect event
         if (socket.userId) {
           socket.broadcast.emit(SOCKET_EVENTS.ERROR, {
-            message: 'User disconnected unexpectedly',
+            message: 'Người dùng đã ngắt kết nối đột ngột',
             userId: socket.userId,
           });
         }
       }
     });
 
+    /**
+     * Sự kiện: Lỗi Socket
+     * Dữ liệu: error object
+     */
     socket.on(SOCKET_EVENTS.ERROR, (error) => {
-      logger.error(`Socket error [${socket.id}]:`, error);
+      logger.error(`⚠️  Socket error [${socket.id}]:`, error);
     });
   });
 
-  logger.info('Socket.IO handlers registered');
+  logger.info('✅ Tất cả Socket.IO handlers đã sẵn sàng');
 };
 
 export default { initializeSocket };

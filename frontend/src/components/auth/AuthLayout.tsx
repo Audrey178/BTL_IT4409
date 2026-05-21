@@ -42,7 +42,7 @@ export function AuthLayout({ children, title, description }: AuthLayoutProps) {
 
       {/* Right Side: Visual */}
       <section className="hidden lg:flex flex-1 relative bg-surface-container-low overflow-hidden items-center justify-center p-12">
-        <div className="absolute top-0 right-0 w-[80%] h-[80%] bg-primary-fixed/30 rounded-bl-[200px] -z-0" />
+        <div className="absolute top-0 right-0 w-[80%] h-[80%] bg-primary-fixed/30 rounded-bl-[200px] z-0" />
         <div className="relative z-10 w-full max-w-2xl">
           <div className="grid grid-cols-12 gap-6 items-end">
             <motion.div
@@ -51,7 +51,7 @@ export function AuthLayout({ children, title, description }: AuthLayoutProps) {
               transition={{ delay: 0.2 }}
               className="col-span-7 bg-surface-container-lowest rounded-[2rem] p-4 shadow-2xl shadow-outline/10 group hover:scale-[1.02] transition-transform duration-500"
             >
-              <div className="aspect-[4/5] rounded-2xl overflow-hidden relative">
+              <div className="aspect-4/5 rounded-2xl overflow-hidden relative">
                 <img
                   src="https://picsum.photos/seed/hearth1/800/1000"
                   alt="Professional woman"
@@ -94,7 +94,7 @@ export function AuthLayout({ children, title, description }: AuthLayoutProps) {
                 animate={{ opacity: 1, scale: 1, rotate: -3 }}
                 transition={{ delay: 0.6 }}
                 whileHover={{ rotate: 0 }}
-                className="bg-gradient-to-br from-primary-container to-primary rounded-[2rem] p-6 text-white shadow-2xl shadow-primary/30 transition-all duration-500"
+                className="bg-linear-to-br from-primary-container to-primary rounded-[2rem] p-6 text-white shadow-2xl shadow-primary/30 transition-all duration-500"
               >
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-md">
