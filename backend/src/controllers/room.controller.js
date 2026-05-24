@@ -3,6 +3,7 @@ const Message = require('../models/message.model');
 const Attendance = require('../models/attendance.model');
 
 const { deleteRoomData } = require('../services/redis.service'); 
+const { sendEmail } = require('../config/email.config');
 
 // Hàm tạo chuỗi ngẫu nhiên (VD: abc-def-ghi)
 const generateRoomCode = () => {
@@ -137,4 +138,116 @@ const getAttendanceReport = async (req, res) => {
     }
 };
 
-module.exports = { createRoom, endRoom, getChatHistory, getAttendanceReport };
+const scheduleRoom = async (req, res) => {
+    try {
+        const hostId = req.user.id; // Lấy ID của người tạo từ token đã xác thực
+        const { title, scheduled_at, require_approval, allow_chat } = req.body;
+
+        // 1. Kiểm tra nếu người dùng quên gửi mốc thời gian lên lịch
+        if (!scheduled_at) {
+            return res.status(400).json({ message: 'Vui lòng chọn thời gian để lên lịch cuộc họp!' });
+        }
+
+        // Kiểm tra xem thời gian đặt lịch có phải trong quá khứ không
+        const scheduledDate = new Date(scheduled_at);
+        if (scheduledDate < new Date()) {
+            return res.status(400).json({ message: 'Thời gian lên lịch không được ở trong quá khứ!' });
+        }
+
+        // 2. Tiến hành đúc căn phòng lên lịch mới
+        const newScheduledRoom = new Room({
+            room_code: generateRoomCode(),
+            host_id: hostId,
+            title: title || 'Cuộc họp không tên',
+            scheduled_at: scheduledDate,
+            status: 'waiting', // Trạng thái chờ cho đến khi chủ phòng bấm Start
+            settings: {
+                require_approval: require_approval || false,
+                allow_chat: allow_chat !== undefined ? allow_chat : true
+            }
+        });
+
+        await newScheduledRoom.save();
+
+        res.status(201).json({
+            message: 'Lên lịch cuộc họp thành công!',
+            room_code: newScheduledRoom.room_code,
+            data: newScheduledRoom
+        });
+
+    } catch (error) {
+        res.status(500).json({ message: 'Lỗi hệ thống khi lên lịch cuộc họp', error: error.message });
+    }
+};
+
+// ==========================================
+// API: GỬI EMAIL MỜI THAM GIA CUỘC HỌP
+// ==========================================
+const sendInvites = async (req, res) => {
+    try {
+        const { roomCode } = req.params;
+        const { emails } = req.body; // Mảng chứa các địa chỉ email khách mời
+        const userId = req.user.id;
+
+        // 1. Kiểm tra đầu vào
+        if (!emails || !Array.isArray(emails) || emails.length === 0) {
+            return res.status(400).json({ message: 'Vui lòng cung cấp danh sách email hợp lệ!' });
+        }
+
+        // 2. Kiểm tra quyền sở hữu phòng
+        const room = await Room.findOne({ room_code: roomCode });
+        if (!room) return res.status(404).json({ message: 'Không tìm thấy phòng!' });
+        
+        if (room.host_id.toString() !== userId) {
+            return res.status(403).json({ message: 'Chỉ chủ phòng mới được gửi lời mời!' });
+        }
+
+        // 3. Xử lý hiển thị thời gian (Format)
+        const timeString = room.scheduled_at 
+            ? new Date(room.scheduled_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) 
+            : 'Tham gia ngay lập tức';
+
+        // 4. Thiết kế Giao diện Email (HTML Template)
+        const subject = `[Thư mời] ${room.title || 'Tham gia cuộc họp trực tuyến'}`;
+        const htmlContent = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-radius: 8px; padding: 20px;">
+                <h2 style="color: #4CAF50; text-align: center;">Lời mời tham gia cuộc họp</h2>
+                <p>Xin chào,</p>
+                <p>Bạn đã được mời tham gia một cuộc họp trực tuyến. Dưới đây là thông tin chi tiết:</p>
+                <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                    <tr>
+                        <td style="padding: 10px; border: 1px solid #ddd; background-color: #f9f9f9;"><strong>Chủ đề:</strong></td>
+                        <td style="padding: 10px; border: 1px solid #ddd;">${room.title || 'Cuộc họp không tên'}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px; border: 1px solid #ddd; background-color: #f9f9f9;"><strong>Thời gian:</strong></td>
+                        <td style="padding: 10px; border: 1px solid #ddd;">${timeString}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px; border: 1px solid #ddd; background-color: #f9f9f9;"><strong>Mã phòng:</strong></td>
+                        <td style="padding: 10px; border: 1px solid #ddd; font-size: 18px; color: #d9534f;"><b>${roomCode}</b></td>
+                    </tr>
+                </table>
+                <p style="text-align: center; margin-top: 30px;">
+                    <a href="http://localhost:3000/join/${roomCode}" style="background-color: #4CAF50; color: white; padding: 12px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">Truy cập hệ thống</a>
+                </p>
+                <p style="color: #888; font-size: 12px; text-align: center; margin-top: 30px;">Hệ thống họp trực tuyến - Đồ án Tốt nghiệp</p>
+            </div>
+        `;
+
+        // 5. Gửi email thông qua trạm phát (Nodemailer hỗ trợ truyền mảng email trực tiếp)
+        const isSent = await sendEmail(emails, subject, htmlContent);
+
+        if (isSent) {
+            res.status(200).json({ message: `Đã gửi thư mời thành công đến ${emails.length} người!` });
+        } else {
+            res.status(500).json({ message: 'Có lỗi xảy ra trong quá trình phát thư.' });
+        }
+
+    } catch (error) {
+        res.status(500).json({ message: 'Lỗi hệ thống khi gửi thư mời', error: error.message });
+    }
+};
+
+
+module.exports = { createRoom, endRoom, getChatHistory, getAttendanceReport, scheduleRoom, sendInvites };
