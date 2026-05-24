@@ -311,4 +311,45 @@ module.exports = (io, socket) => {
             console.error('Lỗi khi AI điểm danh:', error);
         }
     });
+    // ==========================================
+    // LỆNH 8: BẮT ĐẦU CHIA SẺ MÀN HÌNH
+    // ==========================================
+    socket.on('room:start_screen_share', (payload) => {
+        try {
+            const { roomCode } = payload;
+            const userId = socket.userId;
+
+            // Bắn tín hiệu cho cả phòng biết để Frontend đổi giao diện (Layout)
+            socket.to(roomCode).emit('room:screen_share_started', {
+                userId: userId,
+                message: `Người dùng ${userId} đang chia sẻ màn hình.`
+            });
+
+            console.log(`💻 User [${userId}] BẮT ĐẦU chia sẻ màn hình phòng [${roomCode}]`);
+
+        } catch (error) {
+            console.error('Lỗi khi bật chia sẻ màn hình:', error);
+        }
+    });
+
+    // ==========================================
+    // LỆNH 9: KẾT THÚC CHIA SẺ MÀN HÌNH
+    // ==========================================
+    socket.on('room:stop_screen_share', (payload) => {
+        try {
+            const { roomCode } = payload;
+            const userId = socket.userId;
+
+            // Bắn tín hiệu để Frontend gỡ màn hình to xuống, trả lại giao diện lưới (Grid)
+            socket.to(roomCode).emit('room:screen_share_stopped', {
+                userId: userId
+            });
+
+            console.log(`🛑 User [${userId}] KẾT THÚC chia sẻ màn hình phòng [${roomCode}]`);
+
+        } catch (error) {
+            console.error('Lỗi khi tắt chia sẻ màn hình:', error);
+        }
+    });
+    
 };
