@@ -5,6 +5,8 @@ import attendanceRoutes from './attendance.route.js';
 import historyRoutes from './history.route.js';
 import livekitRoutes from './livekit.route.js';
 import recordingRoutes from './recording.route.js';
+import chatRoutes from './chat.route.js';
+import notificationRoutes from './notification.route.js';
 
 const router = express.Router();
 
@@ -15,6 +17,8 @@ router.use('/attendance', attendanceRoutes);
 router.use('/history', historyRoutes);
 router.use('/livekit', livekitRoutes);
 router.use('/recordings', recordingRoutes);
+router.use('/chat', chatRoutes);
+router.use('/notifications', notificationRoutes);
 
 /**
  * @swagger

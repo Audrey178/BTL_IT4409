@@ -160,6 +160,56 @@ describe('backend smoke and regression tests', () => {
     assert.equal(secondCheckIn.body.attendanceLog._id, firstCheckIn.body.attendanceLog._id);
   });
 
+  test('chat REST API stores and returns room messages for authorized users', async () => {
+    const auth = await registerUser('chat-rest');
+
+    const roomCreate = await request('/api/v1/rooms', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${auth.accessToken}` },
+      body: JSON.stringify({ title: 'Chat REST Room' }),
+    });
+    assert.equal(roomCreate.response.status, 201);
+    const roomCode = roomCreate.body.room.room_code;
+
+    const send = await request(`/api/v1/chat/rooms/${roomCode}/messages`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${auth.accessToken}` },
+      body: JSON.stringify({ content: 'Hello from REST chat' }),
+    });
+    assert.equal(send.response.status, 201);
+    assert.equal(send.body.success, true);
+    assert.equal(send.body.message.content, 'Hello from REST chat');
+    assert.equal(send.body.message.senderId, auth.user._id);
+
+    const history = await request(`/api/v1/chat/rooms/${roomCode}/messages`, {
+      headers: { authorization: `Bearer ${auth.accessToken}` },
+    });
+    assert.equal(history.response.status, 200);
+    assert.equal(history.body.messages.length, 1);
+    assert.equal(history.body.messages[0].content, 'Hello from REST chat');
+  });
+
+  test('notification endpoint stores FCM tokens without Firebase credentials', async () => {
+    const auth = await registerUser('fcm-token');
+    const token = `fcm-token-${'x'.repeat(32)}`;
+
+    const register = await request('/api/v1/notifications/fcm-token', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${auth.accessToken}` },
+      body: JSON.stringify({ token, platform: 'web' }),
+    });
+    assert.equal(register.response.status, 200);
+    assert.equal(register.body.success, true);
+
+    const remove = await request('/api/v1/notifications/fcm-token', {
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${auth.accessToken}` },
+      body: JSON.stringify({ token, platform: 'web' }),
+    });
+    assert.equal(remove.response.status, 200);
+    assert.equal(remove.body.success, true);
+  });
+
   test('socket room approval requires the room host', async () => {
     const host = await registerUser('socket-host');
     const guest = await registerUser('socket-guest');

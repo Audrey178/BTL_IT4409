@@ -34,7 +34,7 @@ export const chatService = {
       page: options?.page || 1,
       limit: options?.limit || 50,
     };
-    const res = await api.get(`/history/rooms/${roomCode}/messages`, { params });
+    const res = await api.get(`/chat/rooms/${roomCode}/messages`, { params });
     return res.data;
   },
 
@@ -49,7 +49,23 @@ export const chatService = {
       page: options?.page || 1,
       limit: options?.limit || 50,
     };
-    const res = await api.get(`/history/rooms/${roomCode}/messages`, { params });
+    const res = await api.get(`/chat/rooms/${roomCode}/messages`, { params });
+    return res.data;
+  },
+
+  sendMessage: async (
+    roomCode: string,
+    payload: { content: string; type?: "text" | "system" | "file" }
+  ): Promise<{ success: boolean; message: ChatMessage }> => {
+    const res = await api.post(`/chat/rooms/${roomCode}/messages`, payload);
+    return res.data;
+  },
+
+  deleteMessage: async (
+    roomCode: string,
+    messageId: string
+  ): Promise<{ success: boolean; message: string; deletedMessageId: string }> => {
+    const res = await api.delete(`/chat/rooms/${roomCode}/messages/${messageId}`);
     return res.data;
   },
 };

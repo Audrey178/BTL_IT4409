@@ -5,6 +5,7 @@ import app from './app.js';
 import { connectMongoDB, disconnectMongoDB } from './config/mongodb.js';
 import { connectRedis, disconnectRedis, getRedisClient } from './config/redis.js';
 import { initializeSocket } from './sockets/index.js';
+import notificationService from './services/notification.service.js';
 import { verifyAccessToken } from './utils/jwt.js';
 import logger from './utils/logger.js';
 
@@ -75,6 +76,7 @@ const gracefulShutdown = async () => {
     }
     await disconnectMongoDB();
     await disconnectRedis();
+    notificationService.stopMeetingReminderScheduler();
     logger.info('✓ All connections closed');
     process.exit(0);
   } catch (error) {
@@ -99,6 +101,7 @@ const startServer = async () => {
     // Initialize Socket.IO
     logger.info('🔄 Initializing Socket.IO...');
     initializeSocket(io, redisClient);
+    notificationService.startMeetingReminderScheduler();
 
     // Start HTTP server
     server = httpServer.listen(PORT, HOST, () => {

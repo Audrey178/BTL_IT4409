@@ -27,7 +27,7 @@ export function ProfileScreen() {
   } = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
-      fullName: user?.fullName || "",
+      fullName: user?.full_name || "",
       email: user?.email || "",
     },
   });
@@ -39,14 +39,14 @@ export function ProfileScreen() {
   useEffect(() => {
     if (user) {
       reset({
-        fullName: user.fullName || "",
+        fullName: user.full_name || "",
         email: user.email || "",
       });
     }
   }, [user, reset]);
 
   const onSubmit = async (data: ProfileFormValues) => {
-    await updateProfile({ fullName: data.fullName });
+    await updateProfile({ full_name: data.fullName });
   };
 
   return (

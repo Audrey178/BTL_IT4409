@@ -21,6 +21,7 @@ import { JoinRoomDialog } from "@/components/pages/dashboard/room/JoinRoomDialog
 import { ScheduleMeetingDialog } from "@/components/pages/dashboard/room/ScheduleMeetingDialog";
 import { useUpcomingMeetings } from "@/hooks/useUpcomingMeetings";
 import { useMeetingReminder } from "@/hooks/useMeetingReminder";
+import { useFcmMeetingReminders } from "@/hooks/useFcmMeetingReminders";
 
 export function DashboardScreen() {
   const navigate = useNavigate();
@@ -30,6 +31,7 @@ export function DashboardScreen() {
 
   const { meetings, loading, refetch } = useUpcomingMeetings();
   useMeetingReminder(meetings);
+  useFcmMeetingReminders();
 
   return (
     <div className="flex min-h-screen">

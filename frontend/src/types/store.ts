@@ -8,7 +8,6 @@ export interface AuthState {
   isAuthenticated: boolean;
 
   clearState: () => void;
-  logout: () => void;
 
   signUp: (fullname: string, email: string, password: string) => Promise<{ success: boolean; error?: any }>;
   signIn: (email: string, password: string) => Promise<{ success: boolean; error?: any }>;

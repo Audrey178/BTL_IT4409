@@ -229,6 +229,17 @@ export const paginationValidation = {
 };
 
 // ============================================================================
+// NOTIFICATION VALIDATORS
+// ============================================================================
+
+export const notificationValidation = {
+  registerFcmToken: Joi.object({
+    token: Joi.string().min(20).max(4096).trim().required(),
+    platform: Joi.string().valid('web', 'android', 'ios', 'unknown').default('unknown').optional(),
+  }),
+};
+
+// ============================================================================
 // VALIDATION MIDDLEWARE
 // ============================================================================
 
@@ -313,6 +324,7 @@ export default {
   roomValidation,
   attendanceValidation,
   messageValidation,
+  notificationValidation,
   recordingValidation,
   paginationValidation,
 };
