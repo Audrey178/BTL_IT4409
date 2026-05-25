@@ -23,10 +23,12 @@ export function useRoomEvents(roomCode: string | null) {
     addParticipant,
     removeParticipant,
     updateParticipantMedia,
+    updateParticipantFilter,
     setScreenSharingUserId,
     clearParticipantScreenStream,
     setStatus,
     reset,
+    setSelectedFilter,
   } = useMeetingStore();
 
   useEffect(() => {
@@ -169,6 +171,16 @@ export function useRoomEvents(roomCode: string | null) {
       clearParticipantScreenStream(data.userId);
     };
 
+    // Sync selected video filter across participants
+    const handleFilterChange = (data: { userId: string; filter: string }) => {
+      if (data.userId === myUserId) {
+        setSelectedFilter(data.filter as any);
+        return;
+      }
+
+      updateParticipantFilter(data.userId, data.filter as any);
+    };
+
     socket.on(ROOM_EVENTS.REQUEST_APPROVAL, handleRequestApproval);
     socket.on(ROOM_EVENTS.USER_JOINED, handleUserJoined);
     socket.on(ROOM_EVENTS.USER_LEFT, handleUserLeft);
@@ -178,6 +190,7 @@ export function useRoomEvents(roomCode: string | null) {
     socket.on(MEDIA_EVENTS.TOGGLE, handleMediaToggle);
     socket.on(MEDIA_EVENTS.SCREEN_SHARE_START, handleScreenShareStart);
     socket.on(MEDIA_EVENTS.SCREEN_SHARE_STOP, handleScreenShareStop);
+    socket.on(ROOM_EVENTS.FILTER_CHANGE, handleFilterChange);
 
     return () => {
       socket.off(ROOM_EVENTS.REQUEST_APPROVAL, handleRequestApproval);
@@ -189,6 +202,7 @@ export function useRoomEvents(roomCode: string | null) {
       socket.off(MEDIA_EVENTS.TOGGLE, handleMediaToggle);
       socket.off(MEDIA_EVENTS.SCREEN_SHARE_START, handleScreenShareStart);
       socket.off(MEDIA_EVENTS.SCREEN_SHARE_STOP, handleScreenShareStop);
+      socket.off(ROOM_EVENTS.FILTER_CHANGE, handleFilterChange);
     };
   }, [
     socket,
@@ -201,8 +215,10 @@ export function useRoomEvents(roomCode: string | null) {
     updateParticipantMedia,
     setScreenSharingUserId,
     clearParticipantScreenStream,
+    updateParticipantFilter,
     setStatus,
     reset,
     navigate,
+    setSelectedFilter,
   ]);
 }

@@ -116,7 +116,9 @@ export function MeetingScreen() {
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [isEndingMeeting, setIsEndingMeeting] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [selectedFilter, setSelectedFilter] = useState<VideoFilterKey>("original");
+  // Selected filter is stored in meeting store so it can be synced via socket
+  const selectedFilter = useMeetingStore((s) => s.selectedFilter as VideoFilterKey);
+  const setSelectedFilterStore = useMeetingStore((s) => s.setSelectedFilter);
   const prevMessageCountRef = useRef(messageCount);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<BlobPart[]>([]);
@@ -197,6 +199,23 @@ export function MeetingScreen() {
 
   const meetingStatus = useMeetingStore((s) => s.status);
 
+  // Emit filter change to room and update store
+  const handleSelectFilter = (key: VideoFilterKey) => {
+    if (!roomCode) return;
+    // update local store
+    setSelectedFilterStore(key);
+    // broadcast to others
+    socket.emit(ROOM_EVENTS.FILTER_CHANGE, { roomCode, userId: myUserId, filter: key });
+  };
+
+  // Grid layout logic: show up to 4 tiles. 1 -> full, 2 -> halves, 3-4 -> 2x2
+  const totalParticipants = 1 + participants.length; // include local
+  const tilesToShow = Math.min(4, totalParticipants);
+  const gridClass = tilesToShow === 1
+    ? "grid-cols-1 grid-rows-1"
+    : tilesToShow === 2
+      ? "grid-cols-2 grid-rows-1"
+      : "grid-cols-2 grid-rows-2";
   useEffect(() => {
     // Only redirect if we were previously in-room and hostId became null
     // (e.g. store was reset). Don't redirect on initial mount when store hasn't hydrated.
@@ -304,7 +323,7 @@ export function MeetingScreen() {
       setRecording({
         id: crypto.randomUUID(),
         title: `Meeting recording ${new Date().toLocaleDateString()}`,
-        roomId: roomCode,
+        roomId: roomCode || null,
         url,
         mimeType: blob.type,
         size: blob.size,
@@ -431,6 +450,7 @@ export function MeetingScreen() {
                 isLocal={true}
                 isHost={isHost}
                 compact
+                selectedFilter={selectedFilter}
               />
               {participants.map((p) => (
                 <VideoTile
@@ -440,30 +460,36 @@ export function MeetingScreen() {
                   isMuted={p.isAudioMuted}
                   isVideoOff={p.isVideoMuted}
                   compact
+                  selectedFilter={p.videoFilter as VideoFilterKey | undefined}
                 />
               ))}
             </div>
           </div>
         ) : (
           /* ============ NORMAL GRID MODE ============ */
-          <div className={`flex-1 grid grid-cols-2 grid-rows-2 gap-4 transition-all duration-500 ${showChat ? "mr-0" : ""}`}>
-            <VideoTile
-              name={authUser?.full_name || "You"}
-              stream={localStream}
-              isMuted={isAudioMuted}
-              isVideoOff={isVideoMuted}
-              isLocal={true}
-              isHost={isHost}
-            />
-            {participants.map((p) => (
-              <VideoTile
-                key={p.id}
-                name={p.fullName}
-                stream={p.stream}
-                isMuted={p.isAudioMuted}
-                isVideoOff={p.isVideoMuted}
-              />
-            ))}
+          <div className={`flex-1 grid gap-4 transition-all duration-500 ${gridClass} ${showChat ? "mr-0" : ""}`}>
+            {(() => {
+              // Build ordered tiles: local first, then participants
+              const ordered = [
+                { key: "local", name: authUser?.full_name || "You", stream: localStream, isMuted: isAudioMuted, isVideoOff: isVideoMuted, isLocal: true, isHost },
+                ...participants.map((p) => ({ key: p.id, name: p.fullName, stream: p.stream, isMuted: p.isAudioMuted, isVideoOff: p.isVideoMuted }))
+              ].slice(0, tilesToShow);
+
+              return ordered.map((t) => (
+                <VideoTile
+                  key={t.key}
+                  name={t.name}
+                  stream={t.stream}
+                  isMuted={t.isMuted}
+                  isVideoOff={t.isVideoOff}
+                  isLocal={Boolean((t as any).isLocal)}
+                  isHost={Boolean((t as any).isHost)}
+                  selectedFilter={Boolean((t as any).isLocal)
+                    ? selectedFilter
+                    : (participants.find((p) => p.id === t.key)?.videoFilter as VideoFilterKey | undefined)}
+                />
+              ));
+            })()}
           </div>
         )}
         {/* Chat Sidebar */}
@@ -473,7 +499,7 @@ export function MeetingScreen() {
           )}
         </AnimatePresence>
         {/* Filters Panel */}
-        <FilterPanel showFilters={showFilters} setShowFilters={setShowFilters} selectedFilter={selectedFilter} setSelectedFilter={setSelectedFilter} />
+        <FilterPanel showFilters={showFilters} setShowFilters={setShowFilters} selectedFilter={selectedFilter} setSelectedFilter={handleSelectFilter} />
       </div>
 
       {/* Controls Bar */}
@@ -497,7 +523,7 @@ export function MeetingScreen() {
             active={isScreenSharing}
             className={isScreenSharing
               ? "px-8 w-auto bg-error text-white shadow-lg shadow-error/20 border-none"
-              : "px-8 w-auto bg-gradient-to-r from-primary to-primary-container text-white shadow-lg shadow-primary/20 border-none"
+              : "px-8 w-auto bg-linear-to-r from-primary to-primary-container text-white shadow-lg shadow-primary/20 border-none"
             }
           />
           <ControlButton
@@ -512,7 +538,7 @@ export function MeetingScreen() {
           />
           <ControlButton icon={<MessageSquare size={24} />} onClick={handleToggleChat} active={showChat} badge={unreadCount > 0 ? unreadCount : undefined} />
           <ControlButton icon={<Users size={24} />} badge={participants.length + 1} />
-          {isHost && <WaitingRoomPanel roomCode={roomCode} waitingList={waitingList} removeWaitingUser={removeWaitingUser} />}
+          {isHost && <WaitingRoomPanel roomCode={roomCode || ""} waitingList={waitingList} removeWaitingUser={removeWaitingUser} />}
           <ControlButton icon={<Sparkles size={24} />} onClick={() => setShowFilters(!showFilters)} active={showFilters} />
           <div className="w-px h-10 bg-outline-variant/30 mx-2" />
           <ControlButton
@@ -527,7 +553,7 @@ export function MeetingScreen() {
           <div className="absolute right-8 bottom-8 w-48 aspect-video rounded-2xl overflow-hidden border-2 border-primary shadow-2xl bg-stone-900">
             {/* Local Video Preview */}
             <div className={`absolute inset-0 w-full h-full transition-opacity duration-500 ${localStream && !isVideoMuted ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
-              {localStream && <SelfPreviewVideo stream={localStream} />}
+              {localStream && <SelfPreviewVideo stream={localStream} selectedFilter={selectedFilter} />}
             </div>
             {/* Avatar Fallback */}
             <div className={`absolute inset-0 w-full h-full flex items-center justify-center transition-opacity duration-500 ${localStream && !isVideoMuted ? "opacity-0 pointer-events-none" : "opacity-100 pointer-events-auto"}`}>
@@ -567,7 +593,7 @@ function ScreenShareVideo({ stream }: { stream: MediaStream }) {
   return <video ref={videoRef} autoPlay playsInline className="w-full h-full object-contain bg-black" />;
 }
 
-function SelfPreviewVideo({ stream }: { stream: MediaStream }) {
+function SelfPreviewVideo({ stream, selectedFilter }: { stream: MediaStream; selectedFilter?: VideoFilterKey }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     if (videoRef.current) {
@@ -575,15 +601,17 @@ function SelfPreviewVideo({ stream }: { stream: MediaStream }) {
       videoRef.current.play().catch(err => console.warn("Self preview play error:", err));
     }
   }, [stream]);
-  return <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover -scale-x-100" />;
+  return <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover -scale-x-100" style={{ filter: (selectedFilter && VIDEO_FILTERS[selectedFilter]?.css) || 'none' }} />;
 }
 
 function VideoTile({
   name, stream, isMuted = false, isVideoOff = false,
   isHost = false, isLocal = false, compact = false,
+  selectedFilter,
 }: {
   name: string; stream?: MediaStream | null; isMuted?: boolean;
   isVideoOff?: boolean; isHost?: boolean; isLocal?: boolean; compact?: boolean;
+  selectedFilter?: VideoFilterKey;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -609,7 +637,14 @@ function VideoTile({
       
       {/* Video Container (always in DOM, smooth transition) */}
       <div className={`absolute inset-0 w-full h-full transition-opacity duration-500 ${stream && !isVideoOff ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
-        <video ref={videoRef} autoPlay playsInline muted={isLocal} className="w-full h-full object-cover -scale-x-100" />
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted={isLocal}
+          className="w-full h-full object-cover -scale-x-100"
+          style={{ filter: (selectedFilter && VIDEO_FILTERS[selectedFilter]?.css) || 'none' }}
+        />
       </div>
 
       {/* Avatar Fallback Container (always in DOM, smooth transition) */}
@@ -625,7 +660,7 @@ function VideoTile({
         compact ? "text-[10px]" : "text-sm bottom-6 left-6 gap-3 px-4 py-2"
       }`}>
         {isMuted ? <MicOff size={compact ? 10 : 14} className="text-error" /> : <Mic size={compact ? 10 : 14} />}
-        <span className="font-bold truncate max-w-[80px]">{name}</span>
+        <span className="font-bold truncate max-w-20">{name}</span>
         {isHost && !compact && (
           <span className="text-[10px] text-primary-fixed bg-primary/20 px-1.5 py-0.5 rounded">Host</span>
         )}

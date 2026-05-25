@@ -28,6 +28,7 @@ import { handleRoomJoin, handleApproveUser, handleRejectUser, handleUserLeft, ha
 // WebRTC signaling removed — now handled by LiveKit Cloud SFU
 import { handleChatSend, handleChatHistory } from './chat.handler.js';
 import { handleMediaToggle, handleScreenShareStart, handleScreenShareStop } from './media.handler.js';
+import { handleFilterChange } from './filter.handler.js';
 
 /**
  * Khởi tạo tất cả Socket.IO event handlers
@@ -144,6 +145,14 @@ export const initializeSocket = (io, redisClient) => {
      */
     socket.on(SOCKET_EVENTS.MEDIA_SCREEN_SHARE_STOP, (data) => {
       handleScreenShareStop(socket, data);
+    });
+
+    /**
+     * Sự kiện: Filter change (apply filter globally)
+     * Dữ liệu: { roomCode, userId, filter }
+     */
+    socket.on(SOCKET_EVENTS.ROOM_FILTER_CHANGE, (data) => {
+      handleFilterChange(socket, data);
     });
 
     /**

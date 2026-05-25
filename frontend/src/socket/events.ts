@@ -12,6 +12,7 @@ export const ROOM_EVENTS = {
   USER_KICKED: 'room:user_kicked',
   FORCE_DISCONNECT: 'room:force_disconnect',
   ENDED: 'room:ended',
+  FILTER_CHANGE: 'room:filter_change',
   ERROR: 'error',
 } as const;
 

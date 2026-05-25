@@ -40,6 +40,7 @@ export const SOCKET_EVENTS = {
   ROOM_USER_REJECTED: 'room:user_rejected',
   ROOM_USER_JOINED: 'room:user_joined',
   ROOM_USER_LEFT: 'room:user_left',
+  ROOM_FILTER_CHANGE: 'room:filter_change',
   ROOM_USER_KICKED: 'room:user_kicked',
   ROOM_ENDED: 'room:ended',
 

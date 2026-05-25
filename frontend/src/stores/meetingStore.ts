@@ -11,6 +11,7 @@ interface MeetingState {
   messages: ChatMessage[];
   waitingList: WaitingUser[];
   screenSharingUserId: string | null;
+  selectedFilter: "original" | "warm" | "mono" | "cool" | "golden";
 
   setRoomCode: (code: string | null) => void;
   setStatus: (status: 'idle' | 'waiting' | 'in-room' | 'ended') => void;
@@ -22,6 +23,7 @@ interface MeetingState {
   removeParticipant: (userId: string) => void;
   updateParticipantStream: (userId: string, stream: MediaStream) => void;
   updateParticipantMedia: (userId: string, patch: { isAudioMuted?: boolean; isVideoMuted?: boolean }) => void;
+  updateParticipantFilter: (userId: string, videoFilter: "original" | "warm" | "mono" | "cool" | "golden") => void;
   updateParticipantScreenStream: (userId: string, stream: MediaStream) => void;
   clearParticipantScreenStream: (userId: string) => void;
 
@@ -34,6 +36,7 @@ interface MeetingState {
   removeWaitingUser: (userId: string) => void;
 
   setScreenSharingUserId: (userId: string | null) => void;
+  setSelectedFilter: (key: "original" | "warm" | "mono" | "cool" | "golden") => void;
 
   reset: () => void;
 }
@@ -48,6 +51,7 @@ const initialState = {
   messages: [],
   waitingList: [],
   screenSharingUserId: null,
+  selectedFilter: 'original',
 };
 
 export const useMeetingStore = create<MeetingState>((set) => ({
@@ -85,6 +89,12 @@ export const useMeetingStore = create<MeetingState>((set) => ({
     )
   })),
 
+  updateParticipantFilter: (userId, videoFilter) => set((state) => ({
+    participants: state.participants.map(p =>
+      p.id === userId ? { ...p, videoFilter } : p
+    )
+  })),
+
   updateParticipantScreenStream: (userId, screenStream) => set((state) => ({
     participants: state.participants.map(p =>
       p.id === userId ? { ...p, screenStream } : p
@@ -115,6 +125,8 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   })),
 
   setScreenSharingUserId: (userId) => set({ screenSharingUserId: userId }),
+
+  setSelectedFilter: (key) => set({ selectedFilter: key }),
 
   reset: () => set(initialState),
 }));

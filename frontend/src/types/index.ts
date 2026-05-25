@@ -5,6 +5,7 @@ export interface Participant {
   isAudioMuted: boolean;
   isVideoMuted: boolean;
   isScreenSharing?: boolean;
+  videoFilter?: "original" | "warm" | "mono" | "cool" | "golden";
   stream?: MediaStream;
   screenStream?: MediaStream;
 }
