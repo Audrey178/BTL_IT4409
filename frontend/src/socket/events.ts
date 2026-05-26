@@ -30,3 +30,9 @@ export const MEDIA_EVENTS = {
   SCREEN_SHARE_START: 'media:screen_share_start',
   SCREEN_SHARE_STOP: 'media:screen_share_stop',
 } as const;
+
+export const RECORDING_EVENTS = {
+  START: 'recording:start',
+  STOP: 'recording:stop',
+  STATUS: 'recording:status',
+} as const;

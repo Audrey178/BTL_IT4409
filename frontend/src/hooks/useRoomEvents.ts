@@ -26,6 +26,7 @@ export function useRoomEvents(roomCode: string | null) {
     setScreenSharingUserId,
     clearParticipantScreenStream,
     setStatus,
+    setIsRecording,
     reset,
   } = useMeetingStore();
 
@@ -56,12 +57,16 @@ export function useRoomEvents(roomCode: string | null) {
       user?: { _id: string; fullName?: string; full_name?: string };
       message?: string;
       isSelf?: boolean;
+      isRecording?: boolean;
       existingParticipants?: Array<{ userId: string; userName: string }>;
     }) => {
       // isSelf: cho approved user — useLiveKit xử lý LiveKit connection,
       // ở đây chỉ cập nhật status
       if (data.isSelf) {
         setStatus('in-room');
+        if (data.isRecording !== undefined) {
+          setIsRecording(data.isRecording);
+        }
         // Add existing participants vào store
         if (data.existingParticipants) {
           data.existingParticipants.forEach(p => {

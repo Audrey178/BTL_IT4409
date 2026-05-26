@@ -111,6 +111,62 @@ class RecordingController {
       });
     }
   }
+
+  async startLiveKitRecording(req, res) {
+    try {
+      const { roomCode } = req.params;
+      const result = await recordingService.startLiveKitRecording(roomCode, req.userId);
+
+      // Notify all participants in the room via socket
+      const io = req.app.locals.io;
+      if (io) {
+        io.to(roomCode).emit('recording:status', { isRecording: true, recorderId: req.userId });
+      }
+
+      res.status(HTTP_STATUS.OK).json(result);
+    } catch (error) {
+      logger.error('Start LiveKit recording error:', error);
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+
+  async stopLiveKitRecording(req, res) {
+    try {
+      const { roomCode } = req.params;
+      const result = await recordingService.stopLiveKitRecording(roomCode, req.userId);
+
+      // Notify all participants in the room via socket
+      const io = req.app.locals.io;
+      if (io) {
+        io.to(roomCode).emit('recording:status', { isRecording: false });
+      }
+
+      res.status(HTTP_STATUS.OK).json(result);
+    } catch (error) {
+      logger.error('Stop LiveKit recording error:', error);
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+
+  async getLiveKitRecordingStatus(req, res) {
+    try {
+      const { roomCode } = req.params;
+      const result = await recordingService.getLiveKitRecordingStatus(roomCode);
+      res.status(HTTP_STATUS.OK).json(result);
+    } catch (error) {
+      logger.error('Get LiveKit recording status error:', error);
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
 }
 
 export default new RecordingController();

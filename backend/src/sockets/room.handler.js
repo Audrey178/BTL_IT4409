@@ -19,6 +19,7 @@ import { getRedisClient } from '../config/redis.js';
 import { RoomMember, Room, User } from '../models/index.js';
 import { SOCKET_EVENTS, ROOM_STATUS, USER_STATUS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
+import recordingService from '../services/recording.service.js';
 
 /**
  * Xử lý sự kiện người dùng yêu cầu vào phòng
@@ -158,10 +159,13 @@ export const handleRoomJoin = async (socket, data) => {
         message: `Một người dùng đã vào phòng`,
       });
 
-      // Gửi cho bản thân kèm existing participants
+      const isRecording = !!(await redis.get(`room:${roomCode}:egress_id`));
+
+      // Gửi cho bản thân kèm existing participants và trạng thái ghi hình
       socket.emit(SOCKET_EVENTS.ROOM_USER_JOINED, {
         success: true,
         existingParticipants,
+        isRecording,
       });
     }
 
@@ -256,12 +260,15 @@ export const handleApproveUser = async (io, socket, data) => {
     // 5. Notify người KHÁC trong room (approved user CHƯA join room nên không nhận duplicate)
     socket.to(roomCode).emit(SOCKET_EVENTS.ROOM_USER_JOINED, payload);
 
-    // 6. Emit riêng cho approved user: isSelf + existingParticipants
+    const isRecording = !!(await redis.get(`room:${roomCode}:egress_id`));
+
+    // 6. Emit riêng cho approved user: isSelf + existingParticipants và trạng thái ghi hình
     if (approvedSocket) {
       approvedSocket.emit(SOCKET_EVENTS.ROOM_USER_JOINED, {
         ...payload,
         isSelf: true,
         existingParticipants,
+        isRecording,
       });
       logger.info(`📤 Đã notify approved user ${approvedUserId} với ${existingParticipants.length} existing participants`);
     } else {
@@ -364,6 +371,19 @@ export const handleUserLeft = async (socket, data) => {
     // Xóa user khỏi Set thành viên phòng
     await redis.sRem(`room:${roomCode}:members`, userId);
 
+    const remainingCount = await redis.sCard(`room:${roomCode}:members`);
+    if (remainingCount === 0) {
+      const recordingEgressId = await redis.get(`room:${roomCode}:egress_id`);
+      if (recordingEgressId) {
+        try {
+          await recordingService.stopLiveKitRecording(roomCode, userId);
+          logger.info(`⏹️ Tự động dừng ghi hình do phòng họp không còn ai ${roomCode}`);
+        } catch (recError) {
+          logger.error(`❌ Lỗi khi tự động dừng ghi hình:`, recError);
+        }
+      }
+    }
+
     // Cleanup Redis socket mappings (tránh disconnect handler double-fire)
     await redis.del(`socket:${socket.id}`);
     await redis.del(`user:${userId}:socket`);
@@ -400,6 +420,17 @@ export const handleEndMeeting = async (io, socket, data) => {
     const redis = getRedisClient();
 
     logger.info(`🔴 Host kết thúc phòng ${roomCode}`);
+
+    // Tự động dừng ghi hình nếu đang ghi
+    const recordingEgressId = await redis.get(`room:${roomCode}:egress_id`);
+    if (recordingEgressId) {
+      try {
+        await recordingService.stopLiveKitRecording(roomCode, socket.userId);
+        logger.info(`⏹️ Tự động dừng ghi hình khi kết thúc phòng ${roomCode}`);
+      } catch (recError) {
+        logger.error(`❌ Lỗi khi tự động dừng ghi hình:`, recError);
+      }
+    }
 
     // 1. Broadcast room:ended cho tất cả participant trong room (trừ host)
     socket.to(roomCode).emit(SOCKET_EVENTS.ROOM_ENDED, {

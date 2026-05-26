@@ -4,6 +4,7 @@ import { useSocket } from "@/hooks/useSocket";
 import { useLiveKit } from "@/hooks/useLiveKit";
 import { useRoomEvents } from "@/hooks/useRoomEvents";
 import { useChatEvents } from "@/hooks/useChatEvents";
+import { useRecording } from "@/hooks/useRecording";
 import { useMediaStore } from "@/stores/mediaStore";
 import { useMeetingStore } from "@/stores/meetingStore";
 import { useAuthStore } from "@/stores/useAuthStore";
@@ -13,7 +14,7 @@ import { toast } from "sonner";
 import {
   Mic, MicOff, Video, VideoOff, ScreenShare, ScreenShareOff,
   PhoneOff, MessageSquare, Users, X, XCircle,
-  Sparkles, CheckCircle2, Badge, MonitorUp,
+  Sparkles, CheckCircle2, Badge, MonitorUp, Circle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -93,6 +94,13 @@ export function MeetingScreen() {
   } = useLiveKit(roomCode || null);
   useRoomEvents(roomCode || null);
   const { sendMessage } = useChatEvents(roomCode || null);
+  const {
+    isRecording,
+    formattedDuration,
+    isProcessing,
+    startRecording,
+    stopRecording,
+  } = useRecording();
 
   const {
     localStream, isAudioMuted, isVideoMuted, toggleAudio, toggleVideo,
@@ -406,6 +414,21 @@ export function MeetingScreen() {
           <ControlButton icon={<Users size={24} />} badge={participants.length + 1} />
           {isHost && <WaitingRoomPanel roomCode={roomCode} waitingList={waitingList} removeWaitingUser={removeWaitingUser} />}
           <ControlButton icon={<Sparkles size={24} />} onClick={() => setShowFilters(!showFilters)} active={showFilters} />
+          <ControlButton
+            icon={
+              isRecording ? (
+                <div className="flex items-center gap-1.5 px-1">
+                  <span className="w-2.5 h-2.5 bg-red-600 rounded-full animate-pulse" />
+                  <span className="text-xs font-bold text-red-600 tracking-tight">{formattedDuration}</span>
+                </div>
+              ) : (
+                <Circle size={24} className="fill-stone-600/30 text-stone-600 stroke-[3px]" />
+              )
+            }
+            onClick={isRecording ? stopRecording : startRecording}
+            active={isRecording}
+            className={isRecording ? "w-auto px-4 border-red-200 bg-red-50 hover:bg-red-100 shadow-lg shadow-red-500/10 text-red-600 animate-pulse" : ""}
+          />
           <div className="w-px h-10 bg-outline-variant/30 mx-2" />
           <ControlButton
             icon={<PhoneOff size={24} />}

@@ -61,6 +61,11 @@ export const SOCKET_EVENTS = {
   // Attendance events
   ATTENDANCE_CHECK_IN: 'attendance:check_in',
   ATTENDANCE_CHECK_OUT: 'attendance:check_out',
+
+  // Recording events
+  RECORDING_START: 'recording:start',
+  RECORDING_STOP: 'recording:stop',
+  RECORDING_STATUS: 'recording:status',
 };
 
 export const ROOM_STATUS = {

@@ -1,17 +1,22 @@
-# Plan — Fix Camera Toggle Sync Issue
-> Cập nhật: 2026-05-21T19:08:00+07:00 | Trạng thái: 🔄 In progress
+# Plan — Implement LiveKit Recording
+> Cập nhật: 2026-05-21T20:15:00+07:00 | Trạng thái: ✅ Completed
 
 ## Checklist
 | ID  | Task | Status | File(s) |
 |-----|------|--------|---------|
-| T01 | Cập nhật hook `useLiveKit.ts` để đồng bộ track chuẩn xác, tránh race condition của LiveKit SDK | ✅ | `frontend/src/hooks/useLiveKit.ts` |
-| T02 | Cập nhật component `VideoTile` trong `MeetingScreen.tsx` để kích hoạt `play()` chủ động và thêm transition mượt mà | ✅ | `frontend/src/screens/meeting/MeetingScreen.tsx` |
-| T03 | Chạy kiểm tra build và lint frontend | ✅ | Tích hợp hệ thống |
+| T01 | Cập nhật Constant & Event Types (Backend & Frontend) | ✅ | `backend/src/utils/constants.js`, `frontend/src/socket/events.ts` |
+| T02 | Cập nhật Zustand Meeting Store (Frontend) | ✅ | `frontend/src/stores/meetingStore.ts` |
+| T03 | Tạo API & Endpoints Ghi Hình (Backend) | ✅ | `backend/src/routes/v1/recording.route.js`, `backend/src/controllers/recording.controller.js` |
+| T04 | Implement Logic LiveKit Egress & Redis storage (Backend) | ✅ | `backend/src/services/recording.service.js` |
+| T05 | Tự động dừng ghi khi phòng họp kết thúc hoặc đồng bộ lúc join (Backend) | ✅ | `backend/src/sockets/room.handler.js` |
+| T06 | Tích hợp Client API & Hook Ghi Hình `useRecording` (Frontend) | ✅ | `frontend/src/services/recordingService.ts`, `frontend/src/hooks/useRecording.ts` |
+| T07 | Thiết kế UI nút Record trong ControlBar (Frontend) | ✅ | `frontend/src/screens/meeting/MeetingScreen.tsx` |
 
 ## Progress Log
 | Thời gian | Event |
 |-----------|-------|
-| 2026-05-21T19:07:00+07:00 | 🟢 Plan approved |
+| 2026-05-21T20:11:00+07:00 | 🟢 Plan approved |
+| 2026-05-21T20:15:00+07:00 | 🎉 Done implementing LiveKit Recording and fixing all lint/typescript warnings |
 
 ## Blocked
 _(trống nếu không có)_

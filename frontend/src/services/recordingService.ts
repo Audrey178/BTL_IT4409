@@ -107,4 +107,19 @@ export const recordingService = {
     const res = await api.delete(`/recordings/${recordingId}`);
     return res.data;
   },
+
+  startLiveKitRecording: async (roomCode: string): Promise<any> => {
+    const res = await api.post(`/recordings/rooms/${roomCode}/record/start`);
+    return res.data;
+  },
+
+  stopLiveKitRecording: async (roomCode: string): Promise<any> => {
+    const res = await api.post(`/recordings/rooms/${roomCode}/record/stop`);
+    return res.data;
+  },
+
+  getLiveKitRecordingStatus: async (roomCode: string): Promise<any> => {
+    const res = await api.get(`/recordings/rooms/${roomCode}/record/status`);
+    return res.data;
+  },
 };

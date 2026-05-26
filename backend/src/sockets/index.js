@@ -28,6 +28,7 @@ import { handleRoomJoin, handleApproveUser, handleRejectUser, handleUserLeft, ha
 // WebRTC signaling removed — now handled by LiveKit Cloud SFU
 import { handleChatSend, handleChatHistory } from './chat.handler.js';
 import { handleMediaToggle, handleScreenShareStart, handleScreenShareStop } from './media.handler.js';
+import recordingService from '../services/recording.service.js';
 
 /**
  * Khởi tạo tất cả Socket.IO event handlers
@@ -174,6 +175,19 @@ export const initializeSocket = (io, redisClient) => {
               redis.sRem(`room:${roomCode}:members`, disconnectedUserId),
             ]);
             logger.info(`Người dùng ${disconnectedUserId} đã rời khỏi phòng ${roomCode}`);
+
+            const remainingCount = await redis.sCard(`room:${roomCode}:members`);
+            if (remainingCount === 0) {
+              const recordingEgressId = await redis.get(`room:${roomCode}:egress_id`);
+              if (recordingEgressId) {
+                try {
+                  await recordingService.stopLiveKitRecording(roomCode, disconnectedUserId);
+                  logger.info(`⏹️ Tự động dừng ghi hình do phòng họp không còn ai (disconnect) ${roomCode}`);
+                } catch (recError) {
+                  logger.error(`❌ Lỗi khi tự động dừng ghi hình:`, recError);
+                }
+              }
+            }
           } catch (cleanupError) {
             logger.error(`Xóa dữ liệu không thành công cho người dùng ${disconnectedUserId}:`, cleanupError.message);
             // Don't re-throw - disconnect already happened
