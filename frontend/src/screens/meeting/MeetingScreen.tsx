@@ -101,7 +101,7 @@ export function MeetingScreen() {
   useRoomEvents(roomCode || null);
   const { sendMessage } = useChatEvents(roomCode || null);
   
-  useVideoFilter(room);
+  useVideoFilter();
 
   const {
     isRecording,
@@ -125,6 +125,9 @@ export function MeetingScreen() {
 
   const messageCount = useMeetingStore((s) => s.messages.length);
   const colorFilter = useFilterStore((s) => s.colorFilter);
+  const activeAiFilter = useFilterStore((s) => s.activeFilter);
+  // When AI filter pipeline is active, canvas already handles color — don't double-apply CSS filter
+  const effectiveCssFilter = activeAiFilter !== "none" ? undefined : VIDEO_FILTERS[colorFilter].css;
 
   const [showChat, setShowChat] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -356,7 +359,7 @@ export function MeetingScreen() {
                 isLocal={true}
                 isHost={isHost}
                 compact
-                filterCss={VIDEO_FILTERS[colorFilter].css}
+                filterCss={effectiveCssFilter}
               />
               {participants.map((p) => (
                 <VideoTile
@@ -380,7 +383,7 @@ export function MeetingScreen() {
               isVideoOff={isVideoMuted}
               isLocal={true}
               isHost={isHost}
-              filterCss={VIDEO_FILTERS[colorFilter].css}
+              filterCss={effectiveCssFilter}
             />
             {participants.map((p) => (
               <VideoTile
@@ -461,7 +464,7 @@ export function MeetingScreen() {
           <div className="absolute right-8 bottom-8 w-48 aspect-video rounded-2xl overflow-hidden border-2 border-primary shadow-2xl bg-stone-900">
             {/* Local Video Preview */}
             <div className={`absolute inset-0 w-full h-full transition-opacity duration-500 ${localStream && !isVideoMuted ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
-              {localStream && <SelfPreviewVideo stream={localStream} filterCss={VIDEO_FILTERS[colorFilter].css} />}
+              {localStream && <SelfPreviewVideo stream={localStream} filterCss={effectiveCssFilter} />}
             </div>
             {/* Avatar Fallback */}
             <div className={`absolute inset-0 w-full h-full flex items-center justify-center transition-opacity duration-500 ${localStream && !isVideoMuted ? "opacity-0 pointer-events-none" : "opacity-100 pointer-events-auto"}`}>
@@ -519,13 +522,14 @@ function ScreenShareVideo({ stream }: { stream: MediaStream }) {
 function SelfPreviewVideo({ stream, filterCss }: { stream: MediaStream, filterCss?: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream;
-      videoRef.current.play().catch(err => console.warn("Self preview play error:", err));
-      if (filterCss) {
-        videoRef.current.style.filter = filterCss;
-      }
+    const el = videoRef.current;
+    if (!el) return;
+    if (el.srcObject !== stream) {
+      el.srcObject = stream;
+      el.play().catch(err => console.warn("Self preview play error:", err));
     }
+    // Apply CSS filter only when no AI filter is active (canvas handles it otherwise)
+    el.style.filter = filterCss && filterCss !== "none" ? filterCss : "";
   }, [stream, filterCss]);
   return <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover -scale-x-100" />;
 }

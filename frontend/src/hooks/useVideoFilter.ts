@@ -1,93 +1,132 @@
 import { useEffect, useRef } from "react";
-import { Room, Track } from "livekit-client";
 import { useFilterStore } from "@/stores/filterStore";
 import { VideoFilterProcessor } from "@/filters/VideoFilterProcessor";
 import { useMediaStore } from "@/stores/mediaStore";
 
-export function useVideoFilter(room: Room | null) {
+/**
+ * useVideoFilter
+ *
+ * Applies AI/canvas-based video filters to the local camera stream in-place.
+ * Instead of touching LiveKit tracks (which is unreliable in dev mode),
+ * this hook:
+ *   1. Takes the raw camera MediaStream from mediaStore
+ *   2. Feeds it into a VideoFilterProcessor (Canvas AI pipeline)
+ *   3. Replaces localStream in mediaStore with the processed canvas stream
+ *
+ * The MeetingScreen already reads localStream from mediaStore for the local
+ * preview tile, so the filter is visible immediately to the user.
+ */
+export function useVideoFilter() {
   const processor = useRef<VideoFilterProcessor | null>(null);
+  const rawStreamRef = useRef<MediaStream | null>(null);
+
   const activeFilter = useFilterStore((s) => s.activeFilter);
   const isSupported = useFilterStore((s) => s.isSupported);
   const prevFilter = useRef(activeFilter);
 
+  // Browser support check
   useEffect(() => {
-    // Basic browser support check
     if (!("WebAssembly" in window) || !HTMLCanvasElement.prototype.captureStream) {
       useFilterStore.getState().setIsSupported(false);
     }
   }, []);
 
   useEffect(() => {
-    if (!room?.localParticipant || !isSupported) return;
+    if (!isSupported) return;
 
     const handleFilterChange = async () => {
+      const mediaState = useMediaStore.getState();
+
       if (activeFilter !== "none" && prevFilter.current === "none") {
-        // === ACTIVATE FILTER PIPELINE ===
-        const cameraPub = room.localParticipant.getTrackPublication(Track.Source.Camera);
-        const rawTrack = cameraPub?.track?.mediaStreamTrack;
-        
-        if (!rawTrack) {
-            // Camera not ready yet. Just return and wait for it to be ready.
-            return;
+        // === ACTIVATE FILTER ===
+        const rawStream = mediaState.localStream;
+        if (!rawStream || rawStream.getVideoTracks().length === 0) {
+          // Camera not ready yet; wait for next effect run when localStream updates
+          prevFilter.current = activeFilter;
+          return;
         }
+
+        // Save the raw stream so we can restore it later
+        rawStreamRef.current = rawStream;
 
         try {
           processor.current = new VideoFilterProcessor();
-          const cameraStream = new MediaStream([rawTrack]);
-          
-          await processor.current.initialize(cameraStream);
+          await processor.current.initialize(rawStream);
           await processor.current.loadModels(activeFilter);
           processor.current.startProcessing();
 
           const processedStream = processor.current.getOutputStream();
-          const canvasVideoTrack = processedStream?.getVideoTracks()[0];
-
-          if (canvasVideoTrack) {
-            await room.localParticipant.unpublishTrack(rawTrack);
-            await room.localParticipant.publishTrack(canvasVideoTrack, {
-              source: Track.Source.Camera,
-              name: "filtered-camera",
-            });
-            // Update local stream in store to reflect filtered version
+          if (processedStream) {
+            // Replace localStream with the canvas-processed version
             useMediaStore.getState().setLocalStream(processedStream);
           }
         } catch (error) {
-          console.error("Failed to apply video filter:", error);
+          console.error("Failed to start video filter:", error);
           processor.current?.destroy();
           processor.current = null;
           useFilterStore.getState().setFilter("none");
         }
 
       } else if (activeFilter === "none" && prevFilter.current !== "none") {
-        // === DEACTIVATE FILTER — restore raw camera ===
+        // === DEACTIVATE FILTER ===
         processor.current?.destroy();
         processor.current = null;
 
-        const isVideoMuted = useMediaStore.getState().isVideoMuted;
-        if (!isVideoMuted) {
-           await room.localParticipant.setCameraEnabled(false);
-           await room.localParticipant.setCameraEnabled(true);
-           
-           // Fetch the new raw track and update media store
-           const newCameraPub = room.localParticipant.getTrackPublication(Track.Source.Camera);
-           const newRawTrack = newCameraPub?.track?.mediaStreamTrack;
-           if (newRawTrack) {
-             useMediaStore.getState().setLocalStream(new MediaStream([newRawTrack]));
-           }
+        // Restore the original raw stream
+        if (rawStreamRef.current) {
+          useMediaStore.getState().setLocalStream(rawStreamRef.current);
+          rawStreamRef.current = null;
         }
+
       } else if (activeFilter !== "none" && prevFilter.current !== "none") {
-          // Changed from one filter to another (e.g., blur -> virtual bg)
-          // We need to load models for the new filter type
-          if (processor.current) {
-              await processor.current.loadModels(activeFilter);
-          }
+        // === SWITCH BETWEEN FILTERS (e.g., blur_bg → face_mask) ===
+        if (processor.current) {
+          await processor.current.loadModels(activeFilter);
+        }
       }
 
       prevFilter.current = activeFilter;
     };
 
     handleFilterChange();
-  }, [activeFilter, room, isSupported, room?.localParticipant?.getTrackPublication(Track.Source.Camera)?.track?.mediaStreamTrack]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFilter, isSupported]);
+
+  // Also re-run when localStream changes (e.g. after camera toggle)
+  useEffect(() => {
+    if (!isSupported) return;
+    const currentFilter = useFilterStore.getState().activeFilter;
+    if (currentFilter === "none") return;
+
+    // If a filter is active but processor is gone (e.g. after camera re-enable),
+    // restart the pipeline with the new stream
+    if (!processor.current) {
+      const rawStream = useMediaStore.getState().localStream;
+      if (!rawStream || rawStream.getVideoTracks().length === 0) return;
+
+      rawStreamRef.current = rawStream;
+
+      (async () => {
+        try {
+          processor.current = new VideoFilterProcessor();
+          await processor.current.initialize(rawStream);
+          await processor.current.loadModels(currentFilter);
+          processor.current.startProcessing();
+
+          const processedStream = processor.current.getOutputStream();
+          if (processedStream) {
+            useMediaStore.getState().setLocalStream(processedStream);
+          }
+        } catch (error) {
+          console.error("Failed to restart video filter:", error);
+          processor.current?.destroy();
+          processor.current = null;
+          useFilterStore.getState().setFilter("none");
+        }
+      })();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useMediaStore((s) => s.localStream)]);
 
   // Cleanup on unmount
   useEffect(() => {

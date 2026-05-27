@@ -40,9 +40,11 @@ export class VideoFilterProcessor {
   async initialize(cameraStream: MediaStream): Promise<void> {
     this.sourceVideo.srcObject = cameraStream;
     await new Promise<void>((resolve) => {
-      this.sourceVideo.onloadedmetadata = () => {
+      if (this.sourceVideo.readyState >= 1) { // HAVE_METADATA or higher
         resolve();
-      };
+      } else {
+        this.sourceVideo.onloadedmetadata = () => resolve();
+      }
     });
     await this.sourceVideo.play();
 
