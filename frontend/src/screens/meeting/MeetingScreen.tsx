@@ -8,6 +8,8 @@ import { useRecording } from "@/hooks/useRecording";
 import { useMediaStore } from "@/stores/mediaStore";
 import { useMeetingStore } from "@/stores/meetingStore";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { useVideoFilter } from "@/hooks/useVideoFilter";
+import { useFilterStore } from "@/stores/filterStore";
 import { ROOM_EVENTS, MEDIA_EVENTS } from "@/socket/events";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
@@ -89,6 +91,7 @@ export function MeetingScreen() {
   const navigate = useNavigate();
 
   const {
+    room,
     isConnected,
     toggleCamera: lkToggleCamera,
     toggleMicrophone: lkToggleMicrophone,
@@ -97,6 +100,9 @@ export function MeetingScreen() {
   } = useLiveKit(roomCode || null);
   useRoomEvents(roomCode || null);
   const { sendMessage } = useChatEvents(roomCode || null);
+  
+  useVideoFilter(room);
+
   const {
     isRecording,
     formattedDuration,
@@ -125,7 +131,6 @@ export function MeetingScreen() {
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [showStopRecordingDialog, setShowStopRecordingDialog] = useState(false);
   const [isEndingMeeting, setIsEndingMeeting] = useState(false);
-  const [selectedFilter, setSelectedFilter] = useState<VideoFilterKey>("original");
   const prevMessageCountRef = useRef(messageCount);
 
   // Track unread messages when chat panel is closed
@@ -392,7 +397,7 @@ export function MeetingScreen() {
           )}
         </AnimatePresence>
         {/* Filters Panel */}
-        <FilterPanel showFilters={showFilters} setShowFilters={setShowFilters} selectedFilter={selectedFilter} setSelectedFilter={setSelectedFilter} />
+        <FilterPanel showFilters={showFilters} setShowFilters={setShowFilters} />
       </div>
 
       {/* Controls Bar */}
