@@ -27,9 +27,7 @@ export function useVideoFilter(room: Room | null) {
         const rawTrack = cameraPub?.track?.mediaStreamTrack;
         
         if (!rawTrack) {
-            // User hasn't enabled camera yet. Don't start filter.
-            prevFilter.current = "none";
-            useFilterStore.getState().setFilter("none");
+            // Camera not ready yet. Just return and wait for it to be ready.
             return;
         }
 
@@ -89,7 +87,7 @@ export function useVideoFilter(room: Room | null) {
     };
 
     handleFilterChange();
-  }, [activeFilter, room, isSupported]);
+  }, [activeFilter, room, isSupported, room?.localParticipant?.getTrackPublication(Track.Source.Camera)?.track?.mediaStreamTrack]);
 
   // Cleanup on unmount
   useEffect(() => {

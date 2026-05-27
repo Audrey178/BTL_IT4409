@@ -27,6 +27,7 @@ import { useAuthStore } from '@/stores/useAuthStore';
  */
 export function useLiveKit(roomCode: string | null) {
   const roomRef = useRef<Room | null>(null);
+  const [room, setRoom] = useState<Room | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const myUserId = useAuthStore((s) => s.user?._id);
@@ -56,7 +57,7 @@ export function useLiveKit(roomCode: string | null) {
     if (!roomCode || !myUserId) return;
 
     let cancelled = false;
-    const room = new Room({
+    const newRoom = new Room({
       adaptiveStream: true,
       dynacast: true,
       // Publish defaults — match existing quality expectations
@@ -69,7 +70,7 @@ export function useLiveKit(roomCode: string | null) {
         autoGainControl: true,
       },
     });
-    roomRef.current = room;
+    roomRef.current = newRoom;
 
     // ------- ROOM EVENT HANDLERS -------
 
@@ -156,26 +157,26 @@ export function useLiveKit(roomCode: string | null) {
 
     const handleLocalTrackPublished = () => {
       // Update localStream in mediaStore whenever local tracks change
-      const localP = room.localParticipant;
+      const localP = newRoom.localParticipant;
       const localMediaStream = buildLocalStream(localP);
       setLocalStream(localMediaStream);
     };
 
     const handleLocalTrackUnpublished = () => {
-      const localP = room.localParticipant;
+      const localP = newRoom.localParticipant;
       const localMediaStream = buildLocalStream(localP);
       setLocalStream(localMediaStream);
     };
 
     // Register events
-    room.on(RoomEvent.ParticipantConnected, handleParticipantConnected);
-    room.on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
-    room.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
-    room.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
-    room.on(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
-    room.on(RoomEvent.Disconnected, handleDisconnected);
-    room.on(RoomEvent.LocalTrackPublished, handleLocalTrackPublished);
-    room.on(RoomEvent.LocalTrackUnpublished, handleLocalTrackUnpublished);
+    newRoom.on(RoomEvent.ParticipantConnected, handleParticipantConnected);
+    newRoom.on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
+    newRoom.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
+    newRoom.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
+    newRoom.on(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
+    newRoom.on(RoomEvent.Disconnected, handleDisconnected);
+    newRoom.on(RoomEvent.LocalTrackPublished, handleLocalTrackPublished);
+    newRoom.on(RoomEvent.LocalTrackUnpublished, handleLocalTrackUnpublished);
 
     // Connect
     const connect = async () => {
@@ -183,19 +184,21 @@ export function useLiveKit(roomCode: string | null) {
         const { token, url } = await livekitService.getToken(roomCode);
         if (cancelled) return;
 
-        await room.connect(url, token);
+        await newRoom.connect(url, token);
         if (cancelled) {
-          room.disconnect();
+          newRoom.disconnect();
           return;
         }
 
+        setRoom(newRoom);
+
         // Enable camera and mic based on current media store state
         const mediaState = useMediaStore.getState();
-        await room.localParticipant.setCameraEnabled(!mediaState.isVideoMuted);
-        await room.localParticipant.setMicrophoneEnabled(!mediaState.isAudioMuted);
+        await newRoom.localParticipant.setCameraEnabled(!mediaState.isVideoMuted);
+        await newRoom.localParticipant.setMicrophoneEnabled(!mediaState.isAudioMuted);
 
         // Build initial local stream
-        const localMediaStream = buildLocalStream(room.localParticipant);
+        const localMediaStream = buildLocalStream(newRoom.localParticipant);
         setLocalStream(localMediaStream);
 
         // Sync already-connected remote participants
@@ -225,16 +228,17 @@ export function useLiveKit(roomCode: string | null) {
 
     return () => {
       cancelled = true;
-      room.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
-      room.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
-      room.off(RoomEvent.TrackSubscribed, handleTrackSubscribed);
-      room.off(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
-      room.off(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
-      room.off(RoomEvent.Disconnected, handleDisconnected);
-      room.off(RoomEvent.LocalTrackPublished, handleLocalTrackPublished);
-      room.off(RoomEvent.LocalTrackUnpublished, handleLocalTrackUnpublished);
-      room.disconnect();
+      newRoom.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
+      newRoom.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
+      newRoom.off(RoomEvent.TrackSubscribed, handleTrackSubscribed);
+      newRoom.off(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
+      newRoom.off(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
+      newRoom.off(RoomEvent.Disconnected, handleDisconnected);
+      newRoom.off(RoomEvent.LocalTrackPublished, handleLocalTrackPublished);
+      newRoom.off(RoomEvent.LocalTrackUnpublished, handleLocalTrackUnpublished);
+      newRoom.disconnect();
       roomRef.current = null;
+      setRoom(null);
     };
   }, [roomCode, myUserId]);
 
@@ -308,6 +312,7 @@ export function useLiveKit(roomCode: string | null) {
     if (room) {
       room.disconnect();
       roomRef.current = null;
+      setRoom(null);
     }
     setIsConnected(false);
   }, []);
@@ -325,7 +330,7 @@ export function useLiveKit(roomCode: string | null) {
   }, []);
 
   return {
-    room: roomRef.current,
+    room,
     isConnected,
     connectionError,
     toggleCamera,
