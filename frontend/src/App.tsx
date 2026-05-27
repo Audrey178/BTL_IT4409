@@ -4,6 +4,8 @@ import { LobbyScreen } from "./screens/lobby/LobbyScreen";
 import { MeetingScreen } from "./screens/meeting/MeetingScreen";
 import { ScheduleScreen } from "./screens/schedule/ScheduleScreen";
 import { AdminDashboardScreen } from "./screens/admin/AdminDashboardScreen";
+import { ArchivesScreen } from "./screens/archives/ArchivesScreen";
+import { RecordingPlayerScreen } from "./screens/archives/RecordingPlayerScreen";
 import { SignupScreen } from "./screens/auth/SignupScreen";
 import { LoginScreen } from "./screens/auth/LoginScreen";
 import { ProfileScreen } from "./screens/auth/ProfileScreen";
@@ -35,6 +37,8 @@ export default function App() {
             <Route path="/lobby" element={<LobbyScreen />} />
             <Route path="/meeting/:id" element={<MeetingScreen />} />
             <Route path="/profile" element={<ProfileScreen />} />
+            <Route path="/archives" element={<ArchivesScreen />} />
+            <Route path="/archives/:id" element={<RecordingPlayerScreen />} />
           </Route>
 
           <Route element={<ProtectedRoute requireAdmin />}>

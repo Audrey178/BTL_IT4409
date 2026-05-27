@@ -17,6 +17,7 @@ import { Room, RoomMember, MeetingEvent } from '../models/index.js';
 import { getRedisClient, addToSet, removeFromSet, deleteRedisKey } from '../config/redis.js';
 import { HTTP_STATUS, ERROR_MESSAGES, ROOM_STATUS, USER_STATUS, EVENT_TYPE } from '../utils/constants.js';
 import logger from '../utils/logger.js';
+import recordingService from './recording.service.js';
 
 class RoomService {
   /**
@@ -399,6 +400,18 @@ class RoomService {
       if (!room.started_at) {
         room.started_at = room.created_at;
       }
+
+      // Auto-stop recording if active
+      try {
+        const recordingStatus = await recordingService.getLiveKitRecordingStatus(normalizedCode);
+        if (recordingStatus.isRecording) {
+          await recordingService.stopLiveKitRecording(normalizedCode, hostId);
+          logger.info(`✓ Auto-stopped recording for room ${normalizedCode}`);
+        }
+      } catch (err) {
+        logger.warn('Failed to auto-stop recording on room end:', err.message);
+      }
+
       await room.save();
 
       // Mark all members as left

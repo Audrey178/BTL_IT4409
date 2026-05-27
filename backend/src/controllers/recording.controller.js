@@ -120,7 +120,12 @@ class RecordingController {
       // Notify all participants in the room via socket
       const io = req.app.locals.io;
       if (io) {
-        io.to(roomCode).emit('recording:status', { isRecording: true, recorderId: req.userId });
+        io.to(roomCode).emit('recording:status', {
+          isRecording: true,
+          recorderId: req.userId,
+          recorderName: req.user?.full_name || 'Host',
+          startTime: new Date().toISOString(),
+        });
       }
 
       res.status(HTTP_STATUS.OK).json(result);
@@ -141,7 +146,11 @@ class RecordingController {
       // Notify all participants in the room via socket
       const io = req.app.locals.io;
       if (io) {
-        io.to(roomCode).emit('recording:status', { isRecording: false });
+        io.to(roomCode).emit('recording:status', {
+          isRecording: false,
+          recorderName: null,
+          startTime: null,
+        });
       }
 
       res.status(HTTP_STATUS.OK).json(result);

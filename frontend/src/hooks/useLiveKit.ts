@@ -42,6 +42,8 @@ export function useLiveKit(roomCode: string | null) {
 
   const {
     setLocalStream,
+    setIsAudioMuted,
+    setIsVideoMuted,
     setIsScreenSharing,
     setScreenStream,
   } = useMediaStore();
@@ -250,7 +252,8 @@ export function useLiveKit(roomCode: string | null) {
     // Update local stream in store
     const localMediaStream = buildLocalStream(room.localParticipant);
     setLocalStream(localMediaStream);
-  }, [setLocalStream]);
+    setIsVideoMuted(!newEnabled);
+  }, [setLocalStream, setIsVideoMuted]);
 
   const toggleMicrophone = useCallback(async () => {
     const room = roomRef.current;
@@ -258,7 +261,8 @@ export function useLiveKit(roomCode: string | null) {
 
     const newEnabled = !room.localParticipant.isMicrophoneEnabled;
     await room.localParticipant.setMicrophoneEnabled(newEnabled);
-  }, []);
+    setIsAudioMuted(!newEnabled);
+  }, [setIsAudioMuted]);
 
   const toggleScreenShare = useCallback(async (): Promise<boolean> => {
     const room = roomRef.current;

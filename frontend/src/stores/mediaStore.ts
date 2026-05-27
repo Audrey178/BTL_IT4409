@@ -7,8 +7,8 @@ interface MediaState {
   screenStream: MediaStream | null;
   isScreenSharing: boolean;
   setLocalStream: (stream: MediaStream | null) => void;
-  toggleAudio: () => void;
-  toggleVideo: () => void;
+  setIsAudioMuted: (v: boolean) => void;
+  setIsVideoMuted: (v: boolean) => void;
   setScreenStream: (stream: MediaStream | null) => void;
   setIsScreenSharing: (v: boolean) => void;
   cleanup: () => void;
@@ -25,26 +25,13 @@ export const useMediaStore = create<MediaState>((set, get) => ({
     set({ localStream: stream });
   },
 
-  toggleAudio: () => {
-    const { localStream } = get();
-
-    if (localStream) {
-      localStream.getAudioTracks().forEach((track) => {
-        track.enabled = !track.enabled;
-      });
-      set(state => ({ isAudioMuted: !state.isAudioMuted }));
-    }
+  setIsAudioMuted: (v) => {
+    set({ isAudioMuted: v });
   },
 
-  toggleVideo: () => {
-    const { localStream } = get();
-    if (localStream) {
-      localStream.getVideoTracks().forEach((track) => {
-        track.enabled = !track.enabled;
-      });
-      set(state => ({ isVideoMuted: !state.isVideoMuted }));
-    }
-  },
+  setIsVideoMuted: (v) => {
+    set({ isVideoMuted: v });
+  },  
 
   setScreenStream: (stream) => {
     set({ screenStream: stream });

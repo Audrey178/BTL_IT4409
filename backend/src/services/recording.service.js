@@ -1,8 +1,9 @@
 import mongoose from 'mongoose';
-import { EgressClient } from 'livekit-server-sdk';
+import { EgressClient, EncodedFileOutput, S3Upload } from 'livekit-server-sdk';
 import { Recording, Room, RoomMember, MeetingEvent } from '../models/index.js';
 import { ERROR_MESSAGES, EVENT_TYPE, HTTP_STATUS, USER_STATUS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
+import { getRedisClient } from '../config/redis.js';
 
 class RecordingService {
   async createRecording(roomCode, userId, data) {
@@ -219,6 +220,15 @@ class RecordingService {
     }
   }
 
+  ensureIsHost(room, userId) {
+    const hostId = room.host_id?._id || room.host_id;
+    if (hostId?.toString() !== userId.toString()) {
+      const error = new Error('Only the host can manage recording');
+      error.statusCode = HTTP_STATUS.FORBIDDEN;
+      throw error;
+    }
+  }
+
   async getAccessibleRoomIds(userId) {
     const [hostedRooms, memberRoomIds] = await Promise.all([
       Room.find({ host_id: userId }).distinct('_id'),
@@ -268,7 +278,7 @@ class RecordingService {
   async startLiveKitRecording(roomCode, userId) {
     try {
       const room = await this.getRoomOrThrow(roomCode);
-      await this.ensureRoomAccess(room, userId);
+      this.ensureIsHost(room, userId);
 
       const redis = getRedisClient();
 
@@ -284,28 +294,34 @@ class RecordingService {
       const hasS3 = process.env.S3_BUCKET && process.env.S3_ACCESS_KEY && process.env.S3_SECRET_KEY;
 
       let egressId;
+      const file_path = `recordings/${roomCode}_${Date.now()}.mp4`;
+
       if (LIVEKIT_API_KEY && LIVEKIT_API_SECRET && LIVEKIT_URL && hasS3) {
         // Real Egress with LiveKit
         const httpUrl = LIVEKIT_URL.replace(/^ws(s)?:\/\//, 'http$1://');
         const egressClient = new EgressClient(httpUrl, LIVEKIT_API_KEY, LIVEKIT_API_SECRET);
 
-        const s3Upload = {
+        const s3Upload = new S3Upload({
           accessKey: process.env.S3_ACCESS_KEY,
           secret: process.env.S3_SECRET_KEY,
           bucket: process.env.S3_BUCKET,
-          endpoint: process.env.S3_ENDPOINT || 's3.amazonaws.com',
-          region: process.env.S3_REGION || 'us-east-1',
-        };
+          region: process.env.S3_REGION,
+        });
 
-        const fileOutput = {
-          filepath: `recordings/${roomCode}_${Date.now()}.mp4`,
-          s3: s3Upload,
-        };
+        const fileOutput = new EncodedFileOutput({
+          filepath: file_path,
+          output: {
+            case: 's3',
+            value: s3Upload,
+          },
+        });
 
         logger.info(`Starting LiveKit Egress for room ${roomCode} with S3 storage...`);
-        const egressInfo = await egressClient.startRoomCompositeEgress(roomCode, fileOutput, {
-          layout: 'grid',
-        });
+        const egressInfo = await egressClient.startRoomCompositeEgress(
+          roomCode,
+          { file: fileOutput },
+          { layout: 'grid' }
+        );
         
         egressId = egressInfo.egressId;
       } else {
@@ -318,6 +334,7 @@ class RecordingService {
       await redis.set(`room:${roomCode}:egress_id`, egressId);
       await redis.set(`room:${roomCode}:egress_start_time`, new Date().toISOString());
       await redis.set(`room:${roomCode}:egress_recorder_id`, userId.toString());
+      await redis.set(`room:${roomCode}:recording_path`, file_path);
 
       return {
         success: true,
@@ -333,11 +350,13 @@ class RecordingService {
   async stopLiveKitRecording(roomCode, userId) {
     try {
       const room = await this.getRoomOrThrow(roomCode);
+      this.ensureIsHost(room, userId);
       const redis = getRedisClient();
 
       const egressId = await redis.get(`room:${roomCode}:egress_id`);
       const startTimeStr = await redis.get(`room:${roomCode}:egress_start_time`);
       const recorderId = await redis.get(`room:${roomCode}:egress_recorder_id`) || userId;
+      const file_path = await redis.get(`room:${roomCode}:recording_path`);
 
       if (!egressId) {
         const error = new Error('No active recording found for this room');
@@ -363,10 +382,13 @@ class RecordingService {
         
         try {
           const egressInfo = await egressClient.stopEgress(egressId);
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          const egressData = egressInfo.toJsonString ? JSON.parse(egressInfo.toJsonString()) : egressInfo;
+          logger.info({ egress: egressData }, 'Egress stopped');
           const regionStr = process.env.S3_REGION && process.env.S3_REGION !== 'us-east-1' ? `-${process.env.S3_REGION}` : '';
           const endpointHost = process.env.S3_ENDPOINT ? process.env.S3_ENDPOINT.replace(/^https?:\/\//, '') : `s3${regionStr}.amazonaws.com`;
           
-          fileUrl = `https://${process.env.S3_BUCKET}.${endpointHost}/recordings/${roomCode}_${startTimeStr ? new Date(startTimeStr).getTime() : Date.now()}.mp4`;
+          fileUrl = `https://${process.env.S3_BUCKET}.${endpointHost}/${file_path}`;
         } catch (stopError) {
           logger.error('Error calling stopEgress in LiveKit:', stopError);
           fileUrl = 'https://www.w3schools.com/html/mov_bbb.mp4';
@@ -400,7 +422,7 @@ class RecordingService {
       await redis.del(`room:${roomCode}:egress_id`);
       await redis.del(`room:${roomCode}:egress_start_time`);
       await redis.del(`room:${roomCode}:egress_recorder_id`);
-
+      await redis.del(`room:${roomCode}:recording_path`);
       return {
         success: true,
         message: 'Recording stopped and saved successfully',

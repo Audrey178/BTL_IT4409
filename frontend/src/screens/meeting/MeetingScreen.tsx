@@ -23,6 +23,9 @@ import { Switch } from "@/components/ui/switch";
 import { WaitingRoomPanel } from "@/components/pages/meeting/WaitingRoomPanel";
 import { ChatPanel } from "@/components/pages/meeting/ChatPanel";
 import { EndMeetingDialog } from "@/components/pages/meeting/EndMeetingDialog";
+import { RecordingBanner } from "@/components/pages/meeting/RecordingBanner";
+import { RecordingConsentDialog } from "@/components/pages/meeting/RecordingConsentDialog";
+import { StopRecordingDialog } from "@/components/pages/meeting/StopRecordingDialog";
 import { roomService } from "@/services/roomService";
 import FilterPanel from "@/components/pages/meeting/FilterPanel";
 
@@ -100,10 +103,12 @@ export function MeetingScreen() {
     isProcessing,
     startRecording,
     stopRecording,
+    showConsentDialog,
+    setShowConsentDialog,
   } = useRecording();
 
   const {
-    localStream, isAudioMuted, isVideoMuted, toggleAudio, toggleVideo,
+    localStream, isAudioMuted, isVideoMuted,
     screenStream, isScreenSharing,
   } = useMediaStore();
 
@@ -111,14 +116,14 @@ export function MeetingScreen() {
     participants, isHost, waitingList, hostId,
     removeWaitingUser, screenSharingUserId, setScreenSharingUserId,
   } = useMeetingStore();
-  
-  console.log("participants: ", participants);
+
   const messageCount = useMeetingStore((s) => s.messages.length);
 
   const [showChat, setShowChat] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showEndDialog, setShowEndDialog] = useState(false);
+  const [showStopRecordingDialog, setShowStopRecordingDialog] = useState(false);
   const [isEndingMeeting, setIsEndingMeeting] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<VideoFilterKey>("original");
   const prevMessageCountRef = useRef(messageCount);
@@ -210,25 +215,25 @@ export function MeetingScreen() {
   // Wrapped toggle handlers — emit socket event after toggle
   const handleToggleAudio = useCallback(async () => {
     await lkToggleMicrophone();
-    const newMuted = !useMediaStore.getState().isAudioMuted;
-    toggleAudio();
+    // State already updated by lkToggleMicrophone → read directly
+    const { isAudioMuted, isVideoMuted } = useMediaStore.getState();
     socket.emit(MEDIA_EVENTS.TOGGLE, {
       roomCode, userId: myUserId,
-      isAudioMuted: newMuted,
-      isVideoMuted: useMediaStore.getState().isVideoMuted,
+      isAudioMuted,
+      isVideoMuted,
     });
-  }, [socket, roomCode, myUserId, toggleAudio, lkToggleMicrophone]);
+  }, [socket, roomCode, myUserId, lkToggleMicrophone]);
 
   const handleToggleVideo = useCallback(async () => {
     await lkToggleCamera();
-    const newMuted = !useMediaStore.getState().isVideoMuted;
-    toggleVideo();
+    // State already updated by lkToggleCamera → read directly
+    const { isAudioMuted, isVideoMuted } = useMediaStore.getState();
     socket.emit(MEDIA_EVENTS.TOGGLE, {
       roomCode, userId: myUserId,
-      isAudioMuted: useMediaStore.getState().isAudioMuted,
-      isVideoMuted: newMuted,
+      isAudioMuted,
+      isVideoMuted,
     });
-  }, [socket, roomCode, myUserId, toggleVideo, lkToggleCamera]);
+  }, [socket, roomCode, myUserId, lkToggleCamera]);
 
   // Screen share handlers
   const handleToggleScreenShare = useCallback(async () => {
@@ -268,6 +273,8 @@ export function MeetingScreen() {
             <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
             <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Live: {roomCode}</span>
           </div>
+          {/* Recording indicator — blinking red dot in header */}
+          <RecordingBanner isRecording={isRecording} formattedDuration={formattedDuration} />
         </div>
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2 bg-surface-container rounded-full px-4 py-2">
@@ -311,6 +318,8 @@ export function MeetingScreen() {
           </motion.div>
         )}
       </AnimatePresence>
+
+
 
       <div className="flex-1 flex overflow-hidden p-6 gap-6 relative">
         {/* ============ PRESENTATION MODE ============ */}
@@ -414,21 +423,23 @@ export function MeetingScreen() {
           <ControlButton icon={<Users size={24} />} badge={participants.length + 1} />
           {isHost && <WaitingRoomPanel roomCode={roomCode} waitingList={waitingList} removeWaitingUser={removeWaitingUser} />}
           <ControlButton icon={<Sparkles size={24} />} onClick={() => setShowFilters(!showFilters)} active={showFilters} />
-          <ControlButton
-            icon={
-              isRecording ? (
-                <div className="flex items-center gap-1.5 px-1">
-                  <span className="w-2.5 h-2.5 bg-red-600 rounded-full animate-pulse" />
-                  <span className="text-xs font-bold text-red-600 tracking-tight">{formattedDuration}</span>
-                </div>
-              ) : (
-                <Circle size={24} className="fill-stone-600/30 text-stone-600 stroke-[3px]" />
-              )
-            }
-            onClick={isRecording ? stopRecording : startRecording}
-            active={isRecording}
-            className={isRecording ? "w-auto px-4 border-red-200 bg-red-50 hover:bg-red-100 shadow-lg shadow-red-500/10 text-red-600 animate-pulse" : ""}
-          />
+          {isHost && (
+            <ControlButton
+              icon={
+                isRecording ? (
+                  <div className="flex items-center gap-1.5 px-1">
+                    <span className="w-2.5 h-2.5 bg-red-600 rounded-full animate-pulse" />
+                    <span className="text-xs font-bold text-red-600 tracking-tight">{formattedDuration}</span>
+                  </div>
+                ) : (
+                  <Circle size={24} className="fill-stone-600/30 text-stone-600 stroke-[3px]" />
+                )
+              }
+              onClick={isRecording ? () => setShowStopRecordingDialog(true) : startRecording}
+              active={isRecording}
+              className={isRecording ? "w-auto px-4 border-red-200 bg-red-50 hover:bg-red-100 shadow-lg shadow-red-500/10 text-red-600 animate-pulse" : ""}
+            />
+          )}
           <div className="w-px h-10 bg-outline-variant/30 mx-2" />
           <ControlButton
             icon={<PhoneOff size={24} />}
@@ -464,6 +475,21 @@ export function MeetingScreen() {
         onLeave={handleLeaveMeeting}
         onEndForAll={handleEndMeetingForAll}
         isLoading={isEndingMeeting}
+      />
+
+      {/* Recording Consent Dialog — non-host participants */}
+      <RecordingConsentDialog
+        open={showConsentDialog}
+        onOpenChange={setShowConsentDialog}
+      />
+
+      {/* Stop Recording Dialog — host confirmation */}
+      <StopRecordingDialog
+        open={showStopRecordingDialog}
+        onOpenChange={setShowStopRecordingDialog}
+        onConfirm={stopRecording}
+        isProcessing={isProcessing}
+        formattedDuration={formattedDuration}
       />
     </div>
   );
@@ -504,15 +530,14 @@ function VideoTile({
 
   useEffect(() => {
     if (videoRef.current) {
-      if (isVideoOff) {
+      // Always keep srcObject in sync — prevents stale dead-track when unpausing
+      videoRef.current.srcObject = stream ?? null;
+      if (isVideoOff || !stream) {
         videoRef.current.pause();
       } else {
-        videoRef.current.srcObject = stream ?? null;
-        if (stream) {
-          videoRef.current.play().catch((err) => {
-            console.warn("VideoTile play error:", err);
-          });
-        }
+        videoRef.current.play().catch((err) => {
+          console.warn("VideoTile play error:", err);
+        });
       }
     }
   }, [stream, isVideoOff]);

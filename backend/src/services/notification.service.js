@@ -19,8 +19,8 @@ class NotificationService {
 
     this.initializePromise = (async () => {
       try {
-        const admin = await import('firebase-admin');
-        const credential = this.getFirebaseCredential(admin.default || admin);
+        const admin = (await import('firebase-admin')).default;
+        const credential = this.getFirebaseCredential(admin);
 
         if (!credential) {
           logger.warn('FCM disabled: Firebase credentials are not configured');
@@ -28,11 +28,10 @@ class NotificationService {
           return null;
         }
 
-        const firebaseAdmin = admin.default || admin;
-        this.firebaseApp = firebaseAdmin.apps.length
-          ? firebaseAdmin.apps[0]
-          : firebaseAdmin.initializeApp({ credential });
-        this.messaging = firebaseAdmin.messaging();
+        this.firebaseApp = admin.apps.length
+          ? admin.apps[0]
+          : admin.initializeApp({ credential });
+        this.messaging = admin.messaging();
         this.initialized = true;
         logger.info('FCM initialized');
         return this.messaging;

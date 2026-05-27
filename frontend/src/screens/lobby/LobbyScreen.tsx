@@ -47,7 +47,7 @@ export function LobbyScreen() {
   const roomCode = searchParams.get("code")?.toUpperCase() || null;
 
   const { requestMedia } = useMedia();
-  const { localStream, isAudioMuted, isVideoMuted, toggleAudio, toggleVideo } =
+  const { localStream, isAudioMuted, isVideoMuted, setIsAudioMuted, setIsVideoMuted } =
     useMediaStore();
   const { setRoomCode, setHostId, setIsHost, setStatus, status, setMemberId, addParticipant } =
     useMeetingStore();
@@ -435,13 +435,19 @@ export function LobbyScreen() {
                   icon={isAudioMuted ? <MicOff size={24} /> : <Mic size={24} />}
                   label={isAudioMuted ? "Unmute" : "Mute"}
                   active={!isAudioMuted}
-                  onClick={toggleAudio}
+                  onClick={() => {
+                    localStream?.getAudioTracks().forEach(t => { t.enabled = !t.enabled; });
+                    setIsAudioMuted(!isAudioMuted);
+                  }}
                 />
                 <LobbyControl
                   icon={isVideoMuted ? <VideoOff size={24} /> : <Video size={24} />}
                   label={isVideoMuted ? "Start Video" : "Stop Video"}
                   active={!isVideoMuted}
-                  onClick={toggleVideo}
+                  onClick={() => {
+                    localStream?.getVideoTracks().forEach(t => { t.enabled = !t.enabled; });
+                    setIsVideoMuted(!isVideoMuted);
+                  }}
                 />
                 <div className="w-px h-10 bg-outline-variant/30 mx-2" />
                 <LobbyControl

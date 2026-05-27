@@ -12,6 +12,7 @@ interface MeetingState {
   waitingList: WaitingUser[];
   screenSharingUserId: string | null;
   isRecording: boolean;
+  recorderName: string | null;
 
   setRoomCode: (code: string | null) => void;
   setStatus: (status: 'idle' | 'waiting' | 'in-room' | 'ended') => void;
@@ -19,6 +20,7 @@ interface MeetingState {
   setIsHost: (v: boolean) => void;
   setMemberId: (id: string | null) => void;
   setIsRecording: (v: boolean) => void;
+  setRecorderName: (name: string | null) => void;
 
   addParticipant: (p: Participant) => void;
   removeParticipant: (userId: string) => void;
@@ -51,6 +53,7 @@ const initialState = {
   waitingList: [],
   screenSharingUserId: null,
   isRecording: false,
+  recorderName: null,
 };
 
 export const useMeetingStore = create<MeetingState>((set) => ({
@@ -62,6 +65,7 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   setIsHost: (v) => set({ isHost: v }),
   setMemberId: (memberId) => set({ memberId }),
   setIsRecording: (isRecording) => set({ isRecording }),
+  setRecorderName: (recorderName) => set({ recorderName }),
 
   addParticipant: (p) => set((state) => {
     // Only add if not exist

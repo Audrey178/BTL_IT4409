@@ -8,9 +8,15 @@ export function useRecording() {
   const roomCode = useMeetingStore((s) => s.roomCode);
   const isRecording = useMeetingStore((s) => s.isRecording);
   const setIsRecording = useMeetingStore((s) => s.setIsRecording);
+  const isHost = useMeetingStore((s) => s.isHost);
+  const recorderName = useMeetingStore((s) => s.recorderName);
+  const setRecorderName = useMeetingStore((s) => s.setRecorderName);
+
   const [duration, setDuration] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showConsentDialog, setShowConsentDialog] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const hasShownConsentRef = useRef(false);
 
   // Sync initial status when hook is mounted or roomCode changes
   useEffect(() => {
@@ -24,12 +30,17 @@ export function useRecording() {
             const elapsed = Math.round((Date.now() - new Date(res.startTime).getTime()) / 1000);
             setDuration(elapsed > 0 ? elapsed : 0);
           }
+          // Late-joiner consent: if already recording when we join and we're not host
+          if (res.isRecording && !isHost && !hasShownConsentRef.current) {
+            setShowConsentDialog(true);
+            hasShownConsentRef.current = true;
+          }
         }
       })
       .catch((err) => {
         console.error('Failed to fetch recording status:', err);
       });
-  }, [roomCode, setIsRecording]);
+  }, [roomCode, setIsRecording, isHost]);
 
   // Sync duration timer based on isRecording
   useEffect(() => {
@@ -58,12 +69,30 @@ export function useRecording() {
     const socket = getSocket();
     if (!socket || !roomCode) return;
 
-    const handleRecordingStatus = (data: { isRecording: boolean; recorderId?: string }) => {
+    const handleRecordingStatus = (data: {
+      isRecording: boolean;
+      recorderId?: string;
+      recorderName?: string;
+      startTime?: string;
+    }) => {
       setIsRecording(data.isRecording);
+      setRecorderName(data.recorderName || null);
+
       if (data.isRecording) {
-        toast.info('Meeting recording has started');
+        // Sync duration from startTime if available
+        if (data.startTime) {
+          const elapsed = Math.round((Date.now() - new Date(data.startTime).getTime()) / 1000);
+          setDuration(elapsed > 0 ? elapsed : 0);
+        }
+        // Show consent dialog for non-host participants
+        if (!isHost && !hasShownConsentRef.current) {
+          setShowConsentDialog(true);
+          hasShownConsentRef.current = true;
+        }
       } else {
-        toast.info('Meeting recording has stopped and is saving...');
+        toast.info('Recording has stopped and is being saved');
+        // Reset consent state for next recording session
+        hasShownConsentRef.current = false;
       }
     };
 
@@ -72,7 +101,7 @@ export function useRecording() {
     return () => {
       socket.off('recording:status', handleRecordingStatus);
     };
-  }, [roomCode, setIsRecording]);
+  }, [roomCode, setIsRecording, setRecorderName, isHost]);
 
   const startRecording = async () => {
     if (!roomCode) return;
@@ -115,10 +144,13 @@ export function useRecording() {
 
   return {
     isRecording,
+    recorderName,
     duration,
     formattedDuration: formatDuration(duration),
     isProcessing,
     startRecording,
     stopRecording,
+    showConsentDialog,
+    setShowConsentDialog,
   };
 }
