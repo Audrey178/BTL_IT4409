@@ -101,7 +101,8 @@ export function MeetingScreen() {
   useRoomEvents(roomCode || null);
   const { sendMessage } = useChatEvents(roomCode || null);
   
-  useVideoFilter();
+  useVideoFilter(room);
+
 
   const {
     isRecording,
