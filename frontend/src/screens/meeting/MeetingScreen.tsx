@@ -544,20 +544,62 @@ function VideoTile({
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    if (videoRef.current) {
-      // Always keep srcObject in sync — prevents stale dead-track when unpausing
-      videoRef.current.srcObject = stream ?? null;
-      if (filterCss) {
-        videoRef.current.style.filter = filterCss;
-      }
-      if (isVideoOff || !stream) {
-        videoRef.current.pause();
-      } else {
-        videoRef.current.play().catch((err) => {
-          console.warn("VideoTile play error:", err);
-        });
-      }
+    const el = videoRef.current;
+    if (!el) return;
+
+    // Apply CSS color filter
+    el.style.filter = (filterCss && filterCss !== 'none') ? filterCss : '';
+
+    // Skip srcObject reassignment if it is already pointing to the same stream.
+    // This prevents triggering a new "load request" which would abort a pending play().
+    if (el.srcObject !== (stream ?? null)) {
+      el.srcObject = stream ?? null;
     }
+
+    if (isVideoOff || !stream || stream.getVideoTracks().length === 0) {
+      el.pause();
+      // Return cleanup without starting a play() cycle
+      return () => {
+        el.srcObject = null;
+      };
+    }
+
+    // Use a cancelled flag so we can silently discard the result of a play()
+    // promise that was superseded by a new effect run (React Strict Mode, fast
+    // re-renders, and srcObject reassignments all cause this AbortError).
+    let cancelled = false;
+
+    const startPlay = async () => {
+      try {
+        await el.play();
+      } catch (err: unknown) {
+        if (cancelled) return; // Effect was cleaned up before play() resolved — ignore
+
+        const e = err as DOMException;
+        if (e.name === 'AbortError') {
+          // Caused by a new load starting before the previous play() resolved.
+          // This is benign — the browser will start the new load correctly.
+          return;
+        }
+        if (e.name === 'NotAllowedError') {
+          // Browser autoplay policy blocked unmuted playback — mute and retry once.
+          el.muted = true;
+          try {
+            if (!cancelled) await el.play();
+          } catch {
+            // Silently ignore — video will play once user interacts with the page
+          }
+        }
+      }
+    };
+
+    startPlay();
+
+    return () => {
+      cancelled = true;
+      // Null out srcObject on unmount to release the MediaStream reference
+      el.srcObject = null;
+    };
   }, [stream, isVideoOff, filterCss]);
 
   return (
@@ -567,6 +609,7 @@ function VideoTile({
       
       {/* Video Container (always in DOM, smooth transition) */}
       <div className={`absolute inset-0 w-full h-full transition-opacity duration-500 ${stream && !isVideoOff ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
+        {/* Remote video must NOT have muted attr — local uses muted to avoid echo */}
         <video ref={videoRef} autoPlay playsInline muted={isLocal} className="w-full h-full object-cover -scale-x-100" />
       </div>
 

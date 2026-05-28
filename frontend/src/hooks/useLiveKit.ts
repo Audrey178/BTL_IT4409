@@ -95,26 +95,45 @@ export function useLiveKit(roomCode: string | null) {
     ) => {
       if (!track) return;
 
-      const mediaStream = new MediaStream([track.mediaStreamTrack]);
+      // DIAGNOSTIC LOG A: Verify we are receiving the event
+      console.log('[LiveKit] TrackSubscribed:', participant.identity, publication.source, track.kind);
 
       if (publication.source === Track.Source.ScreenShare) {
+        const mediaStream = new MediaStream([track.mediaStreamTrack]);
         updateParticipantScreenStream(participant.identity, mediaStream);
-        // Set screenSharingUserId so UI switches to presentation mode
-        // (covers edge case: user joins AFTER screen share already started)
         setScreenSharingUserId(participant.identity);
-      } else if (
+        return;
+      }
+
+      if (
         publication.source === Track.Source.Camera ||
         publication.source === Track.Source.Microphone
       ) {
-        // Build a combined stream with all subscribed camera + mic tracks
-        const combinedStream = buildParticipantStream(participant);
+        // CRITICAL FIX: Do NOT use buildParticipantStream() here.
+        // At the moment TrackSubscribed fires, trackPublications may not yet
+        // have isSubscribed=true for the new track, so buildParticipantStream
+        // would return an empty stream.
+        //
+        // Instead: collect all already-subscribed tracks from publications
+        // and explicitly add the new track if not already present.
+        const tracks: MediaStreamTrack[] = [];
 
-        // Đảm bảo track vừa subscribe được bao gồm trong stream (đề phòng race condition)
-        const hasTrack = combinedStream.getTracks().some(t => t.id === track.mediaStreamTrack.id);
-        if (!hasTrack) {
-          combinedStream.addTrack(track.mediaStreamTrack);
+        participant.trackPublications.forEach((pub) => {
+          if (
+            pub.track &&
+            pub.isSubscribed &&
+            (pub.source === Track.Source.Camera || pub.source === Track.Source.Microphone)
+          ) {
+            tracks.push(pub.track.mediaStreamTrack);
+          }
+        });
+
+        // Ensure the new track is in the list (guards against the race condition)
+        if (!tracks.some(t => t.id === track.mediaStreamTrack.id)) {
+          tracks.push(track.mediaStreamTrack);
         }
 
+        const combinedStream = new MediaStream(tracks);
         updateParticipantStream(participant.identity, combinedStream);
       }
     };
@@ -126,7 +145,6 @@ export function useLiveKit(roomCode: string | null) {
     ) => {
       if (publication.source === Track.Source.ScreenShare) {
         clearParticipantScreenStream(participant.identity);
-        // Clear screenSharingUserId so UI switches back to grid mode
         const currentSharer = useMeetingStore.getState().screenSharingUserId;
         if (currentSharer === participant.identity) {
           setScreenSharingUserId(null);
@@ -141,6 +159,28 @@ export function useLiveKit(roomCode: string | null) {
           }
         }
         updateParticipantStream(participant.identity, remainingStream);
+      }
+    };
+
+    const handleTrackMuted = (
+      publication: RemoteTrackPublication,
+      participant: RemoteParticipant,
+    ) => {
+      if (publication.source === Track.Source.Camera) {
+        useMeetingStore.getState().updateParticipantMedia(participant.identity, { isVideoMuted: true });
+      } else if (publication.source === Track.Source.Microphone) {
+        useMeetingStore.getState().updateParticipantMedia(participant.identity, { isAudioMuted: true });
+      }
+    };
+
+    const handleTrackUnmuted = (
+      publication: RemoteTrackPublication,
+      participant: RemoteParticipant,
+    ) => {
+      if (publication.source === Track.Source.Camera) {
+        useMeetingStore.getState().updateParticipantMedia(participant.identity, { isVideoMuted: false });
+      } else if (publication.source === Track.Source.Microphone) {
+        useMeetingStore.getState().updateParticipantMedia(participant.identity, { isAudioMuted: false });
       }
     };
 
@@ -173,6 +213,8 @@ export function useLiveKit(roomCode: string | null) {
     newRoom.on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
     newRoom.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
     newRoom.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
+    newRoom.on(RoomEvent.TrackMuted, handleTrackMuted);
+    newRoom.on(RoomEvent.TrackUnmuted, handleTrackUnmuted);
     newRoom.on(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
     newRoom.on(RoomEvent.Disconnected, handleDisconnected);
     newRoom.on(RoomEvent.LocalTrackPublished, handleLocalTrackPublished);
@@ -201,11 +243,12 @@ export function useLiveKit(roomCode: string | null) {
         const localMediaStream = buildLocalStream(newRoom.localParticipant);
         setLocalStream(localMediaStream);
 
-        // Sync already-connected remote participants
-        room.remoteParticipants.forEach((participant) => {
+        // Sync already-connected remote participants (e.g. joining a room that already has people)
+        // CRITICAL: use `newRoom` here, NOT the React state `room` which is still null at this point.
+        newRoom.remoteParticipants.forEach((participant) => {
           handleParticipantConnected(participant);
 
-          // Sync their existing tracks
+          // Sync their existing subscribed tracks
           participant.trackPublications.forEach((pub) => {
             if (pub.track && pub.isSubscribed) {
               handleTrackSubscribed(pub.track, pub as RemoteTrackPublication, participant);
@@ -232,6 +275,8 @@ export function useLiveKit(roomCode: string | null) {
       newRoom.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
       newRoom.off(RoomEvent.TrackSubscribed, handleTrackSubscribed);
       newRoom.off(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
+      newRoom.off(RoomEvent.TrackMuted, handleTrackMuted);
+      newRoom.off(RoomEvent.TrackUnmuted, handleTrackUnmuted);
       newRoom.off(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
       newRoom.off(RoomEvent.Disconnected, handleDisconnected);
       newRoom.off(RoomEvent.LocalTrackPublished, handleLocalTrackPublished);
