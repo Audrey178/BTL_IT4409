@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Track } from "livekit-client";
-import type { Room, LocalVideoTrack } from "livekit-client";
+import type { Room } from "livekit-client";
 import { useFilterStore } from "@/stores/filterStore";
 import { VideoFilterProcessor } from "@/filters/VideoFilterProcessor";
 import { useMediaStore } from "@/stores/mediaStore";
@@ -8,44 +8,27 @@ import { useMediaStore } from "@/stores/mediaStore";
 /**
  * useVideoFilter
  *
- * Applies AI/canvas-based video filters to the local camera stream using
- * LiveKit's `LocalVideoTrack.replaceTrack()` to swap the underlying
- * MediaStreamTrack on the existing SFU publication without disconnecting.
+ * Applies AI/canvas-based video filters and broadcasts them to remote peers.
  *
- * Architecture:
- *   ACTIVATION (none → filter):
- *     1. Grab the existing LiveKit LocalVideoTrack + its raw MediaStreamTrack.
- *     2. Start the Canvas AI pipeline using the raw track as input.
- *     3. Call `localVideoTrack.replaceTrack(canvasTrack)` — the SFU sender
- *        now forwards the canvas frames to all remote peers instantly.
- *     4. Update localStream in mediaStore for the local preview.
+ * Strategy:
+ *   1. Take the raw camera MediaStream from mediaStore.
+ *   2. Feed it into VideoFilterProcessor (Canvas AI pipeline).
+ *   3. Replace localStream in mediaStore → updates local preview tile.
+ *   4. ALSO replace the published LiveKit track via unpublish/publish so
+ *      remote peers receive the filtered canvas stream instead of raw camera.
  *
- *   DEACTIVATION (filter → none):
- *     1. Call `localVideoTrack.replaceTrack(originalRawTrack)` FIRST —
- *        the SFU sender is back on the raw camera. Do this BEFORE stopping
- *        the canvas pipeline so remote peers never see a black frame.
- *     2. Destroy the processor (now safe to stop the canvas track).
- *     3. Update localStream to show the raw camera again.
- *
- *   SWITCH (filter A → filter B):
- *     The canvas stream stays the same object (same captureStream output).
- *     Just load the new AI model; the existing replaced track carries new frames.
+ * On deactivation, restores the original camera track via setCameraEnabled().
  */
 export function useVideoFilter(room: Room | null) {
   const processor = useRef<VideoFilterProcessor | null>(null);
-
-  // The original raw camera MediaStreamTrack — kept alive while filter is active
-  // so we can replaceTrack() back to it on deactivation.
-  const originalRawTrackRef = useRef<MediaStreamTrack | null>(null);
-
-  // The LiveKit LocalVideoTrack instance — we call replaceTrack() on this.
-  const localVideoTrackRef = useRef<LocalVideoTrack | null>(null);
+  // Store the canvas MediaStreamTrack we published, so we can unpublish it later
+  const publishedCanvasTrackRef = useRef<MediaStreamTrack | null>(null);
 
   const activeFilter = useFilterStore((s) => s.activeFilter);
   const isSupported = useFilterStore((s) => s.isSupported);
   const prevFilter = useRef(activeFilter);
 
-  // One-time browser support check
+  // Browser support check (once on mount)
   useEffect(() => {
     if (!("WebAssembly" in window) || !HTMLCanvasElement.prototype.captureStream) {
       useFilterStore.getState().setIsSupported(false);
@@ -56,129 +39,107 @@ export function useVideoFilter(room: Room | null) {
     if (!isSupported) return;
 
     const handleFilterChange = async () => {
+      const mediaState = useMediaStore.getState();
 
       // ─────────────────────────────────────────────────────────────
       // ACTIVATE: none → some filter
       // ─────────────────────────────────────────────────────────────
       if (activeFilter !== "none" && prevFilter.current === "none") {
-        if (!room?.localParticipant) {
+        const rawStream = mediaState.localStream;
+        if (!rawStream || rawStream.getVideoTracks().length === 0) {
           prevFilter.current = activeFilter;
           return;
         }
-
-        const cameraPub = room.localParticipant.getTrackPublication(Track.Source.Camera);
-        const localVideoTrack = cameraPub?.videoTrack as LocalVideoTrack | undefined;
-
-        if (!localVideoTrack || !localVideoTrack.mediaStreamTrack) {
-          console.warn("[useVideoFilter] Camera publication not found, cannot activate filter.");
-          prevFilter.current = activeFilter;
-          return;
-        }
-
-        // Save the current raw track so we can restore it on deactivation.
-        // Important: save BEFORE calling replaceTrack, because after replaceTrack
-        // localVideoTrack.mediaStreamTrack points to the new canvas track.
-        const rawTrack = localVideoTrack.mediaStreamTrack;
-        originalRawTrackRef.current = rawTrack;
-        localVideoTrackRef.current = localVideoTrack;
 
         try {
-          // Build a MediaStream from the raw track to feed into the canvas pipeline
-          const rawStream = new MediaStream([rawTrack]);
-
-          // Grab the mic track (if available) to pass through the canvas pipeline audio
-          const micPub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
-          if (micPub?.track?.mediaStreamTrack) {
-            rawStream.addTrack(micPub.track.mediaStreamTrack);
-          }
-
           processor.current = new VideoFilterProcessor();
           await processor.current.initialize(rawStream);
           await processor.current.loadModels(activeFilter);
           processor.current.startProcessing();
 
           const processedStream = processor.current.getOutputStream();
-          const canvasVideoTrack = processedStream?.getVideoTracks()[0];
+          if (!processedStream) return;
 
-          if (!processedStream || !canvasVideoTrack) {
-            throw new Error("[useVideoFilter] Canvas pipeline produced no video track.");
-          }
+          const canvasVideoTrack = processedStream.getVideoTracks()[0];
 
-          // Replace the track inside the EXISTING SFU publication.
-          // This does NOT unpublish/republish — it just swaps the MediaStreamTrack
-          // at the RTCRtpSender level. Remote peers seamlessly receive canvas frames.
-          await localVideoTrack.replaceTrack(canvasVideoTrack);
-
-          // Update local preview to show the filtered stream
+          // 1. Update local preview immediately
           useMediaStore.getState().setLocalStream(processedStream);
 
+          // 2. Broadcast the canvas track to remote peers via LiveKit
+          if (room?.localParticipant && canvasVideoTrack) {
+            const localP = room.localParticipant;
+
+            // Unpublish the current raw camera track
+            const cameraPub = localP.getTrackPublication(Track.Source.Camera);
+            if (cameraPub?.track) {
+              await localP.unpublishTrack(cameraPub.track);
+            }
+
+            // Publish the canvas-processed track as the camera source
+            await localP.publishTrack(canvasVideoTrack, {
+              source: Track.Source.Camera,
+              name: "filtered-camera",
+            });
+
+            // Remember the canvas track so we can clean it up later
+            publishedCanvasTrackRef.current = canvasVideoTrack;
+          }
         } catch (error) {
-          console.error("[useVideoFilter] Failed to activate filter:", error);
-          // Teardown on failure
+          console.error("Failed to start video filter:", error);
           processor.current?.destroy();
           processor.current = null;
-          originalRawTrackRef.current = null;
-          localVideoTrackRef.current = null;
+          publishedCanvasTrackRef.current = null;
           useFilterStore.getState().setFilter("none");
         }
 
       // ─────────────────────────────────────────────────────────────
       // DEACTIVATE: some filter → none
-      //
-      // ORDER IS CRITICAL:
-      //   replaceTrack(rawTrack) FIRST  → SFU is back on raw camera
-      //   processor.destroy() AFTER     → now safe to stop canvas track
       // ─────────────────────────────────────────────────────────────
       } else if (activeFilter === "none" && prevFilter.current !== "none") {
-        const localVideoTrack = localVideoTrackRef.current;
-        const rawTrack = originalRawTrackRef.current;
+        // === DEACTIVATE FILTER ===
+        //
+        // ORDER IS CRITICAL:
+        // 1. Unpublish canvas track FIRST — before stopping it.
+        //    If we call destroy() first, the canvas MediaStreamTrack is stopped
+        //    while still published → LiveKit sends a black frame to remote peers.
+        // 2. Destroy the canvas pipeline (now safe to stop the track).
+        // 3. Re-enable real camera — LiveKit re-acquires and publishes fresh raw track.
+        //    The handleLocalTrackPublished event in useLiveKit.ts will automatically
+        //    update localStream in mediaStore once the new camera track is published.
 
-        // STEP 1: Restore the raw camera track in the RTCRtpSender FIRST.
-        // After this call, remote peers receive raw camera frames again.
-        // The canvas track is still "live" at this point (not yet stopped).
-        if (localVideoTrack && rawTrack && rawTrack.readyState === "live") {
-          try {
-            await localVideoTrack.replaceTrack(rawTrack);
-          } catch (err) {
-            console.error("[useVideoFilter] replaceTrack back to raw failed:", err);
+        if (room?.localParticipant) {
+          const localP = room.localParticipant;
+          const isCameraOff = useMediaStore.getState().isVideoMuted;
+
+          // Step 1: Unpublish the canvas track cleanly BEFORE stopping it
+          const canvasPub = localP.getTrackPublication(Track.Source.Camera);
+          if (canvasPub?.track) {
+            await localP.unpublishTrack(canvasPub.track);
           }
-        } else if (localVideoTrack) {
-          // Edge case: raw track ended (e.g. camera was toggled while filter active).
-          // Fall back to letting LiveKit re-acquire the camera.
-          console.warn("[useVideoFilter] Original raw track is gone, using setCameraEnabled fallback.");
-          await room?.localParticipant?.setCameraEnabled(false);
-          await room?.localParticipant?.setCameraEnabled(true);
+
+          // Step 2: Now safe to destroy the pipeline (stops canvas track)
+          processor.current?.destroy();
+          processor.current = null;
+          publishedCanvasTrackRef.current = null;
+
+          // Step 3: Re-enable the real camera if it's not muted
+          if (!isCameraOff) {
+            await localP.setCameraEnabled(true);
+          }
+        } else {
+          // No room available — just clean up the processor
+          processor.current?.destroy();
+          processor.current = null;
+          publishedCanvasTrackRef.current = null;
         }
-
-        // STEP 2: NOW safe to destroy the processor.
-        // processor.destroy() stops the canvas output track — this is OK because
-        // the RTCRtpSender no longer references it (we swapped back in step 1).
-        processor.current?.destroy();
-        processor.current = null;
-
-        // STEP 3: Update local preview to show the raw camera stream
-        if (rawTrack && rawTrack.readyState === "live") {
-          useMediaStore.getState().setLocalStream(new MediaStream([rawTrack]));
-        } else if (room?.localParticipant) {
-          // Build a fresh stream from whatever LiveKit has now
-          const tracks: MediaStreamTrack[] = [];
-          [Track.Source.Camera, Track.Source.Microphone].forEach((src) => {
-            const pub = room.localParticipant.getTrackPublication(src);
-            if (pub?.track?.mediaStreamTrack) tracks.push(pub.track.mediaStreamTrack);
-          });
-          if (tracks.length) useMediaStore.getState().setLocalStream(new MediaStream(tracks));
-        }
-
-        // Clear saved refs
-        originalRawTrackRef.current = null;
-        localVideoTrackRef.current = null;
 
       // ─────────────────────────────────────────────────────────────
-      // SWITCH: filter A → filter B
-      // The canvas MediaStream / replaceTrack'd track stays the same object.
-      // Just swap the AI model — new frames will appear in the existing sender.
+      // SWITCH: one AI filter → another AI filter
       // ─────────────────────────────────────────────────────────────
       } else if (activeFilter !== "none" && prevFilter.current !== "none") {
+        // The canvas stream object stays the same (same captureStream output).
+        // We only need to load the new model; the existing published track
+        // continues to carry the updated frames automatically.
         if (processor.current) {
           await processor.current.loadModels(activeFilter);
         }
@@ -191,15 +152,9 @@ export function useVideoFilter(room: Room | null) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFilter, isSupported, room]);
 
-  // Cleanup on unmount: restore raw track if filter is active, then destroy
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      const localVT = localVideoTrackRef.current;
-      const rawTrack = originalRawTrackRef.current;
-      if (localVT && rawTrack && rawTrack.readyState === "live") {
-        // Synchronous — replaceTrack is async but we do our best on unmount
-        localVT.replaceTrack(rawTrack).catch(() => {});
-      }
       processor.current?.destroy();
     };
   }, []);
