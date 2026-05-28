@@ -96,42 +96,49 @@ export function useVideoFilter(room: Room | null) {
       // DEACTIVATE: some filter → none
       // ─────────────────────────────────────────────────────────────
       } else if (activeFilter === "none" && prevFilter.current !== "none") {
-        // === DEACTIVATE FILTER ===
-        //
-        // ORDER IS CRITICAL:
-        // 1. Unpublish canvas track FIRST — before stopping it.
-        //    If we call destroy() first, the canvas MediaStreamTrack is stopped
-        //    while still published → LiveKit sends a black frame to remote peers.
-        // 2. Destroy the canvas pipeline (now safe to stop the track).
-        // 3. Re-enable real camera — LiveKit re-acquires and publishes fresh raw track.
-        //    The handleLocalTrackPublished event in useLiveKit.ts will automatically
-        //    update localStream in mediaStore once the new camera track is published.
 
         if (room?.localParticipant) {
           const localP = room.localParticipant;
-          const isCameraOff = useMediaStore.getState().isVideoMuted;
 
-          // Step 1: Unpublish the canvas track cleanly BEFORE stopping it
+          // STEP 1: Stop the canvas rendering loop (but keep tracks alive)
+          processor.current?.stopProcessing();
+
+          // STEP 2: Unpublish the canvas track WHILE IT IS STILL ALIVE.
+          //   If we destroy() first, the track dies and LiveKit gets confused
+          //   about its camera state, preventing re-acquisition.
           const canvasPub = localP.getTrackPublication(Track.Source.Camera);
           if (canvasPub?.track) {
             await localP.unpublishTrack(canvasPub.track);
           }
-
-          // Step 2: Now safe to destroy the pipeline (stops canvas track)
-          processor.current?.destroy();
-          processor.current = null;
           publishedCanvasTrackRef.current = null;
 
-          // Step 3: Re-enable the real camera if it's not muted
+          // STEP 3: Now safe to destroy the processor (frees WASM models, canvas, etc.)
+          processor.current?.destroy();
+          processor.current = null;
+
+          // STEP 4: Re-acquire the real camera via LiveKit.
+          //   Use a full off→on cycle to reset LiveKit's internal camera state
+          //   machine. A bare setCameraEnabled(true) can silently no-op if
+          //   LiveKit thinks the camera is still "enabled" from our publishTrack.
+          const isCameraOff = useMediaStore.getState().isVideoMuted;
           if (!isCameraOff) {
+            await localP.setCameraEnabled(false);
             await localP.setCameraEnabled(true);
+
+            // Sync local preview to the freshly published raw camera track
+            const rawPub = localP.getTrackPublication(Track.Source.Camera);
+            if (rawPub?.track) {
+              useMediaStore
+                .getState()
+                .setLocalStream(new MediaStream([rawPub.track.mediaStreamTrack]));
+            }
           }
         } else {
-          // No room available — just clean up the processor
+          // No room — just tear down the processor
           processor.current?.destroy();
           processor.current = null;
-          publishedCanvasTrackRef.current = null;
         }
+
 
       // ─────────────────────────────────────────────────────────────
       // SWITCH: one AI filter → another AI filter
