@@ -30,17 +30,17 @@ const io = new SocketIOServer(httpServer, {
 // Verify JWT token before accepting socket connection
 io.use(async (socket, next) => {
   const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.replace('Bearer ', '');
-  
+
   if (!token) {
     return next(new Error('Authentication error: No token provided'));
   }
-  
+
   try {
     const decoded = verifyAccessToken(token);
     if (!decoded || !decoded.userId) {
       return next(new Error('Authentication error: Invalid token'));
     }
-    
+
     try {
       const redis = getRedisClient();
       const isBlacklisted = await redis.get(`token:blacklist:access:${token}`);
@@ -54,7 +54,7 @@ io.use(async (socket, next) => {
     // Attach authenticated user data to socket object
     socket.userId = decoded.userId;
     socket.email = decoded.email;
-    
+
     next();
   } catch (error) {
     logger.error('Socket authentication error:', error.message);

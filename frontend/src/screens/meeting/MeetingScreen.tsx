@@ -8,6 +8,8 @@ import { useRecording } from "@/hooks/useRecording";
 import { useMediaStore } from "@/stores/mediaStore";
 import { useMeetingStore } from "@/stores/meetingStore";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { useVideoFilter } from "@/hooks/useVideoFilter";
+import { useFilterStore } from "@/stores/filterStore";
 import { ROOM_EVENTS, MEDIA_EVENTS } from "@/socket/events";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
@@ -89,6 +91,7 @@ export function MeetingScreen() {
   const navigate = useNavigate();
 
   const {
+    room,
     isConnected,
     toggleCamera: lkToggleCamera,
     toggleMicrophone: lkToggleMicrophone,
@@ -97,6 +100,9 @@ export function MeetingScreen() {
   } = useLiveKit(roomCode || null);
   useRoomEvents(roomCode || null);
   const { sendMessage } = useChatEvents(roomCode || null);
+  
+  useVideoFilter();
+
   const {
     isRecording,
     formattedDuration,
@@ -118,6 +124,10 @@ export function MeetingScreen() {
   } = useMeetingStore();
 
   const messageCount = useMeetingStore((s) => s.messages.length);
+  const colorFilter = useFilterStore((s) => s.colorFilter);
+  const activeAiFilter = useFilterStore((s) => s.activeFilter);
+  // When AI filter pipeline is active, canvas already handles color — don't double-apply CSS filter
+  const effectiveCssFilter = activeAiFilter !== "none" ? undefined : VIDEO_FILTERS[colorFilter].css;
 
   const [showChat, setShowChat] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -125,7 +135,6 @@ export function MeetingScreen() {
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [showStopRecordingDialog, setShowStopRecordingDialog] = useState(false);
   const [isEndingMeeting, setIsEndingMeeting] = useState(false);
-  const [selectedFilter, setSelectedFilter] = useState<VideoFilterKey>("original");
   const prevMessageCountRef = useRef(messageCount);
 
   // Track unread messages when chat panel is closed
@@ -350,6 +359,7 @@ export function MeetingScreen() {
                 isLocal={true}
                 isHost={isHost}
                 compact
+                filterCss={effectiveCssFilter}
               />
               {participants.map((p) => (
                 <VideoTile
@@ -373,6 +383,7 @@ export function MeetingScreen() {
               isVideoOff={isVideoMuted}
               isLocal={true}
               isHost={isHost}
+              filterCss={effectiveCssFilter}
             />
             {participants.map((p) => (
               <VideoTile
@@ -392,7 +403,7 @@ export function MeetingScreen() {
           )}
         </AnimatePresence>
         {/* Filters Panel */}
-        <FilterPanel showFilters={showFilters} setShowFilters={setShowFilters} selectedFilter={selectedFilter} setSelectedFilter={setSelectedFilter} />
+        <FilterPanel showFilters={showFilters} setShowFilters={setShowFilters} />
       </div>
 
       {/* Controls Bar */}
@@ -453,7 +464,7 @@ export function MeetingScreen() {
           <div className="absolute right-8 bottom-8 w-48 aspect-video rounded-2xl overflow-hidden border-2 border-primary shadow-2xl bg-stone-900">
             {/* Local Video Preview */}
             <div className={`absolute inset-0 w-full h-full transition-opacity duration-500 ${localStream && !isVideoMuted ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
-              {localStream && <SelfPreviewVideo stream={localStream} />}
+              {localStream && <SelfPreviewVideo stream={localStream} filterCss={effectiveCssFilter} />}
             </div>
             {/* Avatar Fallback */}
             <div className={`absolute inset-0 w-full h-full flex items-center justify-center transition-opacity duration-500 ${localStream && !isVideoMuted ? "opacity-0 pointer-events-none" : "opacity-100 pointer-events-auto"}`}>
@@ -508,23 +519,27 @@ function ScreenShareVideo({ stream }: { stream: MediaStream }) {
   return <video ref={videoRef} autoPlay playsInline className="w-full h-full object-contain bg-black" />;
 }
 
-function SelfPreviewVideo({ stream }: { stream: MediaStream }) {
+function SelfPreviewVideo({ stream, filterCss }: { stream: MediaStream, filterCss?: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream;
-      videoRef.current.play().catch(err => console.warn("Self preview play error:", err));
+    const el = videoRef.current;
+    if (!el) return;
+    if (el.srcObject !== stream) {
+      el.srcObject = stream;
+      el.play().catch(err => console.warn("Self preview play error:", err));
     }
-  }, [stream]);
+    // Apply CSS filter only when no AI filter is active (canvas handles it otherwise)
+    el.style.filter = filterCss && filterCss !== "none" ? filterCss : "";
+  }, [stream, filterCss]);
   return <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover -scale-x-100" />;
 }
 
 function VideoTile({
   name, stream, isMuted = false, isVideoOff = false,
-  isHost = false, isLocal = false, compact = false,
+  isHost = false, isLocal = false, compact = false, filterCss,
 }: {
   name: string; stream?: MediaStream | null; isMuted?: boolean;
-  isVideoOff?: boolean; isHost?: boolean; isLocal?: boolean; compact?: boolean;
+  isVideoOff?: boolean; isHost?: boolean; isLocal?: boolean; compact?: boolean; filterCss?: string;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -532,6 +547,9 @@ function VideoTile({
     if (videoRef.current) {
       // Always keep srcObject in sync — prevents stale dead-track when unpausing
       videoRef.current.srcObject = stream ?? null;
+      if (filterCss) {
+        videoRef.current.style.filter = filterCss;
+      }
       if (isVideoOff || !stream) {
         videoRef.current.pause();
       } else {
@@ -540,7 +558,7 @@ function VideoTile({
         });
       }
     }
-  }, [stream, isVideoOff]);
+  }, [stream, isVideoOff, filterCss]);
 
   return (
     <div className={`relative overflow-hidden bg-stone-900 shadow-sm group transition-all duration-500 flex flex-col justify-center items-center ${
