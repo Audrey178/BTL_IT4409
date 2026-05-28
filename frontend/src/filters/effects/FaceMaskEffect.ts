@@ -2,25 +2,32 @@ import { FaceLandmarkerResult, NormalizedLandmark } from "@mediapipe/tasks-visio
 import { FilterConfig, MaskConfig } from "./types";
 
 export const MASK_REGISTRY: Record<string, MaskConfig> = {
-  crown:    { src: "/masks/crown.png",    offsetX: 0, offsetY: -120, scale: 2.2, referenceWidth: 100 },
-  glasses:  { src: "/masks/glasses.png",  offsetX: 0, offsetY: -10,  scale: 2.0, referenceWidth: 100 },
-  mustache: { src: "/masks/mustache.png", offsetX: 0, offsetY: 40,   scale: 1.5, referenceWidth: 100 },
+  // scale = ratio of (desired mask width) relative to (inter-eye distance)
+  // e.g. scale=2.5 means mask will be 2.5× the inter-eye pixel distance wide
+  crown:    { src: "/masks/crown.png",    offsetX: 0, offsetY: -1.2, scale: 2.5, referenceWidth: 100 },
+  glasses:  { src: "/masks/glasses.png",  offsetX: 0, offsetY: 0.1,  scale: 2.2, referenceWidth: 100 },
+  mustache: { src: "/masks/mustache.png", offsetX: 0, offsetY: 0.8,  scale: 1.8, referenceWidth: 100 },
 };
 
 /**
  * FaceMaskEffect
  *
- * Draws PNG stickers on top of detected face landmarks.
+ * Draws PNG sticker overlays anchored to face landmarks.
  *
- * Key points:
- * - Canvas has un-mirrored video frame (mirror is done via CSS on <video>).
- * - MediaPipe landmark coordinates are in normalized [0,1] space matching the
- *   un-mirrored video → we multiply directly by canvas width/height.
- * - We use globalCompositeOperation = "source-over" (default) which correctly
- *   respects PNG alpha transparency.
- * - ctx.save()/restore() prevents filter or transform leaking between draws.
- * - We explicitly reset ctx.filter = "none" before drawing masks so the color
- *   CSS filter from Step 1 doesn't affect the sticker colors.
+ * Scaling strategy:
+ * - `faceWidth` = pixel distance between left-eye inner and right-eye inner corners.
+ *   This is a stable measure of how large the face appears in the frame.
+ * - `drawW = faceWidth * maskConfig.scale`
+ *   → mask width is directly proportional to face size, regardless of PNG resolution.
+ * - `drawH = drawW * (img.naturalHeight / img.naturalWidth)`
+ *   → maintains the PNG's original aspect ratio.
+ * - `offsetX/Y` in maskConfig are now in units of `faceWidth`, not pixels,
+ *   so they scale correctly with face size.
+ *
+ * Compositing:
+ * - ctx.filter = "none" prevents color filters from tinting the mask PNG.
+ * - ctx.globalCompositeOperation = "source-over" preserves PNG transparency.
+ * - ctx.save()/restore() isolates transforms per mask.
  */
 export class FaceMaskEffect {
   private maskImages: Map<string, HTMLImageElement> = new Map();
@@ -49,17 +56,21 @@ export class FaceMaskEffect {
     const landmarks = faceResult.faceLandmarks[0];
     const { width, height } = ctx.canvas;
 
-    // Convert normalized landmark to canvas pixel coordinates (no mirroring)
+    // Convert normalized [0,1] landmark to canvas pixel coordinates (no mirroring)
     const toCanvas = (lm: NormalizedLandmark) => ({
       x: lm.x * width,
       y: lm.y * height,
     });
 
-    // Use outer eye corners for a stable, wide face width measurement
-    const leftEye  = toCanvas(landmarks[33]);   // left eye inner
-    const rightEye = toCanvas(landmarks[263]);  // right eye inner
-    const faceWidth  = Math.hypot(rightEye.x - leftEye.x, rightEye.y - leftEye.y);
-    const faceAngle  = Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x);
+    // Landmark indices for inner eye corners (stable, tight measurement)
+    // 33  = left eye outer corner
+    // 263 = right eye outer corner
+    const leftEye   = toCanvas(landmarks[33]);
+    const rightEye  = toCanvas(landmarks[263]);
+
+    // faceWidth in canvas pixels = inter-eye distance
+    const faceWidth   = Math.hypot(rightEye.x - leftEye.x, rightEye.y - leftEye.y);
+    const faceAngle   = Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x);
     const faceCenterX = (leftEye.x + rightEye.x) / 2;
     const faceCenterY = (leftEye.y + rightEye.y) / 2;
 
@@ -68,27 +79,29 @@ export class FaceMaskEffect {
       if (!maskConfig) continue;
 
       const img = this.maskImages.get(maskId);
-      // Skip if image not loaded yet
       if (!img || !img.complete || img.naturalWidth === 0) continue;
 
       ctx.save();
 
-      // CRITICAL: Reset filter so CSS color filters don't tint the mask PNG
+      // Reset filter so color grading doesn't tint the PNG sticker
       ctx.filter = "none";
-
-      // CRITICAL: Ensure we're using normal compositing so PNG transparency works
+      // Normal alpha compositing so PNG transparency is respected
       ctx.globalCompositeOperation = "source-over";
       ctx.globalAlpha = 1.0;
 
-      // Move origin to face center, then rotate to align with face tilt
+      // Move origin to face center, then rotate to match face tilt
       ctx.translate(faceCenterX, faceCenterY);
       ctx.rotate(faceAngle);
 
-      const scale  = faceWidth / maskConfig.referenceWidth;
-      const drawW  = img.naturalWidth  * scale * maskConfig.scale;
-      const drawH  = img.naturalHeight * scale * maskConfig.scale;
-      const drawX  = maskConfig.offsetX * scale - drawW / 2;
-      const drawY  = maskConfig.offsetY * scale - drawH / 2;
+      // === CORRECTED SCALING ===
+      // drawW is a direct multiple of faceWidth (canvas pixels), not PNG pixels.
+      // This means the sticker grows/shrinks proportionally as the face moves closer/farther.
+      const drawW = faceWidth * maskConfig.scale;
+      const drawH = drawW * (img.naturalHeight / img.naturalWidth);
+
+      // offsetX/Y are also in units of faceWidth so they scale with the face.
+      const drawX = maskConfig.offsetX * faceWidth - drawW / 2;
+      const drawY = maskConfig.offsetY * faceWidth - drawH / 2;
 
       ctx.drawImage(img, drawX, drawY, drawW, drawH);
 

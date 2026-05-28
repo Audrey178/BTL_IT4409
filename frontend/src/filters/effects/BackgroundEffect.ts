@@ -5,11 +5,16 @@ import { FilterConfig } from "./types";
  * BackgroundEffect
  *
  * Compositing strategy (no mirroring in canvas):
- * 1. The main canvas has the raw (un-mirrored) video frame on it.
- * 2. MediaPipe segmentation mask coordinates match the raw video frame.
- * 3. We composite in-place using pixel manipulation on ImageData.
+ * - Canvas has the raw (un-mirrored) video frame.
+ * - MediaPipe mask coordinates match the raw video frame exactly.
+ * - Mirror effect is handled by CSS on the <video> element, NOT in canvas.
  *
- * Mirror effect is handled by CSS on the <video> element, NOT in canvas.
+ * MediaPipe selfie_segmenter categoryMask values:
+ *   0   = PERSON / foreground  (category index 0 = the only detected class)
+ *   255 = BACKGROUND           (all other pixels)
+ *
+ * Therefore: to replace the BACKGROUND, we apply the effect where mask[i] > 127.
+ *            to KEEP the person,         we skip   where mask[i] <= 127.
  */
 export class BackgroundEffect {
   private tempCanvas: HTMLCanvasElement;
@@ -53,31 +58,31 @@ export class BackgroundEffect {
       this.tempCanvas.height = height;
     }
 
-    // Mediapipe mask: 0 = background, 1 = person
+    // selfie_segmenter: 0 = person, 255 = background
+    // We check mask[i] > 127 to robustly detect background pixels.
     const mask = segResult.categoryMask.getAsUint8Array();
 
-    // Read the current canvas pixels (has the raw video frame, no mirroring)
+    // Read the current canvas pixels (raw video frame, no mirroring)
     const imageData = ctx.getImageData(0, 0, width, height);
     const pixels = imageData.data;
 
     if (config.activeFilter === "blur_bg") {
-      // Draw the raw video (un-mirrored, same as canvas) into tempCanvas with blur
+      // Draw the raw video (same coordinates as canvas) with blur into tempCanvas
       this.tempCtx.filter = `blur(${config.blurIntensity}px)`;
       this.tempCtx.clearRect(0, 0, width, height);
       this.tempCtx.drawImage(video, 0, 0, width, height);
       this.tempCtx.filter = "none";
       const blurredData = this.tempCtx.getImageData(0, 0, width, height).data;
 
-      // Replace background pixels with blurred version
-      // mask[i] === 0 → background pixel → replace with blurred
-      // mask[i] === 1 → person pixel → keep original
+      // mask[i] > 127 → background → replace with blurred version
+      // mask[i] <= 127 → person   → keep original canvas pixel
       for (let i = 0; i < mask.length; i++) {
-        if (mask[i] === 0) {
+        if (mask[i] > 127) {
           const pi = i * 4;
           pixels[pi]     = blurredData[pi];
           pixels[pi + 1] = blurredData[pi + 1];
           pixels[pi + 2] = blurredData[pi + 2];
-          // Keep alpha as-is
+          // Alpha channel unchanged
         }
       }
 
@@ -85,21 +90,24 @@ export class BackgroundEffect {
       try {
         const bgImg = await this.loadBgImage(config.virtualBgUrl);
 
-        // Draw background image cover-fit to tempCanvas
+        // Draw background image cover-fit into tempCanvas
         this.tempCtx.clearRect(0, 0, width, height);
 
-        const imgRatio    = bgImg.width / bgImg.height;
+        const imgRatio    = bgImg.naturalWidth / bgImg.naturalHeight;
         const canvasRatio = width / height;
         let drawW: number, drawH: number, drawX: number, drawY: number;
 
+        // Cover-fit: scale image so it fills the entire canvas, cropping if needed
         if (imgRatio > canvasRatio) {
+          // Image is wider than canvas → constrain by height
           drawH = height;
-          drawW = bgImg.width * (height / bgImg.height);
+          drawW = bgImg.naturalWidth * (height / bgImg.naturalHeight);
           drawX = (width - drawW) / 2;
           drawY = 0;
         } else {
+          // Image is taller than canvas → constrain by width
           drawW = width;
-          drawH = bgImg.height * (width / bgImg.width);
+          drawH = bgImg.naturalHeight * (width / bgImg.naturalWidth);
           drawX = 0;
           drawY = (height - drawH) / 2;
         }
@@ -107,9 +115,10 @@ export class BackgroundEffect {
         this.tempCtx.drawImage(bgImg, drawX, drawY, drawW, drawH);
         const bgData = this.tempCtx.getImageData(0, 0, width, height).data;
 
-        // Replace background pixels with virtual background image
+        // mask[i] > 127 → background → replace with virtual background image
+        // mask[i] <= 127 → person   → keep original canvas pixel
         for (let i = 0; i < mask.length; i++) {
-          if (mask[i] === 0) {
+          if (mask[i] > 127) {
             const pi = i * 4;
             pixels[pi]     = bgData[pi];
             pixels[pi + 1] = bgData[pi + 1];
