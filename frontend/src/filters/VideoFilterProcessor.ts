@@ -94,17 +94,13 @@ export class VideoFilterProcessor {
       const startProcess = performance.now();
       const config = useFilterStore.getState();
 
-      // Step 1: Draw source video or color-filtered video
+      // Step 1: Draw source video frame to canvas (NO mirroring here!)
+      // Mirroring is handled by CSS -scale-x-100 on the <video> element.
+      // Keeping canvas un-mirrored ensures MediaPipe mask/landmark coordinates
+      // align correctly with canvas pixel positions.
       this.ctx.save();
-      
-      // Apply color filter logic via CSS filter context
       const colorFilterString = this.colorEffect.getFilterString(config);
       this.ctx.filter = colorFilterString;
-      
-      // Mirror the video horizontally (as typical for front cameras)
-      this.ctx.translate(this.canvas.width, 0);
-      this.ctx.scale(-1, 1);
-      
       this.ctx.drawImage(this.sourceVideo, 0, 0, this.canvas.width, this.canvas.height);
       this.ctx.restore();
 

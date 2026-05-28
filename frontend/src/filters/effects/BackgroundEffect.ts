@@ -1,6 +1,16 @@
 import { ImageSegmenterResult } from "@mediapipe/tasks-vision";
 import { FilterConfig } from "./types";
 
+/**
+ * BackgroundEffect
+ *
+ * Compositing strategy (no mirroring in canvas):
+ * 1. The main canvas has the raw (un-mirrored) video frame on it.
+ * 2. MediaPipe segmentation mask coordinates match the raw video frame.
+ * 3. We composite in-place using pixel manipulation on ImageData.
+ *
+ * Mirror effect is handled by CSS on the <video> element, NOT in canvas.
+ */
 export class BackgroundEffect {
   private tempCanvas: HTMLCanvasElement;
   private tempCtx: CanvasRenderingContext2D;
@@ -36,42 +46,52 @@ export class BackgroundEffect {
     if (!segResult || !segResult.categoryMask) return;
 
     const { width, height } = ctx.canvas;
-    
-    // Ensure temp canvas matches main canvas dimensions
+
+    // Sync temp canvas dimensions
     if (this.tempCanvas.width !== width || this.tempCanvas.height !== height) {
       this.tempCanvas.width = width;
       this.tempCanvas.height = height;
     }
 
+    // Mediapipe mask: 0 = background, 1 = person
     const mask = segResult.categoryMask.getAsUint8Array();
+
+    // Read the current canvas pixels (has the raw video frame, no mirroring)
     const imageData = ctx.getImageData(0, 0, width, height);
     const pixels = imageData.data;
 
     if (config.activeFilter === "blur_bg") {
+      // Draw the raw video (un-mirrored, same as canvas) into tempCanvas with blur
       this.tempCtx.filter = `blur(${config.blurIntensity}px)`;
+      this.tempCtx.clearRect(0, 0, width, height);
       this.tempCtx.drawImage(video, 0, 0, width, height);
+      this.tempCtx.filter = "none";
       const blurredData = this.tempCtx.getImageData(0, 0, width, height).data;
 
+      // Replace background pixels with blurred version
+      // mask[i] === 0 → background pixel → replace with blurred
+      // mask[i] === 1 → person pixel → keep original
       for (let i = 0; i < mask.length; i++) {
-        if (mask[i] === 0) { // Background
+        if (mask[i] === 0) {
           const pi = i * 4;
-          pixels[pi] = blurredData[pi];
+          pixels[pi]     = blurredData[pi];
           pixels[pi + 1] = blurredData[pi + 1];
           pixels[pi + 2] = blurredData[pi + 2];
+          // Keep alpha as-is
         }
       }
+
     } else if (config.activeFilter === "virtual_bg" && config.virtualBgUrl) {
       try {
         const bgImg = await this.loadBgImage(config.virtualBgUrl);
-        // Draw the background image to fill the canvas
-        // First, clear
+
+        // Draw background image cover-fit to tempCanvas
         this.tempCtx.clearRect(0, 0, width, height);
-        
-        // Calculate crop to cover canvas
-        const imgRatio = bgImg.width / bgImg.height;
+
+        const imgRatio    = bgImg.width / bgImg.height;
         const canvasRatio = width / height;
-        let drawW, drawH, drawX, drawY;
-        
+        let drawW: number, drawH: number, drawX: number, drawY: number;
+
         if (imgRatio > canvasRatio) {
           drawH = height;
           drawW = bgImg.width * (height / bgImg.height);
@@ -87,16 +107,17 @@ export class BackgroundEffect {
         this.tempCtx.drawImage(bgImg, drawX, drawY, drawW, drawH);
         const bgData = this.tempCtx.getImageData(0, 0, width, height).data;
 
+        // Replace background pixels with virtual background image
         for (let i = 0; i < mask.length; i++) {
-          if (mask[i] === 0) { // Background
+          if (mask[i] === 0) {
             const pi = i * 4;
-            pixels[pi] = bgData[pi];
+            pixels[pi]     = bgData[pi];
             pixels[pi + 1] = bgData[pi + 1];
             pixels[pi + 2] = bgData[pi + 2];
           }
         }
       } catch (err) {
-        console.error("Error drawing virtual background", err);
+        console.error("Error drawing virtual background:", err);
       }
     }
 
