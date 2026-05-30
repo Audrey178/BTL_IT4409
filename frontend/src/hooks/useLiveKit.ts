@@ -298,6 +298,30 @@ export function useLiveKit(roomCode: string | null) {
         const videoTrack = localStream.getVideoTracks()[0];
         if (!videoTrack) return;
 
+        // ── GUARD: Detect premature trigger (AI model still loading) ─────────
+        // When activeFilter is first set, this effect fires immediately — but
+        // useVideoFilter may still be loading AI models (takes 100–500ms).
+        // During that window, localStream is still the RAW camera stream, not
+        // the canvas stream. Publishing the raw camera MST under the canvas
+        // track's identity causes a double-publish storm:
+        //   Trigger 1 (activeFilter change): raw track published as "canvas"
+        //   Trigger 2 (canvas stream ready): tries to publish over Trigger 1
+        //   → LiveKit SFU: "Cancelled publication by calling unpublish"
+        //   → NegotiationError: negotiation timed out
+        //
+        // Detection strategy: canvas.captureStream() tracks are NOT physical
+        // devices, so getSettings().deviceId is always undefined for them.
+        // Native hardware camera tracks always have a non-empty deviceId.
+        // If deviceId is present → this is still the raw camera track → wait.
+        const trackSettings = videoTrack.getSettings();
+        if (trackSettings.deviceId) {
+          // Raw camera track — AI pipeline has not emitted the canvas stream yet.
+          // Return now; the next localStream update (from useVideoFilter) will
+          // trigger this effect again with the actual canvas stream.
+          console.log('[LiveKit Filter] Waiting for canvas stream (AI loading)...');
+          return;
+        }
+
         // Idempotency guard: skip if this exact MST is already published
         if (publishedCustomTrackRef.current?.mediaStreamTrack === videoTrack) {
           return;
