@@ -23,6 +23,18 @@ export class VideoFilterProcessor {
   private TARGET_FRAME_TIME = 33; // ~30fps
   private lastFrameTime = 0;
 
+  /**
+   * Re-entrancy lock. Set to true while an async processFrame is in-flight.
+   * Any new rAF invocation that arrives while this is true is skipped immediately,
+   * preventing multiple async frames from sharing this.ctx simultaneously.
+   *
+   * Why a plain boolean is safe here: JS is single-threaded, so the assignment
+   * `isProcessingFrame = true` executes synchronously before the first `await`,
+   * making it impossible for another invocation to observe it as false until the
+   * current frame releases the lock in the finally block.
+   */
+  private isProcessingFrame = false;
+
   constructor() {
     this.sourceVideo = document.createElement("video");
     this.sourceVideo.autoplay = true;
@@ -109,6 +121,15 @@ export class VideoFilterProcessor {
           return; // schedules via finally
         }
 
+        // ── GUARD: Re-entrancy lock ─────────────────────────────────────────
+        // If the previous frame's AI processing (await bgEffect.apply / detect)
+        // is still running when rAF fires again, skip this frame entirely.
+        // Without this lock, multiple async processFrame calls interleave on the
+        // same this.ctx: frame A's mask gets composited onto frame B's pixels,
+        // producing the "invisible person" bug and WebGL lazy-init warnings.
+        if (this.isProcessingFrame) return; // schedules next frame via finally
+        this.isProcessingFrame = true;      // acquire lock (synchronous, before any await)
+
         const startProcess = performance.now();
         const config = useFilterStore.getState();
 
@@ -164,8 +185,10 @@ export class VideoFilterProcessor {
         console.error("[VideoFilterProcessor] Unexpected error in processFrame:", e);
       } finally {
         // ── IMMORTALITY GUARANTEE ──────────────────────────────────────────
-        // This block runs unconditionally after every early-return and catch.
-        // The render loop is NEVER broken, even if AI models crash.
+        // Release the re-entrancy lock BEFORE scheduling the next frame so
+        // the incoming rAF callback sees isProcessingFrame = false and can
+        // proceed normally. Order matters: unlock → then reschedule.
+        this.isProcessingFrame = false;
         if (this.animFrameId !== null) {
           this.animFrameId = requestAnimationFrame(processFrame);
         }
