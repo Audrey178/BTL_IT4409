@@ -58,7 +58,7 @@ export function useLiveKit(roomCode: string | null) {
 
     let cancelled = false;
     const newRoom = new Room({
-      adaptiveStream: true,
+      adaptiveStream: false, // MUST be false when manually managing MediaStream objects instead of using track.attach()
       dynacast: true,
       // Publish defaults — match existing quality expectations
       videoCaptureDefaults: {
@@ -75,6 +75,7 @@ export function useLiveKit(roomCode: string | null) {
     // ------- ROOM EVENT HANDLERS -------
 
     const handleParticipantConnected = (participant: RemoteParticipant) => {
+      console.log("[LiveKit Debug] Participant connected:", participant.identity, "camera:", participant.isCameraEnabled);
       addParticipant({
         id: participant.identity,
         fullName: participant.name || participant.identity,
@@ -93,6 +94,7 @@ export function useLiveKit(roomCode: string | null) {
       publication: RemoteTrackPublication,
       participant: RemoteParticipant,
     ) => {
+      console.log("[LiveKit Debug] Track subscribed:", publication.source, "for user:", participant.identity, "track:", track);
       if (!track) return;
 
       const mediaStream = new MediaStream([track.mediaStreamTrack]);

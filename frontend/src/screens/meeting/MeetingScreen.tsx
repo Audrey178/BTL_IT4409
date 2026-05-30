@@ -545,6 +545,7 @@ function VideoTile({
 
   useEffect(() => {
     if (videoRef.current) {
+      console.log("[LiveKit Debug] [VideoTile] Setting srcObject for", name, "| stream:", !!stream, "| isVideoOff:", isVideoOff, "| isLocal:", isLocal);
       // Always keep srcObject in sync — prevents stale dead-track when unpausing
       videoRef.current.srcObject = stream ?? null;
       if (filterCss) {
@@ -554,11 +555,11 @@ function VideoTile({
         videoRef.current.pause();
       } else {
         videoRef.current.play().catch((err) => {
-          console.warn("VideoTile play error:", err);
+          console.warn("[LiveKit Debug] VideoTile play error:", err);
         });
       }
     }
-  }, [stream, isVideoOff, filterCss]);
+  }, [stream, isVideoOff, filterCss, name, isLocal]);
 
   return (
     <div className={`relative overflow-hidden bg-stone-900 shadow-sm group transition-all duration-500 flex flex-col justify-center items-center ${
