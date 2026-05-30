@@ -339,6 +339,14 @@ export function useLiveKit(roomCode: string | null) {
           await localParticipant.publishTrack(canvasVideoTrack, {
             source: Track.Source.Camera,
             simulcast: false,
+            // Ép VP8 codec và cấp băng thông rõ ràng cho canvas stream.
+            // Canvas captureStream() không có metadata độ phân giải như hardware camera,
+            // nên SFU cần được chỉ định codec + encoding để mã hóa khung hình đúng.
+            videoCodec: 'vp8',
+            videoEncoding: {
+              maxBitrate: 1500000, // 1.5 Mbps
+              maxFramerate: 30,
+            },
           });
           publishedCustomTrackRef.current = canvasVideoTrack;
           console.log('[LiveKit Filter] Canvas track published to room.');
