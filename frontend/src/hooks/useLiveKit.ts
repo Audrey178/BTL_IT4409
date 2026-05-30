@@ -360,14 +360,19 @@ export function useLiveKit(roomCode: string | null) {
           }
         }
 
-        // 2. Re-enable native camera (only if user has not muted it)
         const isVideoMuted = useMediaStore.getState().isVideoMuted;
-        if (!isVideoMuted) {
+        const cameraPub = localParticipant.getTrackPublication(Track.Source.Camera);
+
+        // 2. Re-enable native camera only if user has not muted it AND the native
+        //    track is not already published (avoids double-publish after a no-op).
+        //    DO NOT call setLocalStream() here — that would create a new MediaStream
+        //    object on every run, changing the `localStream` dep and re-triggering
+        //    this very effect → infinite loop.
+        //    localStream is updated automatically by handleLocalTrackPublished when
+        //    setCameraEnabled(true) causes LiveKit to publish the native track.
+        if (!isVideoMuted && !cameraPub) {
           try {
             await localParticipant.setCameraEnabled(true);
-            // Rebuild the raw local stream so the local preview reflects native camera
-            const localMediaStream = buildLocalStream(localParticipant);
-            setLocalStream(localMediaStream);
           } catch (e) {
             console.error('[LiveKit Filter] Failed to restore native camera:', e);
           }
@@ -378,7 +383,7 @@ export function useLiveKit(roomCode: string | null) {
     handleFilterPublish();
   // localStream is intentionally in the deps: when useVideoFilter replaces
   // localStream with the canvas stream, this effect must fire to publish it.
-  }, [activeFilter, localStream, isConnected, setLocalStream]);
+  }, [activeFilter, localStream, isConnected]);
 
   // =========================================================================
   // MEDIA CONTROLS
