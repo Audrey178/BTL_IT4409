@@ -24,7 +24,15 @@ export interface ChatMessage {
   senderName: string;
   content: string;
   timestamp: string;
-  type?: 'text' | 'system' | 'file';
+  // message type: include text, system, file, sticker and emoji
+  type?: 'text' | 'system' | 'file' | 'sticker' | 'emoji';
+  attachment?: {
+    url: string;
+    filename: string;
+    storedFilename?: string;
+    mime_type?: string;
+    size?: number;
+  } | null;
 }
 
 export interface Room {

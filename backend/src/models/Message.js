@@ -165,14 +165,24 @@ const messageSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['text', 'system', 'file'],
+      enum: ['text', 'system', 'file', 'sticker', 'emoji'],
       default: 'text',
     },
     content: {
       type: String,
-      required: [true, 'Message content is required'],
+      default: null,
     },
-    file_url: {
+    // Attachment object for uploaded files/images/documents
+    attachment: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    // Sticker or emoji fields
+    sticker_id: {
+      type: String,
+      default: null,
+    },
+    emoji: {
       type: String,
       default: null,
     },
@@ -258,6 +268,11 @@ messageSchema.pre('validate', function (next) {
 
   if (this.type !== 'system' && !this.sender_id) {
     this.invalidate('sender_id', 'Sender ID is required');
+  }
+
+  // Require content for text/emoji messages
+  if ((this.type === 'text' || this.type === 'emoji') && !this.content) {
+    this.invalidate('content', 'Message content is required for text/emoji messages');
   }
 
   next();

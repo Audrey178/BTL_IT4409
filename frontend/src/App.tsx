@@ -13,7 +13,12 @@ import { MessagesScreen } from "./screens/messages/MessagesScreen";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { Toaster } from "sonner";
 import { useAuthStore } from "./stores/useAuthStore";
-import React from "react";
+import React, { useEffect } from "react";
+import useGlobalChatListener from "@/hooks/useGlobalChatListener";
+// Removed duplicate import of useGlobalChatListener
+import { connectSocket } from "@/socket/socket";
+import { useMessageStore } from "@/stores/messageStore";
+ // notifications removed - popup removed
 
 function AuthRoute({ children }: { children: React.ReactNode }) {
   const { accessToken } = useAuthStore();
@@ -24,9 +29,28 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  useGlobalChatListener();
+  const accessToken = useAuthStore((s) => s.accessToken);
+
+  useEffect(() => {
+    if (accessToken) {
+      try { connectSocket(); } catch (e) { console.warn('connectSocket failed', e); }
+    }
+    const ms = useMessageStore;
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    window.__incrementUnread = (convId: string) => {
+      try {
+        ms.getState().incrementUnread(convId);
+      } catch (e) {
+        console.warn('increment failed', e);
+      }
+    };
+  }, [accessToken]);
+
   return (
     <>
-      <Toaster richColors />
+      <Toaster richColors position="bottom-right" />
       <BrowserRouter>
         <Routes>
           <Route path="signup" element={<AuthRoute><SignupScreen /></AuthRoute>} />

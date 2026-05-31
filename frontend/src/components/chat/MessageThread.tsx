@@ -60,6 +60,60 @@ export function MessageThread({
 }: MessageThreadProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
+  const renderMessageBody = (message: ChatMessage) => {
+    const attachment = (message as ChatMessage & { attachment?: any }).attachment;
+    const parsedAttachment = (() => {
+      if (attachment && typeof attachment === "object" && attachment.url) {
+        return attachment;
+      }
+
+      if (typeof message.content === "string") {
+        try {
+          const parsed = JSON.parse(message.content);
+          if (parsed && typeof parsed === "object" && parsed.url) {
+            return parsed;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      return null;
+    })();
+
+    if (message.type === "file" || parsedAttachment) {
+      const fileUrl = parsedAttachment?.url || (typeof message.content === "string" && /^https?:\/\//i.test(message.content) ? message.content : null);
+      const fileName = parsedAttachment?.filename || parsedAttachment?.name || parsedAttachment?.storedFilename || message.content;
+      const isImage = Boolean(
+        parsedAttachment?.mime_type?.startsWith("image/") ||
+        (fileUrl && /\.(png|jpe?g|gif|webp|bmp|svg)(\?.*)?$/i.test(String(fileUrl)))
+      );
+
+      if (fileUrl) {
+        return (
+          <div className="flex flex-col gap-2">
+            {isImage ? (
+              <a href={fileUrl} target="_blank" rel="noreferrer">
+                <img src={fileUrl} alt={fileName as string} className="max-h-56 rounded-2xl object-cover border border-outline-variant/10" />
+              </a>
+            ) : null}
+            <a href={fileUrl} target="_blank" rel="noreferrer" className="underline break-all font-medium">
+              {fileName}
+            </a>
+          </div>
+        );
+      }
+
+      return <span className="italic">Attachment</span>;
+    }
+
+    if (message.type === "emoji") {
+      return <span className="text-2xl leading-none">{message.content}</span>;
+    }
+
+    return <p className="text-body-base whitespace-pre-wrap break-words">{message.content}</p>;
+  };
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, typing?.userId]);
@@ -276,7 +330,7 @@ export function MessageThread({
                       Forwarded
                     </p>
                   ) : null}
-                  <p className="text-body-base whitespace-pre-wrap break-words">{message.content}</p>
+                  {renderMessageBody(message)}
                   {message.isEdited ? (
                     <button
                       type="button"

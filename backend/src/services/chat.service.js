@@ -156,7 +156,10 @@ class ChatService {
         sender_name: user.full_name,
         sender_avatar: user.avatar || null,
         type: data.type || MESSAGE_TYPE.TEXT,
-        content: content.substring(0, 5000),
+        content: content ? content.substring(0, 5000) : null,
+        attachment: data.attachment || null,
+        sticker_id: data.stickerId || null,
+        emoji: data.emoji || null,
         client_id: data.clientId || null,
         reply_to_message_id: replyMessage?._id || null,
         reply_snapshot: await this.buildReplySnapshot(replyMessage),
@@ -293,7 +296,10 @@ class ChatService {
         sender_name: user.full_name,
         sender_avatar: user.avatar || null,
         type: data.type || MESSAGE_TYPE.TEXT,
-        content: content.substring(0, 5000),
+        content: content ? content.substring(0, 5000) : null,
+        attachment: data.attachment || null,
+        sticker_id: data.stickerId || null,
+        emoji: data.emoji || null,
         client_id: data.clientId || null,
         reply_to_message_id: replyMessage?._id || null,
         reply_snapshot: await this.buildReplySnapshot(replyMessage),
@@ -1601,6 +1607,48 @@ class ChatService {
 
   mapMessage(message, viewerId = null) {
     const raw = typeof message.toJSON === 'function' ? message.toJSON() : message;
+    const parsedAttachment = (() => {
+      if (raw.attachment && typeof raw.attachment === 'object' && raw.attachment.url) {
+        return raw.attachment;
+      }
+
+      if (typeof raw.content === 'string') {
+        try {
+          const parsed = JSON.parse(raw.content);
+          if (parsed && typeof parsed === 'object' && parsed.url) {
+            return parsed;
+          }
+        } catch {
+          // not JSON
+        }
+      }
+
+      return null;
+    })();
+
+    const normalizedContent = (() => {
+      if (raw.type === MESSAGE_TYPE.FILE) {
+        // If sender provided a caption in content, prefer that. Otherwise fall back to attachment filename/url.
+        if (raw.content && typeof raw.content === 'string' && raw.content.trim()) {
+          // If content is a JSON-encoded attachment, ignore it and prefer attachment filename
+          try {
+            const maybe = JSON.parse(raw.content);
+            if (maybe && typeof maybe === 'object' && !maybe.url && raw.content.trim()) {
+              return raw.content;
+            }
+          } catch {
+            return raw.content;
+          }
+        }
+        if (parsedAttachment) {
+          return parsedAttachment.filename || parsedAttachment.name || parsedAttachment.storedFilename || parsedAttachment.url || '';
+        }
+        return raw.content || '';
+      }
+
+      return raw.content;
+    })();
+
     const delivery = (raw.delivery || []).map((entry) => ({
       userId: entry.user_id?.toString?.() || entry.user_id?.toString?.(),
       status: entry.status,
@@ -1612,6 +1660,8 @@ class ChatService {
     return {
       ...raw,
       messageId: raw._id?.toString(),
+      // Preserve original DB client_id for backward compatibility
+      client_id: raw.client_id || null,
       conversationId: raw.conversation_id?.toString?.() || null,
       senderId: raw.sender_id?.toString(),
       senderName: raw.sender_name,
@@ -1619,6 +1669,8 @@ class ChatService {
       clientId: raw.client_id || null,
       version: raw.version || 1,
       status: raw.status || MESSAGE_STATUS.SENT,
+      content: normalizedContent,
+      attachment: parsedAttachment,
       delivery,
       ownReceipt,
       editedAt: raw.edited_at || null,

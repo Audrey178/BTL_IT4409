@@ -83,11 +83,25 @@ export const handleChatSend = async (io, socket, data = {}) => {
 
     if (conversationId) {
       const result = await chatService.sendConversationMessage(conversationId, user, data);
+      // Ensure emitted message contains clientId for clients to match optimistic messages
+      try {
+        const cid = data.clientId || data.client_id || result.message.clientId || null;
+        result.message.clientId = cid;
+        // Also include legacy snake_case for clients that expect it
+        result.message.client_id = cid;
+      } catch (e) {}
+      console.log('chat.send conversation result', { conversationId, clientId: data.clientId || data.client_id || null, message: result.message });
       io.to(getConversationChannel(conversationId)).emit(SOCKET_EVENTS.CHAT_RECEIVE, result.message);
       return;
     }
 
     const result = await chatService.sendRoomMessage(roomCode, user, data);
+    try {
+      const cid = data.clientId || data.client_id || result.message.clientId || null;
+      result.message.clientId = cid;
+      result.message.client_id = cid;
+    } catch (e) {}
+    console.log('chat.send room result', { roomCode, clientId: data.clientId || data.client_id || null, message: result.message });
     io.to(roomCode).emit(SOCKET_EVENTS.CHAT_RECEIVE, result.message);
   } catch (error) {
     logger.error('handleChatSend error:', error);

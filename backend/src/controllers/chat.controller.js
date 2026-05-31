@@ -2,6 +2,7 @@ import chatService from '../services/chat.service.js';
 import { SOCKET_EVENTS, HTTP_STATUS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
 import { Room } from '../models/index.js';
+import { buildUploadUrl } from '../middlewares/upload.js';
 
 const getScopeChannel = async (message) => {
   if (message?.conversationId) {
@@ -188,6 +189,28 @@ class ChatController {
         success: false,
         message: error.message,
       });
+    }
+  }
+
+  async uploadAttachment(req, res) {
+    try {
+      if (!req.file) {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'No file uploaded' });
+      }
+
+      const url = buildUploadUrl(req, req.file);
+      const fileMeta = {
+        url,
+        filename: req.file.originalname,
+        storedFilename: req.file.filename,
+        mime_type: req.file.mimetype,
+        size: req.file.size,
+      };
+
+      res.status(HTTP_STATUS.OK).json({ success: true, file: fileMeta });
+    } catch (error) {
+      logger.error('Upload attachment error:', error);
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_ERROR).json({ success: false, message: error.message });
     }
   }
 

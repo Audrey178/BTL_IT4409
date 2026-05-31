@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import {
   chatService,
   type ChatMessage,
@@ -108,7 +109,19 @@ export function useMessages(conversationId: string | null) {
       if (message.conversationId !== conversationId) {
         return;
       }
+      if (message.senderId && message.senderId === authUser?._id) {
+        upsertMessage(conversationId, message);
+        return;
+      }
+
+      const preview = message.type === "file"
+        ? message.attachment?.filename || message.content || "Attachment"
+        : message.type === "emoji"
+          ? message.content
+          : message.content;
+
       if (message.messageId && conversationId !== activeConversationId) {
+        toast.info(`Tin nhắn mới từ ${message.senderName}`, { description: preview });
         incrementUnread(conversationId);
       }
       upsertMessage(conversationId, message);
@@ -225,17 +238,20 @@ export function useMessages(conversationId: string | null) {
     };
   }, [activeConversationId, authUser?._id, conversationId, incrementUnread, markMessageDeleted, removeConversation, setTyping, updateMessageReceipt, upsertMessage]);
 
-  const sendMessage = async (content: string) => {
-    if (!conversationId || !authUser?._id || !content.trim()) {
-      return;
-    }
+  type SendPayload = string | { type: import("@/services/chatService").MessageType; content?: string; file?: any; stickerId?: string; emoji?: string };
 
+  const sendMessage = async (payload: SendPayload) => {
+    if (!conversationId || !authUser?._id) return;
+    if (typeof payload === 'string' && !payload.trim()) return;
+
+    // handle edit mode
     if (composerState.mode === "edit" && composerState.message) {
       const current = composerState.message;
       const previousContent = current.content;
+      const newContent = typeof payload === 'string' ? payload.trim() : payload.content || '';
       const optimistic: ChatMessage = {
         ...current,
-        content: content.trim(),
+        content: newContent,
         version: current.version + 1,
         isEdited: true,
         editCount: current.editCount + 1,
@@ -245,7 +261,7 @@ export function useMessages(conversationId: string | null) {
       upsertMessage(conversationId, optimistic);
       try {
         const result = await chatService.editMessage(current.messageId, {
-          content: content.trim(),
+          content: newContent,
           expectedVersion: current.version,
           clientMutationId: buildClientId(),
         });
@@ -258,7 +274,16 @@ export function useMessages(conversationId: string | null) {
       return;
     }
 
-    const clientId = buildClientId();
+    const clientId = typeof payload === 'string' ? buildClientId() : ((payload as any).clientId || buildClientId());
+
+    // Build optimistic message based on payload
+    const messageType = typeof payload === 'string' ? 'text' : payload.type || 'text';
+    const contentStr = typeof payload === 'string'
+      ? payload.trim()
+      : payload.type === 'file'
+        ? (payload.file?.filename || payload.file?.url || '')
+        : (payload.content || '');
+
     const optimistic: ChatMessage = {
       _id: clientId,
       messageId: clientId,
@@ -269,11 +294,12 @@ export function useMessages(conversationId: string | null) {
       senderId: authUser._id,
       senderName: authUser.full_name,
       senderAvatar: authUser.avatar || null,
-      type: "text",
-      content: content.trim(),
+      type: messageType as any,
+      content: contentStr,
       timestamp: new Date().toISOString(),
       status: "sent",
       clientId,
+      attachment: typeof payload === 'string' ? null : (payload.type === 'file' ? payload.file || null : null),
       version: 1,
       delivery: [],
       ownReceipt: null,
@@ -302,13 +328,34 @@ export function useMessages(conversationId: string | null) {
     };
 
     upsertMessage(conversationId, optimistic);
-    getSocket().emit(CHAT_EVENTS.SEND, {
+
+    // Emit socket send with appropriate type and payload
+    const sendPayload: any = {
       conversationId,
-      content: content.trim(),
-      type: "text",
       clientId,
       replyToMessageId: composerState.mode === "reply" ? composerState.message?.messageId || null : null,
-    });
+    };
+
+    if (typeof payload === 'string') {
+      sendPayload.content = payload.trim();
+      sendPayload.type = 'text';
+    } else {
+      sendPayload.type = payload.type || 'text';
+      if (payload.type === 'file' && payload.file) {
+        // include file metadata as attachment
+        sendPayload.attachment = payload.file;
+        // file messages do not carry captions in this flow
+        sendPayload.content = payload.file.filename || payload.file.url || '';
+      } else if (payload.type === 'sticker') {
+        sendPayload.content = payload.stickerId || '';
+      } else if (payload.type === 'emoji') {
+        sendPayload.content = payload.emoji || '';
+      } else {
+        sendPayload.content = payload.content || '';
+      }
+    }
+
+    getSocket().emit(CHAT_EVENTS.SEND, sendPayload);
     setComposerState({ mode: "default", message: null });
   };
 

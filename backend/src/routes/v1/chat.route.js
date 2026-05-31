@@ -2,6 +2,7 @@ import express from 'express';
 import chatController from '../../controllers/chat.controller.js';
 import { authenticate } from '../../middlewares/auth.js';
 import { messageValidation, paginationValidation, validate, validateQuery } from '../../utils/validators.js';
+import { uploadChatFile } from '../../middlewares/upload.js';
 
 const router = express.Router();
 
@@ -57,6 +58,9 @@ router.get(
   validateQuery(paginationValidation.chatHistory),
   chatController.getConversationMessages.bind(chatController)
 );
+
+// Upload chat attachment (single file field named 'file')
+router.post('/uploads/chat', uploadChatFile, chatController.uploadAttachment.bind(chatController));
 
 router.post(
   '/conversations/:conversationId/messages',

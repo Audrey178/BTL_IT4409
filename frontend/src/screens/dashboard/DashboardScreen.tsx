@@ -67,7 +67,7 @@ export function DashboardScreen() {
             </Button>
             <Button
               onClick={() => setShowScheduleDialog(true)}
-              className="h-14 px-8 bg-gradient-to-r from-primary to-primary-container text-white rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3 group"
+              className="h-14 px-8 bg-linear-to-r from-primary to-primary-container text-white rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3 group"
             >
               <Plus
                 className="group-hover:rotate-90 transition-transform"

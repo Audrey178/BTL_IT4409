@@ -427,7 +427,7 @@ export function MeetingScreen() {
             active={isScreenSharing}
             className={isScreenSharing
               ? "px-8 w-auto bg-error text-white shadow-lg shadow-error/20 border-none"
-              : "px-8 w-auto bg-gradient-to-r from-primary to-primary-container text-white shadow-lg shadow-primary/20 border-none"
+              : "px-8 w-auto bg-linear-to-r from-primary to-primary-container text-white shadow-lg shadow-primary/20 border-none"
             }
           />
           <ControlButton icon={<MessageSquare size={24} />} onClick={handleToggleChat} active={showChat} badge={unreadCount > 0 ? unreadCount : undefined} />
@@ -583,7 +583,7 @@ function VideoTile({
         compact ? "text-[10px]" : "text-sm bottom-6 left-6 gap-3 px-4 py-2"
       }`}>
         {isMuted ? <MicOff size={compact ? 10 : 14} className="text-error" /> : <Mic size={compact ? 10 : 14} />}
-        <span className="font-bold truncate max-w-[80px]">{name}</span>
+        <span className="font-bold truncate max-w-20">{name}</span>
         {isHost && !compact && (
           <span className="text-[10px] text-primary-fixed bg-primary/20 px-1.5 py-0.5 rounded">Host</span>
         )}

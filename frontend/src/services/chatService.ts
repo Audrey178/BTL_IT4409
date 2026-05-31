@@ -1,7 +1,7 @@
 import api from "@/lib/axios";
 
 export type MessageStatus = "sent" | "delivered" | "read";
-export type MessageType = "text" | "system" | "file";
+export type MessageType = "text" | "system" | "file" | "sticker" | "emoji";
 export type ReactionEmoji = "like" | "love" | "haha" | "wow" | "sad" | "angry";
 export type CallType = "audio" | "video";
 export type CallStatus = "ended" | "missed" | "rejected";
@@ -76,6 +76,13 @@ export interface ChatMessage {
   content: string;
   timestamp: string;
   status: MessageStatus;
+  attachment?: {
+    url: string;
+    filename: string;
+    storedFilename?: string;
+    mime_type?: string;
+    size?: number;
+  } | null;
   clientId?: string | null;
   version: number;
   delivery: MessageDelivery[];
@@ -336,5 +343,11 @@ export const chatService = {
     options?: { page?: number; limit?: number }
   ): Promise<RoomChatHistoryResponse> => {
     return chatService.getChatHistory(roomCode, options);
+  },
+  
+  uploadChatFile: async (form: FormData): Promise<{ success: boolean; file: { url: string; filename: string; mime_type: string; size: number } }> => {
+    // Do NOT set Content-Type header manually; let axios set the multipart boundary.
+    const res = await api.post(`/chat/uploads/chat`, form);
+    return res.data;
   },
 };

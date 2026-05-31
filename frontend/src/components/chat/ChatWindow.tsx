@@ -15,7 +15,7 @@ interface ChatWindowProps {
   hasMore: boolean;
   composerState: ComposerState;
   onLoadMore: () => void;
-  onSendMessage: (content: string) => void | Promise<void>;
+  onSendMessage: (content: string | { type: import("@/services/chatService").MessageType; content?: string; file?: any; stickerId?: string; emoji?: string }) => void | Promise<void>;
   onTypingChange: (typing: boolean) => void;
   onCancelComposerState: () => void;
   onReplyMessage: (message: ChatMessage) => void;

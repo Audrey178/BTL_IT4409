@@ -30,6 +30,7 @@ interface MeetingState {
   clearParticipantScreenStream: (userId: string) => void;
 
   addMessage: (msg: ChatMessage) => void;
+  upsertMessage: (msg: ChatMessage) => void;
   setMessages: (msgs: ChatMessage[]) => void;
   prependMessages: (msgs: ChatMessage[]) => void;
 
@@ -75,6 +76,17 @@ export const useMeetingStore = create<MeetingState>((set) => ({
     return state;
   }),
 
+  setMessages: (msgs) => set({ messages: msgs }),
+  prependMessages: (msgs) => set((state) => ({ messages: [...msgs, ...state.messages] })),
+
+  setWaitingList: (list) => set({ waitingList: list }),
+  addWaitingUser: (user) => set((state) => {
+    if (!state.waitingList.find(u => u.id === user.id)) {
+      return { waitingList: [...state.waitingList, user] };
+    }
+    return state;
+  }),
+
   removeParticipant: (userId) => set((state) => ({
     participants: state.participants.filter(p => p.id !== userId),
     // Clear screen sharing if the user who left was sharing
@@ -105,17 +117,92 @@ export const useMeetingStore = create<MeetingState>((set) => ({
     )
   })),
 
-  addMessage: (msg) => set((state) => ({ messages: [...state.messages, msg] })),
-  setMessages: (msgs) => set({ messages: msgs }),
-  prependMessages: (msgs) => set((state) => ({ messages: [...msgs, ...state.messages] })),
+  addMessage: (msg) => set((state) => {
+    // Deduplicate: avoid adding if same id/messageId or clientId already exists
+    console.log('[MEETING STORE] addMessage incoming', { id: (msg as any).id, messageId: (msg as any).messageId, clientId: (msg as any).clientId || (msg as any).client_id });
+    const exists = state.messages.some((m) => {
+      if (!m) return false;
+      if (m.id && msg.id && m.id === msg.id) return true;
+      if ((m as any).messageId && (msg as any).messageId && (m as any).messageId === (msg as any).messageId) return true;
+      const mc = (m as any).clientId || (m as any).client_id || null;
+      const nc = (msg as any).clientId || (msg as any).client_id || null;
+      if (mc && nc && mc === nc) return true;
+      return false;
+    });
+    console.log('[MEETING STORE] addMessage exists?', exists, 'currentCount', state.messages.length);
+    if (exists) return state;
 
-  setWaitingList: (list) => set({ waitingList: list }),
-
-  addWaitingUser: (user) => set((state) => {
-    if (!state.waitingList.find(u => u.id === user.id)) {
-      return { waitingList: [...state.waitingList, user] };
+    // Defensive merge: sometimes server may omit clientId but attachment storedFilename/url matches
+    // Try to find an existing optimistic message by attachment stored filename or url and merge instead of appending
+    try {
+      const incomingStored = (msg as any).attachment?.storedFilename || (msg as any).attachment?.stored_filename || null;
+      const incomingUrl = (msg as any).attachment?.url || null;
+      if (incomingStored || incomingUrl) {
+        const idx = state.messages.findIndex((m) => {
+          if (!m) return false;
+          const mStored = (m as any).attachment?.storedFilename || (m as any).attachment?.stored_filename || null;
+          const mUrl = (m as any).attachment?.url || null;
+          if (incomingStored && mStored && incomingStored === mStored) return true;
+          if (incomingUrl && mUrl && incomingUrl === mUrl) return true;
+          return false;
+        });
+        if (idx !== -1) {
+          const next = [...state.messages];
+          next[idx] = { ...next[idx], ...msg };
+          try { console.log('[MEETING STORE] after addMessage (merged by attachment) snapshot', next.map(m => ({ id: (m as any).id || (m as any).messageId || null, clientId: (m as any).clientId || (m as any).client_id || null, content: m.content }))); } catch(e) {}
+          return { messages: next };
+        }
+      }
+    } catch (e) {
+      // ignore merge errors
     }
-    return state;
+    const nextMessages = [...state.messages, msg];
+    try {
+      console.log('[MEETING STORE] after addMessage snapshot', nextMessages.map(m => ({ id: (m as any).id || (m as any).messageId || null, clientId: (m as any).clientId || (m as any).client_id || null, content: m.content })));
+    } catch (e) {}
+    return { messages: nextMessages };
+  }),
+  upsertMessage: (msg) => set((state) => {
+    console.log('[MEETING STORE] upsertMessage incoming', { id: (msg as any).id, messageId: (msg as any).messageId, clientId: (msg as any).clientId || (msg as any).client_id, attachment: (msg as any).attachment });
+    const incomingId = (msg as any).id || null;
+    const incomingMessageId = (msg as any).messageId || (msg as any)._id || null;
+    const incomingClientId = (msg as any).clientId || (msg as any).client_id || null;
+    const incomingStoredFilename = (msg as any).attachment?.storedFilename || (msg as any).attachment?.stored_filename || null;
+
+    const existingIndex = state.messages.findIndex((m) => {
+      if (!m) return false;
+      const mId = (m as any).id || null;
+      const mMessageId = (m as any).messageId || (m as any)._id || null;
+      const mClientId = (m as any).clientId || (m as any).client_id || null;
+      const mStoredFilename = (m as any).attachment?.storedFilename || (m as any).attachment?.stored_filename || null;
+
+      if (incomingId && mId && incomingId === mId) return true;
+      if (incomingMessageId && mMessageId && incomingMessageId === mMessageId) return true;
+      if (incomingClientId && mClientId && incomingClientId === mClientId) return true;
+      if (incomingStoredFilename && mStoredFilename && incomingStoredFilename === mStoredFilename) return true;
+      return false;
+    });
+    console.log('[MEETING STORE] upsert existingIndex', existingIndex, 'currentCount', state.messages.length);
+
+    if (existingIndex !== -1) {
+      const next = [...state.messages];
+      const existing = next[existingIndex];
+      // Preserve optimistic local id to avoid React key churn which can look like duplicates.
+      const preserveId = (existing as any).id && String((existing as any).id).startsWith('local-');
+      const merged = { ...existing, ...msg };
+      if (preserveId) {
+        merged.id = (existing as any).id;
+        // also preserve _id if present on optimistic message
+        if ((existing as any)._id) (merged as any)._id = (existing as any)._id;
+      }
+      next[existingIndex] = merged;
+      try { console.log('[MEETING STORE] after upsert (merged) snapshot', next.map(m => ({ id: (m as any).id || (m as any).messageId || null, clientId: (m as any).clientId || (m as any).client_id || null, content: m.content }))); } catch(e) {}
+      return { messages: next };
+    }
+
+    const appended = [...state.messages, msg];
+    try { console.log('[MEETING STORE] after upsert (append) snapshot', appended.map(m => ({ id: (m as any).id || (m as any).messageId || null, clientId: (m as any).clientId || (m as any).client_id || null, content: m.content }))); } catch(e) {}
+    return { messages: appended };
   }),
 
   removeWaitingUser: (userId) => set((state) => ({

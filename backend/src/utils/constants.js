@@ -125,6 +125,8 @@ export const MESSAGE_TYPE = {
   TEXT: 'text',
   SYSTEM: 'system',
   FILE: 'file',
+  STICKER: 'sticker',
+  EMOJI: 'emoji',
 };
 
 export const MESSAGE_REACTION = {

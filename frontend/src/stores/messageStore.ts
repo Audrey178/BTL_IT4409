@@ -76,7 +76,14 @@ const replaceByMessageId = (messages: ChatMessage[], nextMessage: ChatMessage) =
   }
 
   const copy = [...messages];
-  copy[existingIndex] = { ...copy[existingIndex], ...nextMessage };
+  const existing = copy[existingIndex];
+  const preserveLocal = (existing && ((existing._id && String(existing._id).startsWith('local-')) || (existing.messageId && String(existing.messageId).startsWith('local-'))));
+  const merged = { ...existing, ...nextMessage };
+  if (preserveLocal) {
+    if (existing._id) merged._id = existing._id;
+    if (existing.messageId) merged.messageId = existing.messageId;
+  }
+  copy[existingIndex] = merged;
   return copy;
 };
 
