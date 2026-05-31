@@ -105,6 +105,13 @@ export const roomValidation = {
       .required()
       .messages({ 'any.required': 'Room code is required' }),
   }),
+
+  transferHost: Joi.object({
+    new_host_id: Joi.string()
+      .trim()
+      .required()
+      .messages({ 'any.required': 'new_host_id is required' }),
+  }),
 };
 
 // ============================================================================

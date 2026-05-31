@@ -176,6 +176,41 @@ router.post('/:roomCode/kick/:userId', roomController.kickUser.bind(roomControll
 
 /**
  * @swagger
+ * /rooms/{roomCode}/transfer-host:
+ *   put:
+ *     summary: Transfer host role to another joined participant (host only)
+ *     tags: [Rooms]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: roomCode
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - new_host_id
+ *             properties:
+ *               new_host_id:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Host transferred successfully
+ */
+router.put(
+	'/:roomCode/transfer-host',
+	validate(roomValidation.transferHost),
+	roomController.transferHost.bind(roomController)
+);
+
+/**
+ * @swagger
  * /rooms/{roomCode}/end:
  *   put:
  *     summary: End room (host only)

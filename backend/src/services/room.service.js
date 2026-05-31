@@ -374,6 +374,88 @@ class RoomService {
   }
 
   /**
+   * Transfer host role to another joined participant
+   * @param {String} roomCode
+   * @param {String} currentHostId
+   * @param {String} newHostId
+   * @returns {Object}
+   */
+  async transferHost(roomCode, currentHostId, newHostId) {
+    try {
+      const normalizedCode = roomCode ? roomCode.toUpperCase() : '';
+      const room = await Room.findOne({ room_code: normalizedCode });
+      if (!room) {
+        const error = new Error(ERROR_MESSAGES.ROOM_NOT_FOUND);
+        error.statusCode = HTTP_STATUS.NOT_FOUND;
+        throw error;
+      }
+
+      if (!newHostId) {
+        const error = new Error(ERROR_MESSAGES.NEW_HOST_REQUIRED);
+        error.statusCode = HTTP_STATUS.BAD_REQUEST;
+        throw error;
+      }
+
+      if (room.host_id.toString() !== currentHostId.toString()) {
+        const error = new Error(ERROR_MESSAGES.NOT_HOST);
+        error.statusCode = HTTP_STATUS.FORBIDDEN;
+        throw error;
+      }
+
+      if (currentHostId.toString() === newHostId.toString()) {
+        const error = new Error(ERROR_MESSAGES.HOST_TRANSFER_SELF);
+        error.statusCode = HTTP_STATUS.CONFLICT;
+        throw error;
+      }
+
+      const joinedMember = await RoomMember.findOne({
+        room_id: room._id,
+        user_id: newHostId,
+        status: USER_STATUS.JOINED,
+      });
+
+      if (!joinedMember) {
+        const error = new Error(ERROR_MESSAGES.NEW_HOST_NOT_IN_ROOM);
+        error.statusCode = HTTP_STATUS.CONFLICT;
+        throw error;
+      }
+
+      const previousHostId = room.host_id.toString();
+      room.host_id = newHostId;
+      room.updated_at = new Date();
+      await room.save();
+
+      const redis = getRedisClient();
+      await redis.set(`room:${normalizedCode}:host`, newHostId.toString());
+      const newHostSocketId = await redis.get(`user:${newHostId.toString()}:socket`);
+      if (newHostSocketId) {
+        await redis.set(`room:${normalizedCode}:host:socket`, newHostSocketId);
+      } else {
+        await redis.del(`room:${normalizedCode}:host:socket`);
+      }
+
+      await this.logEvent(
+        room._id,
+        newHostId,
+        EVENT_TYPE.HOST_TRANSFERRED,
+        `Host transferred from ${previousHostId} to ${newHostId}`
+      );
+
+      logger.info(`✓ Host transferred in room ${normalizedCode}: ${previousHostId} -> ${newHostId}`);
+
+      return {
+        success: true,
+        room: this.mapRoom(room),
+        previousHostId,
+        newHostId: newHostId.toString(),
+      };
+    } catch (error) {
+      logger.error('Transfer host error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * End room
    * @param {String} roomCode
    * @param {String} hostId

@@ -27,6 +27,8 @@ export function useRoomEvents(roomCode: string | null) {
     clearParticipantScreenStream,
     setStatus,
     setIsRecording,
+    setHostId,
+    setIsHost,
     reset,
   } = useMeetingStore();
 
@@ -144,6 +146,25 @@ export function useRoomEvents(roomCode: string | null) {
       navigate('/', { replace: true });
     };
 
+    const handleHostTransferred = (data: {
+      previousHostId?: string;
+      newHostId?: string;
+      message?: string;
+    }) => {
+      if (!data.newHostId) return;
+      setHostId(data.newHostId);
+      setIsHost(data.newHostId === myUserId);
+
+      if (data.newHostId === myUserId) {
+        toast.success('You are now the host');
+        return;
+      }
+
+      if (data.previousHostId === myUserId) {
+        toast.info('Host role has been transferred');
+      }
+    };
+
     // =========================================================================
     // MEDIA STATE SYNC — mic/cam toggle + screen share
     // =========================================================================
@@ -180,6 +201,7 @@ export function useRoomEvents(roomCode: string | null) {
     socket.on(ROOM_EVENTS.USER_REJECTED, handleUserRejected);
     socket.on(ROOM_EVENTS.FORCE_DISCONNECT, handleForceDisconnect);
     socket.on(ROOM_EVENTS.ENDED, handleRoomEnded);
+    socket.on(ROOM_EVENTS.HOST_TRANSFERRED, handleHostTransferred);
     socket.on(MEDIA_EVENTS.TOGGLE, handleMediaToggle);
     socket.on(MEDIA_EVENTS.SCREEN_SHARE_START, handleScreenShareStart);
     socket.on(MEDIA_EVENTS.SCREEN_SHARE_STOP, handleScreenShareStop);
@@ -191,6 +213,7 @@ export function useRoomEvents(roomCode: string | null) {
       socket.off(ROOM_EVENTS.USER_REJECTED, handleUserRejected);
       socket.off(ROOM_EVENTS.FORCE_DISCONNECT, handleForceDisconnect);
       socket.off(ROOM_EVENTS.ENDED, handleRoomEnded);
+      socket.off(ROOM_EVENTS.HOST_TRANSFERRED, handleHostTransferred);
       socket.off(MEDIA_EVENTS.TOGGLE, handleMediaToggle);
       socket.off(MEDIA_EVENTS.SCREEN_SHARE_START, handleScreenShareStart);
       socket.off(MEDIA_EVENTS.SCREEN_SHARE_STOP, handleScreenShareStop);
@@ -207,6 +230,8 @@ export function useRoomEvents(roomCode: string | null) {
     setScreenSharingUserId,
     clearParticipantScreenStream,
     setStatus,
+    setHostId,
+    setIsHost,
     reset,
     navigate,
   ]);

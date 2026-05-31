@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import {
   Mic, MicOff, Video, VideoOff, ScreenShare, ScreenShareOff,
   PhoneOff, MessageSquare, Users, X, XCircle,
-  Sparkles, CheckCircle2, Badge, MonitorUp, Circle,
+  Sparkles, CheckCircle2, Badge, MonitorUp, Circle, Crown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -135,6 +135,7 @@ export function MeetingScreen() {
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [showStopRecordingDialog, setShowStopRecordingDialog] = useState(false);
   const [isEndingMeeting, setIsEndingMeeting] = useState(false);
+  const [transferringHostId, setTransferringHostId] = useState<string | null>(null);
   const prevMessageCountRef = useRef(messageCount);
 
   // Track unread messages when chat panel is closed
@@ -196,6 +197,25 @@ export function MeetingScreen() {
       setIsEndingMeeting(false);
     }
   }, [isEndingMeeting, roomCode, socket, lkDisconnect, cleanupMedia, reset, navigate]);
+
+  const handleTransferHost = useCallback(
+    async (newHostId: string, participantName: string) => {
+      if (!roomCode || !isHost || transferringHostId) return;
+
+      const confirmed = window.confirm(`Transfer host role to ${participantName}?`);
+      if (!confirmed) return;
+
+      setTransferringHostId(newHostId);
+      try {
+        await roomService.transferHost(roomCode, newHostId);
+      } catch (error) {
+        toast.error('Failed to transfer host role');
+      } finally {
+        setTransferringHostId(null);
+      }
+    },
+    [roomCode, isHost, transferringHostId]
+  );
 
   // Is someone (me or remote) sharing screen?
   const isAnyoneSharing = isScreenSharing || !!screenSharingUserId;
@@ -271,6 +291,11 @@ export function MeetingScreen() {
   const screenShareStream = isMeSharing
     ? screenStream
     : sharingParticipant?.screenStream || null;
+
+  const totalVisibleTiles = participants.length + 1;
+  const meetingGridStyle = totalVisibleTiles >= 4
+    ? { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gridTemplateRows: 'repeat(2, minmax(0, 1fr))' }
+    : { gridTemplateColumns: `repeat(${totalVisibleTiles}, minmax(0, 1fr))` };
 
   return (
     <div className="h-screen flex flex-col bg-surface overflow-hidden">
@@ -369,13 +394,19 @@ export function MeetingScreen() {
                   isMuted={p.isAudioMuted}
                   isVideoOff={p.isVideoMuted}
                   compact
+                  showTransferAction={isHost}
+                  isTransferPending={transferringHostId === p.id}
+                  onTransferHost={() => handleTransferHost(p.id, p.fullName)}
                 />
               ))}
             </div>
           </div>
         ) : (
           /* ============ NORMAL GRID MODE ============ */
-          <div className={`flex-1 grid grid-cols-2 grid-rows-2 gap-4 transition-all duration-500 ${showChat ? "mr-0" : ""}`}>
+          <div
+            className={`flex-1 grid gap-4 transition-all duration-500 ${showChat ? "mr-0" : ""}`}
+            style={meetingGridStyle}
+          >
             <VideoTile
               name={authUser?.full_name || "You"}
               stream={localStream}
@@ -392,6 +423,9 @@ export function MeetingScreen() {
                 stream={p.stream}
                 isMuted={p.isAudioMuted}
                 isVideoOff={p.isVideoMuted}
+                showTransferAction={isHost}
+                isTransferPending={transferringHostId === p.id}
+                onTransferHost={() => handleTransferHost(p.id, p.fullName)}
               />
             ))}
           </div>
@@ -427,12 +461,12 @@ export function MeetingScreen() {
             active={isScreenSharing}
             className={isScreenSharing
               ? "px-8 w-auto bg-error text-white shadow-lg shadow-error/20 border-none"
-              : "px-8 w-auto bg-gradient-to-r from-primary to-primary-container text-white shadow-lg shadow-primary/20 border-none"
+              : "px-8 w-auto bg-linear-to-r from-primary to-primary-container text-white shadow-lg shadow-primary/20 border-none"
             }
           />
           <ControlButton icon={<MessageSquare size={24} />} onClick={handleToggleChat} active={showChat} badge={unreadCount > 0 ? unreadCount : undefined} />
           <ControlButton icon={<Users size={24} />} badge={participants.length + 1} />
-          {isHost && <WaitingRoomPanel roomCode={roomCode} waitingList={waitingList} removeWaitingUser={removeWaitingUser} />}
+          {isHost && roomCode && <WaitingRoomPanel roomCode={roomCode} waitingList={waitingList} removeWaitingUser={removeWaitingUser} />}
           <ControlButton icon={<Sparkles size={24} />} onClick={() => setShowFilters(!showFilters)} active={showFilters} />
           {isHost && (
             <ControlButton
@@ -537,9 +571,11 @@ function SelfPreviewVideo({ stream, filterCss }: { stream: MediaStream, filterCs
 function VideoTile({
   name, stream, isMuted = false, isVideoOff = false,
   isHost = false, isLocal = false, compact = false, filterCss,
+  showTransferAction = false, isTransferPending = false, onTransferHost,
 }: {
   name: string; stream?: MediaStream | null; isMuted?: boolean;
   isVideoOff?: boolean; isHost?: boolean; isLocal?: boolean; compact?: boolean; filterCss?: string;
+  showTransferAction?: boolean; isTransferPending?: boolean; onTransferHost?: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -583,11 +619,23 @@ function VideoTile({
         compact ? "text-[10px]" : "text-sm bottom-6 left-6 gap-3 px-4 py-2"
       }`}>
         {isMuted ? <MicOff size={compact ? 10 : 14} className="text-error" /> : <Mic size={compact ? 10 : 14} />}
-        <span className="font-bold truncate max-w-[80px]">{name}</span>
+        <span className="font-bold truncate max-w-20">{name}</span>
         {isHost && !compact && (
           <span className="text-[10px] text-primary-fixed bg-primary/20 px-1.5 py-0.5 rounded">Host</span>
         )}
       </div>
+
+      {showTransferAction && !isLocal && onTransferHost && (
+        <button
+          type="button"
+          onClick={onTransferHost}
+          disabled={isTransferPending}
+          className="absolute top-3 right-3 px-3 py-1.5 rounded-full bg-black/45 text-white border border-white/15 text-[11px] font-semibold flex items-center gap-1.5 hover:bg-black/65 disabled:opacity-60"
+        >
+          <Crown size={12} />
+          {isTransferPending ? 'Transferring...' : 'Make host'}
+        </button>
+      )}
     </div>
   );
 }
