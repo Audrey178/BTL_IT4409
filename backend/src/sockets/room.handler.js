@@ -286,11 +286,14 @@ export const handleApproveUser = async (io, socket, data) => {
 /**
  * Xử lý Host từ chối người tham gia
  * 
+ * io được truyền từ index.js để có thể emit tới rejected user
+ * 
+ * @param {Object} io - Socket.IO server instance
  * @param {Object} socket - Socket.IO socket instance
  * @param {Object} data - { roomCode, memberId }
  * @returns {Promise<void>}
  */
-export const handleRejectUser = async (socket, data) => {
+export const handleRejectUser = async (io, socket, data) => {
   try {
     const { roomCode, memberId } = data;
     const redis = getRedisClient();
@@ -323,11 +326,14 @@ export const handleRejectUser = async (socket, data) => {
     const rejectedUserId = member.user_id.toString();
     const rejectedSocketId = await redis.get(`user:${rejectedUserId}:socket`);
     if (rejectedSocketId) {
-      socket.to(rejectedSocketId).emit(SOCKET_EVENTS.ROOM_USER_REJECTED, {
+      io.to(rejectedSocketId).emit(SOCKET_EVENTS.ROOM_USER_REJECTED, {
         memberId,
         userId: rejectedUserId,
         message: 'Yêu cầu vào phòng đã bị từ chối',
       });
+      logger.info(`📤 Đã notify rejected user ${rejectedUserId} qua socket ${rejectedSocketId}`);
+    } else {
+      logger.warn(`⚠️  Không tìm thấy socket của user ${rejectedUserId} để gửi rejection`);
     }
 
     logger.info(`❌ Host từ chối người dùng vào phòng ${roomCode}`);

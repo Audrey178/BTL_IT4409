@@ -81,7 +81,6 @@ export function ScheduleMeetingDialog({ open, onOpenChange, onScheduled }: Sched
           max_participants: maxParticipants,
         },
       });
-
       if (res.success && res.room) {
         setCreatedRoomCode(res.room.room_code);
         toast.success('Meeting scheduled successfully!');
