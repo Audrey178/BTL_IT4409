@@ -19,10 +19,57 @@ export const ROOM_EVENTS = {
 
 
 export const CHAT_EVENTS = {
+  SUBSCRIBE: 'chat:subscribe',
+  UNSUBSCRIBE: 'chat:unsubscribe',
   SEND: 'chat:send',
   RECEIVE: 'chat:receive',
+  CONVERSATION_UPDATED: 'chat:conversation_updated',
   SYSTEM_ALERT: 'chat:system_alert',
   HISTORY: 'chat:history',
+  DELIVERED: 'chat:delivered',
+  READ: 'chat:read',
+  RECEIPT: 'chat:receipt',
+  RECEIPT_UPDATED: 'chat:receipt_updated',
+  TYPING: 'chat:typing',
+  TYPING_STOP: 'chat:typing_stop',
+  DELETED: 'chat:deleted',
+  EDIT: 'chat:edit',
+  DELETE: 'chat:delete',
+  FORWARD: 'chat:forward',
+  MESSAGE_UPDATED: 'chat:message_updated',
+  MESSAGE_DELETED: 'chat:message_deleted',
+  MESSAGE_HIDDEN: 'chat:message_hidden',
+  REACTION_ADD: 'chat:reaction:add',
+  REACTION_REMOVE: 'chat:reaction:remove',
+  REACTION_UPDATED: 'chat:reaction_updated',
+} as const;
+
+export const PRESENCE_EVENTS = {
+  SUBSCRIBE: 'presence:subscribe',
+  UNSUBSCRIBE: 'presence:unsubscribe',
+  SNAPSHOT: 'presence:snapshot',
+  ONLINE: 'presence:online',
+  OFFLINE: 'presence:offline',
+} as const;
+
+export const CALL_EVENTS = {
+  START: 'call:start',
+  RINGING: 'call:ringing',
+  ACCEPT: 'call:accept',
+  ACCEPTED: 'call:accepted',
+  REJECT: 'call:reject',
+  REJECTED: 'call:rejected',
+  CANCEL: 'call:cancel',
+  MISSED: 'call:missed',
+  END: 'call:end',
+  ENDED: 'call:ended',
+  ERROR: 'call:error',
+} as const;
+
+export const WEBRTC_EVENTS = {
+  OFFER: 'webrtc:offer',
+  ANSWER: 'webrtc:answer',
+  ICE_CANDIDATE: 'webrtc:ice_candidate',
 } as const;
 
 export const MEDIA_EVENTS = {

@@ -49,9 +49,48 @@ export const SOCKET_EVENTS = {
   WEBRTC_ICE_CANDIDATE: 'webrtc:ice_candidate',
 
   // Chat events
+  CHAT_SUBSCRIBE: 'chat:subscribe',
+  CHAT_UNSUBSCRIBE: 'chat:unsubscribe',
   CHAT_SEND: 'chat:send',
   CHAT_RECEIVE: 'chat:receive',
+  CHAT_CONVERSATION_UPDATED: 'chat:conversation_updated',
   CHAT_HISTORY: 'chat:history',
+  CHAT_DELIVERED: 'chat:delivered',
+  CHAT_READ: 'chat:read',
+  CHAT_RECEIPT: 'chat:receipt',
+  CHAT_RECEIPT_UPDATED: 'chat:receipt_updated',
+  CHAT_TYPING: 'chat:typing',
+  CHAT_TYPING_STOP: 'chat:typing_stop',
+  CHAT_DELETED: 'chat:deleted',
+  CHAT_EDIT: 'chat:edit',
+  CHAT_DELETE: 'chat:delete',
+  CHAT_FORWARD: 'chat:forward',
+  CHAT_MESSAGE_UPDATED: 'chat:message_updated',
+  CHAT_MESSAGE_DELETED: 'chat:message_deleted',
+  CHAT_MESSAGE_HIDDEN: 'chat:message_hidden',
+  CHAT_REACTION_ADD: 'chat:reaction:add',
+  CHAT_REACTION_REMOVE: 'chat:reaction:remove',
+  CHAT_REACTION_UPDATED: 'chat:reaction_updated',
+
+  // Presence events
+  PRESENCE_SUBSCRIBE: 'presence:subscribe',
+  PRESENCE_UNSUBSCRIBE: 'presence:unsubscribe',
+  PRESENCE_SNAPSHOT: 'presence:snapshot',
+  PRESENCE_ONLINE: 'presence:online',
+  PRESENCE_OFFLINE: 'presence:offline',
+
+  // Call events
+  CALL_START: 'call:start',
+  CALL_RINGING: 'call:ringing',
+  CALL_ACCEPT: 'call:accept',
+  CALL_ACCEPTED: 'call:accepted',
+  CALL_REJECT: 'call:reject',
+  CALL_REJECTED: 'call:rejected',
+  CALL_CANCEL: 'call:cancel',
+  CALL_MISSED: 'call:missed',
+  CALL_END: 'call:end',
+  CALL_ENDED: 'call:ended',
+  CALL_ERROR: 'call:error',
 
   // Media events
   MEDIA_TOGGLE: 'media:toggle',
@@ -88,6 +127,35 @@ export const MESSAGE_TYPE = {
   FILE: 'file',
 };
 
+export const MESSAGE_REACTION = {
+  LIKE: 'like',
+  LOVE: 'love',
+  HAHA: 'haha',
+  WOW: 'wow',
+  SAD: 'sad',
+  ANGRY: 'angry',
+};
+
+export const MESSAGE_STATUS = {
+  SENT: 'sent',
+  DELIVERED: 'delivered',
+  READ: 'read',
+};
+
+export const CALL_TYPE = {
+  AUDIO: 'audio',
+  VIDEO: 'video',
+};
+
+export const CALL_STATUS = {
+  RINGING: 'ringing',
+  ACCEPTED: 'accepted',
+  REJECTED: 'rejected',
+  MISSED: 'missed',
+  ENDED: 'ended',
+  FAILED: 'failed',
+};
+
 export const EVENT_TYPE = {
   ROOM_CREATED: 'room_created',
   USER_JOINED: 'user_joined',
@@ -107,5 +175,8 @@ export default {
   ROOM_STATUS,
   USER_STATUS,
   MESSAGE_TYPE,
+  MESSAGE_STATUS,
+  CALL_TYPE,
+  CALL_STATUS,
   EVENT_TYPE,
 };

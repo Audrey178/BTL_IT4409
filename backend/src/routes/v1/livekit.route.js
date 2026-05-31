@@ -10,7 +10,7 @@
  */
 
 import express from 'express';
-import { generateToken } from '../../controllers/livekit.controller.js';
+import { generateCallToken, generateToken } from '../../controllers/livekit.controller.js';
 import { authenticate } from '../../middlewares/auth.js';
 
 const router = express.Router();
@@ -55,5 +55,6 @@ const router = express.Router();
  *         description: Room not found
  */
 router.post('/token', authenticate, generateToken);
+router.post('/call-token', authenticate, generateCallToken);
 
 export default router;
