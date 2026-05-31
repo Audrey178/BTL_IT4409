@@ -22,6 +22,43 @@ import logger from '../utils/logger.js';
 import recordingService from '../services/recording.service.js';
 
 /**
+ * Helper: Fetch existing participants in a room (batch query optimization)
+ * Prevents N+1 query problem by fetching all members in one query
+ * 
+ * @param {string} roomCode - Room code
+ * @param {Object} roomId - Room MongoDB ID
+ * @param {string} excludeUserId - User ID to exclude from results
+ * @returns {Promise<Array>} Array of {userId, userName} objects
+ */
+const getExistingParticipants = async (roomCode, roomId, excludeUserId) => {
+  const redis = getRedisClient();
+  const memberIds = await redis.sMembers(`room:${roomCode}:members`);
+  
+  if (memberIds.length === 0) return [];
+  
+  // Filter out the excluded user
+  const filteredMemberIds = memberIds.filter(mId => mId !== excludeUserId);
+  
+  if (filteredMemberIds.length === 0) return [];
+  
+  // Batch fetch all RoomMembers with user details in ONE query (not N queries)
+  const roomMembers = await RoomMember.find({
+    room_id: roomId,
+    user_id: { $in: filteredMemberIds },
+  })
+    .populate('user_id', 'full_name email')
+    .lean();
+  
+  // Convert to required format
+  return roomMembers
+    .filter(rm => rm && rm.user_id)
+    .map(rm => ({
+      userId: rm.user_id._id.toString(),
+      userName: rm.user_id.full_name,
+    }));
+};
+
+/**
  * Xử lý sự kiện người dùng yêu cầu vào phòng
  * 
  * @param {Object} socket - Socket.IO socket instance
@@ -88,22 +125,8 @@ export const handleRoomJoin = async (socket, data) => {
       socket.join(roomCode);
       await redis.set(`room:${roomCode}:host:socket`, socket.id);
 
-      // Lấy existing participants
-      const memberIds = await redis.sMembers(`room:${roomCode}:members`);
-      const existingParticipants = [];
-      for (const mId of memberIds) {
-        if (mId === userId) continue;
-        const rm = await RoomMember.findOne({
-          room_id: room._id,
-          user_id: mId,
-        }).populate('user_id', 'full_name email');
-        if (rm && rm.user_id) {
-          existingParticipants.push({
-            userId: rm.user_id._id.toString(),
-            userName: rm.user_id.full_name,
-          });
-        }
-      }
+      // Lấy existing participants (batch query - không N+1)
+      const existingParticipants = await getExistingParticipants(roomCode, room._id, userId);
 
       socket.emit(SOCKET_EVENTS.ROOM_USER_JOINED, {
         success: true,
@@ -131,22 +154,8 @@ export const handleRoomJoin = async (socket, data) => {
       // ====================================================================
       // KHÔNG CẦN DUYỆT: join room namespace ngay
       // ====================================================================
-      // Lấy existing participants TRƯỚC khi join room
-      const memberIds = await redis.sMembers(`room:${roomCode}:members`);
-      const existingParticipants = [];
-      for (const mId of memberIds) {
-        if (mId === userId) continue;
-        const rm = await RoomMember.findOne({
-          room_id: room._id,
-          user_id: mId,
-        }).populate('user_id', 'full_name email');
-        if (rm && rm.user_id) {
-          existingParticipants.push({
-            userId: rm.user_id._id.toString(),
-            userName: rm.user_id.full_name,
-          });
-        }
-      }
+      // Lấy existing participants TRƯỚC khi join room (batch query - không N+1)
+      const existingParticipants = await getExistingParticipants(roomCode, room._id, userId);
 
       // Thêm vào members set + join room
       await redis.sAdd(`room:${roomCode}:members`, userId);
@@ -228,22 +237,8 @@ export const handleApproveUser = async (io, socket, data) => {
       approvedSocket = io.sockets.sockets.get(approvedSocketId);
     }
 
-    // 2. Lấy danh sách existing participants TRƯỚC khi thêm approved user
-    const memberIds = await redis.sMembers(`room:${roomCode}:members`);
-    const existingParticipants = [];
-    for (const mId of memberIds) {
-      if (mId === approvedUserId) continue;
-      const rm = await RoomMember.findOne({
-        room_id: room?._id,
-        user_id: mId,
-      }).populate('user_id', 'full_name email');
-      if (rm && rm.user_id) {
-        existingParticipants.push({
-          userId: rm.user_id._id.toString(),
-          userName: rm.user_id.full_name,
-        });
-      }
-    }
+    // 2. Lấy danh sách existing participants TRƯỚC khi thêm approved user (batch query - không N+1)
+    const existingParticipants = await getExistingParticipants(roomCode, room._id, approvedUserId);
 
     // 3. Thêm approved user vào Redis members set
     await redis.sAdd(`room:${roomCode}:members`, approvedUserId);
