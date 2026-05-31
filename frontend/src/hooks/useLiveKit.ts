@@ -32,18 +32,18 @@ export function useLiveKit(roomCode: string | null) {
   const roomRef = useRef<Room | null>(null);
 
   /**
-   * Tracks the currently published custom (canvas) LocalVideoTrack.
-   * When a filter is active, this holds the canvas track we manually published.
-   * When the filter is off, this is null (LiveKit manages the native camera track).
+   * Stores the original native camera MediaStreamTrack before a filter replaces it.
+   * Used to restore the native camera feed when the filter is turned off.
+   * When no filter is active, this is null.
    */
-  const publishedCustomTrackRef = useRef<LocalVideoTrack | null>(null);
+  const nativeCameraTrackRef = useRef<MediaStreamTrack | null>(null);
 
   const [room, setRoom] = useState<Room | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const myUserId = useAuthStore((s) => s.user?._id);
 
-  // Subscribe to filter and local stream for the republish effect.
+  // Subscribe to filter and local stream for the track-replacement effect.
   // These drive the effect that swaps native camera ↔ canvas track in the room.
   const activeFilter = useFilterStore((s) => s.activeFilter);
   const localStream = useMediaStore((s) => s.localStream);
@@ -178,7 +178,7 @@ export function useLiveKit(roomCode: string | null) {
      * BUT only when there is NO active filter. When a filter is running, localStream
      * is owned by useVideoFilter (it holds the canvas stream). We must not override
      * it with a raw LiveKit stream, otherwise the filter preview would flicker and
-     * the republish effect would fire spuriously.
+     * the track-replacement effect would fire spuriously.
      */
     const handleLocalTrackPublished = () => {
       if (useFilterStore.getState().activeFilter !== 'none') return;
@@ -264,22 +264,21 @@ export function useLiveKit(roomCode: string | null) {
       newRoom.off(RoomEvent.LocalTrackUnpublished, handleLocalTrackUnpublished);
       newRoom.disconnect();
       roomRef.current = null;
+      nativeCameraTrackRef.current = null;
       setRoom(null);
     };
   }, [roomCode, myUserId]);
 
   // =========================================================================
-  // FILTER TRACK REPUBLISH
+  // FILTER TRACK REPLACEMENT (Zero-Renegotiation)
   //
-  // When an AI filter is active, `localStream` (mediaStore) is replaced with a
-  // canvas-captured MediaStream by useVideoFilter. This effect detects that change
-  // and swaps what LiveKit publishes:
+  // Uses LocalVideoTrack.replaceTrack() which calls RTCRtpSender.replaceTrack()
+  // under the hood. This swaps the underlying MediaStreamTrack on the existing
+  // WebRTC transceiver WITHOUT any SDP renegotiation — no unpublish/publish,
+  // no negotiation storm, no timeout. Remote users see the change instantly.
   //
-  //   Filter ON  → unpublish native camera (keep physical camera alive for processor)
-  //                → publish canvas video track with source=Camera, simulcast=false
-  //
-  //   Filter OFF → unpublish canvas track
-  //                → re-enable native camera via setCameraEnabled(true)
+  //   Filter ON  → save native camera MST → replaceTrack(canvasMediaStreamTrack)
+  //   Filter OFF → replaceTrack(savedNativeCameraTrack) → clear saved ref
   // =========================================================================
 
   useEffect(() => {
@@ -288,133 +287,76 @@ export function useLiveKit(roomCode: string | null) {
 
     const localParticipant = currentRoom.localParticipant;
 
-    const handleFilterPublish = async () => {
+    const handleFilterSwap = async () => {
+      // Get the existing Camera publication — this is the track we will "re-skin"
+      const cameraPub = localParticipant.getTrackPublication(Track.Source.Camera);
+      const publishedVideoTrack = cameraPub?.videoTrack as LocalVideoTrack | undefined;
+
       if (activeFilter !== 'none') {
         // ── FILTER IS ACTIVE ──────────────────────────────────────────────
         // Guard: do nothing if camera is muted or canvas stream not ready yet
         const isVideoMuted = useMediaStore.getState().isVideoMuted;
         if (isVideoMuted || !localStream) return;
 
-        const videoTrack = localStream.getVideoTracks()[0];
-        if (!videoTrack) return;
+        const canvasVideoMST = localStream.getVideoTracks()[0];
+        if (!canvasVideoMST) return;
 
         // ── GUARD: Detect premature trigger (AI model still loading) ─────────
-        // When activeFilter is first set, this effect fires immediately — but
-        // useVideoFilter may still be loading AI models (takes 100–500ms).
-        // During that window, localStream is still the RAW camera stream, not
-        // the canvas stream. Publishing the raw camera MST under the canvas
-        // track's identity causes a double-publish storm:
-        //   Trigger 1 (activeFilter change): raw track published as "canvas"
-        //   Trigger 2 (canvas stream ready): tries to publish over Trigger 1
-        //   → LiveKit SFU: "Cancelled publication by calling unpublish"
-        //   → NegotiationError: negotiation timed out
-        //
-        // Detection strategy: canvas.captureStream() tracks are NOT physical
-        // devices, so getSettings().deviceId is always undefined for them.
-        // Native hardware camera tracks always have a non-empty deviceId.
-        // If deviceId is present → this is still the raw camera track → wait.
-        const trackSettings = videoTrack.getSettings();
+        // canvas.captureStream() tracks have NO deviceId. Native camera tracks
+        // always have a non-empty deviceId. If deviceId is present → still the
+        // raw camera track → wait for useVideoFilter to emit the canvas stream.
+        const trackSettings = canvasVideoMST.getSettings();
         if (trackSettings.deviceId) {
-          // Raw camera track — AI pipeline has not emitted the canvas stream yet.
-          // Return now; the next localStream update (from useVideoFilter) will
-          // trigger this effect again with the actual canvas stream.
           console.log('[LiveKit Filter] Waiting for canvas stream (AI loading)...');
           return;
         }
 
-        // Idempotency guard: skip if this exact MST is already published
-        if (publishedCustomTrackRef.current?.mediaStreamTrack === videoTrack) {
+        // Guard: need a published camera track to replace into
+        if (!publishedVideoTrack) {
+          console.warn('[LiveKit Filter] No published camera track to replace into.');
           return;
         }
 
-        // 1. Unpublish any previously published canvas track
-        if (publishedCustomTrackRef.current) {
-          try {
-            await localParticipant.unpublishTrack(publishedCustomTrackRef.current);
-          } catch (e) {
-            console.warn('[LiveKit Filter] Could not unpublish old canvas track:', e);
-          }
-          publishedCustomTrackRef.current = null;
+        // Idempotency guard: skip if this exact MST is already on the published track
+        if (publishedVideoTrack.mediaStreamTrack === canvasVideoMST) {
+          return;
         }
 
-        // 2. Unpublish LiveKit's native camera track.
-        //    IMPORTANT: pass stopOnUnpublish=false so the underlying MediaStreamTrack
-        //    stays alive — VideoFilterProcessor.sourceVideo still needs it to render
-        //    frames onto the canvas.
-        const cameraPub = localParticipant.getTrackPublication(Track.Source.Camera);
-        if (cameraPub?.track) {
-          try {
-            await localParticipant.unpublishTrack(
-              cameraPub.track as LocalVideoTrack,
-              false, // stopOnUnpublish=false → keep physical camera running
-            );
-          } catch (e) {
-            console.warn('[LiveKit Filter] Could not unpublish native camera:', e);
-          }
+        // Save the native camera track BEFORE replacing (only once per filter session)
+        if (!nativeCameraTrackRef.current) {
+          nativeCameraTrackRef.current = publishedVideoTrack.mediaStreamTrack;
+          console.log('[LiveKit Filter] Saved native camera track for later restoration.');
         }
 
-        // 3. Publish the canvas video track as the Camera source
-        //    simulcast=false: canvas streams have a fixed resolution/framerate;
-        //    simulcast layers would just waste bandwidth on identical quality.
-        //    userProvidedTrack=true: tells LiveKit not to restart this track if
-        //    it ends (canvas tracks don't auto-restart like device tracks).
+        // ── REPLACE TRACK: swap the underlying MST without SDP renegotiation ──
         try {
-          const canvasVideoTrack = new LocalVideoTrack(videoTrack, undefined, true);
-          await localParticipant.publishTrack(canvasVideoTrack, {
-            source: Track.Source.Camera,
-            simulcast: false,
-            // Ép VP8 codec và cấp băng thông rõ ràng cho canvas stream.
-            // Canvas captureStream() không có metadata độ phân giải như hardware camera,
-            // nên SFU cần được chỉ định codec + encoding để mã hóa khung hình đúng.
-            videoCodec: 'vp8',
-            videoEncoding: {
-              maxBitrate: 1500000, // 1.5 Mbps
-              maxFramerate: 30,
-            },
-          });
-          publishedCustomTrackRef.current = canvasVideoTrack;
-          console.log('[LiveKit Filter] Canvas track published to room.');
+          await publishedVideoTrack.replaceTrack(canvasVideoMST, true);
+          console.log('[LiveKit Filter] ✅ Canvas track replaced into published camera (zero-renegotiation).');
         } catch (e) {
-          console.error('[LiveKit Filter] Failed to publish canvas track:', e);
+          console.error('[LiveKit Filter] Failed to replace track with canvas:', e);
         }
 
       } else {
         // ── FILTER IS OFF ─────────────────────────────────────────────────
-
-        // 1. Unpublish the canvas track (remotes stop receiving the filtered video)
-        if (publishedCustomTrackRef.current) {
-          try {
-            await localParticipant.unpublishTrack(publishedCustomTrackRef.current);
-            publishedCustomTrackRef.current = null;
-            console.log('[LiveKit Filter] Canvas track removed from room.');
-          } catch (e) {
-            console.warn('[LiveKit Filter] Could not unpublish canvas track:', e);
+        // Restore the native camera track if we previously saved one
+        if (nativeCameraTrackRef.current && publishedVideoTrack) {
+          // Only restore if the current track is NOT already the native one
+          if (publishedVideoTrack.mediaStreamTrack !== nativeCameraTrackRef.current) {
+            try {
+              await publishedVideoTrack.replaceTrack(nativeCameraTrackRef.current, true);
+              console.log('[LiveKit Filter] ✅ Native camera track restored (zero-renegotiation).');
+            } catch (e) {
+              console.error('[LiveKit Filter] Failed to restore native camera track:', e);
+            }
           }
-        }
-
-        const isVideoMuted = useMediaStore.getState().isVideoMuted;
-        const cameraPub = localParticipant.getTrackPublication(Track.Source.Camera);
-
-        // 2. Re-enable native camera only if user has not muted it AND the native
-        //    track is not already published (avoids double-publish after a no-op).
-        //    DO NOT call setLocalStream() here — that would create a new MediaStream
-        //    object on every run, changing the `localStream` dep and re-triggering
-        //    this very effect → infinite loop.
-        //    localStream is updated automatically by handleLocalTrackPublished when
-        //    setCameraEnabled(true) causes LiveKit to publish the native track.
-        if (!isVideoMuted && !cameraPub) {
-          try {
-            await localParticipant.setCameraEnabled(true);
-          } catch (e) {
-            console.error('[LiveKit Filter] Failed to restore native camera:', e);
-          }
+          nativeCameraTrackRef.current = null;
         }
       }
     };
 
-    handleFilterPublish();
+    handleFilterSwap();
   // localStream is intentionally in the deps: when useVideoFilter replaces
-  // localStream with the canvas stream, this effect must fire to publish it.
+  // localStream with the canvas stream, this effect must fire to swap it in.
   }, [activeFilter, localStream, isConnected]);
 
   // =========================================================================
@@ -428,33 +370,16 @@ export function useLiveKit(roomCode: string | null) {
     const localParticipant = room.localParticipant;
     const isFilterActive = useFilterStore.getState().activeFilter !== 'none';
 
-    // Use mediaStore as the source of truth for "is the camera currently on",
-    // because when a filter is active the native LiveKit isCameraEnabled might
-    // return false (the native track was unpublished) even though the user's
-    // camera is logically on (canvas stream is being published).
+    // Use mediaStore as the source of truth for "is the camera currently on"
     const isCurrentlyEnabled = !useMediaStore.getState().isVideoMuted;
     const newEnabled = !isCurrentlyEnabled;
 
     if (!newEnabled) {
       // ── TURNING CAMERA OFF ────────────────────────────────────────────
-
-      if (isFilterActive && publishedCustomTrackRef.current) {
-        // Unpublish the canvas track so remotes see the camera as off
-        try {
-          await localParticipant.unpublishTrack(publishedCustomTrackRef.current);
-          publishedCustomTrackRef.current = null;
-        } catch (e) {
-          console.warn('[LiveKit] Could not unpublish canvas track on cam-off:', e);
-        }
-      }
-
-      // Disable the physical camera (also unpublishes any remaining native track)
       await localParticipant.setCameraEnabled(false);
-
+      nativeCameraTrackRef.current = null; // Reset saved track since it's being destroyed
     } else {
       // ── TURNING CAMERA ON ─────────────────────────────────────────────
-
-      // Re-enable the physical camera. LiveKit will publish the native track.
       await localParticipant.setCameraEnabled(true);
 
       if (!isFilterActive) {
@@ -467,7 +392,7 @@ export function useLiveKit(roomCode: string | null) {
       // and useVideoFilter's second effect will detect that localStream changed to
       // the new raw camera stream and restart the canvas pipeline automatically.
       // Once the pipeline emits a new canvas stream, setLocalStream(canvasStream)
-      // is called by useVideoFilter, which triggers our republish useEffect above.
+      // is called by useVideoFilter, which triggers our replaceTrack useEffect above.
     }
 
     setIsVideoMuted(!newEnabled);
