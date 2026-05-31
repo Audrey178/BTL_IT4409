@@ -292,6 +292,11 @@ export function MeetingScreen() {
     ? screenStream
     : sharingParticipant?.screenStream || null;
 
+  const totalVisibleTiles = participants.length + 1;
+  const meetingGridStyle = totalVisibleTiles >= 4
+    ? { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gridTemplateRows: 'repeat(2, minmax(0, 1fr))' }
+    : { gridTemplateColumns: `repeat(${totalVisibleTiles}, minmax(0, 1fr))` };
+
   return (
     <div className="h-screen flex flex-col bg-surface overflow-hidden">
       {/* Header */}
@@ -398,7 +403,10 @@ export function MeetingScreen() {
           </div>
         ) : (
           /* ============ NORMAL GRID MODE ============ */
-          <div className={`flex-1 grid grid-cols-2 grid-rows-2 gap-4 transition-all duration-500 ${showChat ? "mr-0" : ""}`}>
+          <div
+            className={`flex-1 grid gap-4 transition-all duration-500 ${showChat ? "mr-0" : ""}`}
+            style={meetingGridStyle}
+          >
             <VideoTile
               name={authUser?.full_name || "You"}
               stream={localStream}
