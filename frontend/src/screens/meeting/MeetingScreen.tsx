@@ -243,8 +243,19 @@ export function MeetingScreen() {
 
   // Wrapped toggle handlers — emit socket event after toggle
   const handleToggleAudio = useCallback(async () => {
-    await lkToggleMicrophone();
-    // State already updated by lkToggleMicrophone → read directly
+    if (isConnected) {
+      await lkToggleMicrophone();
+    } else {
+      // Fallback when LiveKit not connected: toggle local audio tracks directly
+      const ms = useMediaStore.getState().localStream;
+      const currentlyMuted = useMediaStore.getState().isAudioMuted;
+      if (ms && ms.getAudioTracks().length > 0) {
+        ms.getAudioTracks().forEach(t => { t.enabled = currentlyMuted; });
+        useMediaStore.getState().setIsAudioMuted(!currentlyMuted);
+      }
+    }
+
+    // Read current state from store and emit to others
     const { isAudioMuted, isVideoMuted } = useMediaStore.getState();
     socket.emit(MEDIA_EVENTS.TOGGLE, {
       roomCode, userId: myUserId,
@@ -253,9 +264,20 @@ export function MeetingScreen() {
     });
   }, [socket, roomCode, myUserId, lkToggleMicrophone]);
 
+
   const handleToggleVideo = useCallback(async () => {
-    await lkToggleCamera();
-    // State already updated by lkToggleCamera → read directly
+    if (isConnected) {
+      await lkToggleCamera();
+    } else {
+      // Fallback when LiveKit not connected: toggle local video tracks directly
+      const ms = useMediaStore.getState().localStream;
+      const currentlyVideoMuted = useMediaStore.getState().isVideoMuted;
+      if (ms && ms.getVideoTracks().length > 0) {
+        ms.getVideoTracks().forEach(t => { t.enabled = currentlyVideoMuted; });
+        useMediaStore.getState().setIsVideoMuted(!currentlyVideoMuted);
+      }
+    }
+
     const { isAudioMuted, isVideoMuted } = useMediaStore.getState();
     socket.emit(MEDIA_EVENTS.TOGGLE, {
       roomCode, userId: myUserId,
@@ -286,6 +308,26 @@ export function MeetingScreen() {
       socket.emit(MEDIA_EVENTS.SCREEN_SHARE_STOP, { roomCode, userId: myUserId });
     }
   }, [socket, roomCode, myUserId, authUser, isScreenSharing, screenSharingUserId, lkToggleScreenShare, setScreenSharingUserId]);
+
+  // Keyboard shortcuts: 'm' toggle mic, 'v' toggle camera
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // ignore when typing in inputs
+      const active = document.activeElement as HTMLElement | null;
+      const tag = active?.tagName?.toLowerCase() || '';
+      if (tag === 'input' || tag === 'textarea' || active?.isContentEditable) return;
+      if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        handleToggleAudio();
+      }
+      if (e.key === 'v' || e.key === 'V') {
+        e.preventDefault();
+        handleToggleVideo();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [handleToggleAudio, handleToggleVideo]);
 
   // Get screen share stream to display
   const screenShareStream = isMeSharing
@@ -649,6 +691,7 @@ function ControlButton({ icon, label, active = false, badge, className, onClick 
   return (
     <button
       onClick={onClick}
+      title={label}
       className={`relative h-14 w-14 rounded-full flex items-center justify-center transition-all active:scale-90 border border-outline-variant/20 ${
         active ? "bg-secondary-container text-primary border-primary/20" : "bg-surface-container-highest text-on-surface-variant hover:bg-orange-100"
       } ${className}`}
