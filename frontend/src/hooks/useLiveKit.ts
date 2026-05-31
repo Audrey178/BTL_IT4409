@@ -202,7 +202,7 @@ export function useLiveKit(roomCode: string | null) {
         setLocalStream(localMediaStream);
 
         // Sync already-connected remote participants
-        room.remoteParticipants.forEach((participant) => {
+        newRoom.remoteParticipants.forEach((participant) => {
           handleParticipantConnected(participant);
 
           // Sync their existing tracks

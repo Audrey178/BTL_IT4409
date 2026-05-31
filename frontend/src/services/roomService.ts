@@ -31,6 +31,11 @@ export const roomService = {
     return res.data;
   },
 
+  kickUser: async (roomCode: string, userId: string) => {
+    const res = await api.post(`/rooms/${roomCode}/kick/${userId}`);
+    return res.data;
+  },
+
   getRoomParticipants: async (roomCode: string) => {
     const res = await api.get(`/rooms/${roomCode}/participants`);
     return res.data;

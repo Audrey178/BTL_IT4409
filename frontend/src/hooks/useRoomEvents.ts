@@ -13,7 +13,7 @@ import type { WaitingUser } from '@/types';
  * Quản lý waiting list (host-side), user join/leave notifications,
  * force disconnect, room ended events, và media state sync.
  */
-export function useRoomEvents(roomCode: string | null) {
+export function useRoomEvents(roomCode: string | null, onForceDisconnect?: () => void) {
   const socket = getSocket();
   const navigate = useNavigate();
   const myUserId = useAuthStore((s) => s.user?._id);
@@ -132,7 +132,17 @@ export function useRoomEvents(roomCode: string | null) {
     // Force disconnect (kicked)
     const handleForceDisconnect = () => {
       toast.error('You have been removed from the meeting');
+      useMediaStore.getState().cleanup();
       reset();
+      onForceDisconnect?.();
+      navigate('/', { replace: true });
+    };
+
+    const handleUserKicked = () => {
+      toast.error('You have been removed from the meeting');
+      useMediaStore.getState().cleanup();
+      reset();
+      onForceDisconnect?.();
       navigate('/', { replace: true });
     };
 
@@ -142,6 +152,7 @@ export function useRoomEvents(roomCode: string | null) {
       setStatus('ended');
       // Cleanup media tracks (camera, mic, screen share)
       useMediaStore.getState().cleanup();
+      onForceDisconnect?.();
       reset();
       navigate('/', { replace: true });
     };
@@ -162,6 +173,16 @@ export function useRoomEvents(roomCode: string | null) {
 
       if (data.previousHostId === myUserId) {
         toast.info('Host role has been transferred');
+      }
+    };
+
+    const handleSocketDisconnect = (reason: string) => {
+      if (reason === 'io server disconnect' || reason === 'transport close' || reason === 'transport error') {
+        toast.error('You have been removed from the meeting');
+        useMediaStore.getState().cleanup();
+        reset();
+        onForceDisconnect?.();
+        navigate('/', { replace: true });
       }
     };
 
@@ -200,11 +221,13 @@ export function useRoomEvents(roomCode: string | null) {
     socket.on(ROOM_EVENTS.USER_LEFT, handleUserLeft);
     socket.on(ROOM_EVENTS.USER_REJECTED, handleUserRejected);
     socket.on(ROOM_EVENTS.FORCE_DISCONNECT, handleForceDisconnect);
+    socket.on(ROOM_EVENTS.USER_KICKED, handleUserKicked);
     socket.on(ROOM_EVENTS.ENDED, handleRoomEnded);
     socket.on(ROOM_EVENTS.HOST_TRANSFERRED, handleHostTransferred);
     socket.on(MEDIA_EVENTS.TOGGLE, handleMediaToggle);
     socket.on(MEDIA_EVENTS.SCREEN_SHARE_START, handleScreenShareStart);
     socket.on(MEDIA_EVENTS.SCREEN_SHARE_STOP, handleScreenShareStop);
+    socket.on('disconnect', handleSocketDisconnect);
 
     return () => {
       socket.off(ROOM_EVENTS.REQUEST_APPROVAL, handleRequestApproval);
@@ -212,11 +235,13 @@ export function useRoomEvents(roomCode: string | null) {
       socket.off(ROOM_EVENTS.USER_LEFT, handleUserLeft);
       socket.off(ROOM_EVENTS.USER_REJECTED, handleUserRejected);
       socket.off(ROOM_EVENTS.FORCE_DISCONNECT, handleForceDisconnect);
+      socket.off(ROOM_EVENTS.USER_KICKED, handleUserKicked);
       socket.off(ROOM_EVENTS.ENDED, handleRoomEnded);
       socket.off(ROOM_EVENTS.HOST_TRANSFERRED, handleHostTransferred);
       socket.off(MEDIA_EVENTS.TOGGLE, handleMediaToggle);
       socket.off(MEDIA_EVENTS.SCREEN_SHARE_START, handleScreenShareStart);
       socket.off(MEDIA_EVENTS.SCREEN_SHARE_STOP, handleScreenShareStop);
+      socket.off('disconnect', handleSocketDisconnect);
     };
   }, [
     socket,

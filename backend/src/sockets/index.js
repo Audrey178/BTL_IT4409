@@ -55,7 +55,7 @@ export const initializeSocket = (io, redisClient) => {
      * Dữ liệu: { userId, roomCode }
      */
     socket.on(SOCKET_EVENTS.ROOM_JOIN, (data) => {
-      handleRoomJoin(socket, data);
+      handleRoomJoin(io, socket, data);
     });
 
     /**
