@@ -21,6 +21,9 @@ export const ERROR_MESSAGES = {
   ROOM_ENDED: 'This room has ended',
   INVALID_ROOM_CODE: 'Invalid room code',
   NOT_HOST: 'Only room host can perform this action',
+  NEW_HOST_REQUIRED: 'New host ID is required',
+  HOST_TRANSFER_SELF: 'Cannot transfer host role to yourself',
+  NEW_HOST_NOT_IN_ROOM: 'New host must be an active participant in the room',
   MAX_PARTICIPANTS: 'Maximum participants reached',
   SERVER_ERROR: 'Internal server error',
 };
@@ -41,6 +44,7 @@ export const SOCKET_EVENTS = {
   ROOM_USER_JOINED: 'room:user_joined',
   ROOM_USER_LEFT: 'room:user_left',
   ROOM_USER_KICKED: 'room:user_kicked',
+  ROOM_HOST_TRANSFERRED: 'room:host_transferred',
   ROOM_ENDED: 'room:ended',
 
   // WebRTC events
@@ -96,6 +100,7 @@ export const EVENT_TYPE = {
   ROOM_ENDED: 'room_ended',
   USER_APPROVED: 'user_approved',
   USER_REJECTED: 'user_rejected',
+  HOST_TRANSFERRED: 'host_transferred',
   RECORDING_CREATED: 'recording_created',
   RECORDING_DELETED: 'recording_deleted',
 };

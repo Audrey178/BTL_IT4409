@@ -10,6 +10,7 @@ export const ROOM_EVENTS = {
   USER_REJECTED: 'room:user_rejected',
   KICK_USER: 'room:kick_user',
   USER_KICKED: 'room:user_kicked',
+  HOST_TRANSFERRED: 'room:host_transferred',
   FORCE_DISCONNECT: 'room:force_disconnect',
   ENDED: 'room:ended',
   ERROR: 'error',

@@ -36,6 +36,13 @@ export const roomService = {
     return res.data;
   },
 
+  transferHost: async (roomCode: string, newHostId: string) => {
+    const res = await api.put(`/rooms/${roomCode}/transfer-host`, {
+      new_host_id: newHostId,
+    });
+    return res.data;
+  },
+
   endRoom: async (roomCode: string) => {
     const res = await api.put(`/rooms/${roomCode}/end`);
     return res.data;

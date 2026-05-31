@@ -7,7 +7,7 @@
  */
 
 import roomService from '../services/room.service.js';
-import { HTTP_STATUS } from '../utils/constants.js';
+import { HTTP_STATUS, SOCKET_EVENTS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
 
 class RoomController {
@@ -126,6 +126,37 @@ class RoomController {
       res.status(HTTP_STATUS.OK).json(result);
     } catch (error) {
       logger.error('Kick user error:', error);
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+
+  /**
+   * PUT /api/v1/rooms/:roomCode/transfer-host - Chuyển quyền host
+   */
+  async transferHost(req, res) {
+    try {
+      const { roomCode } = req.params;
+      const { new_host_id: newHostId } = req.body;
+      const result = await roomService.transferHost(roomCode, req.userId, newHostId);
+
+      const io = req.app.locals.io;
+      const normalizedCode = roomCode ? roomCode.toUpperCase() : '';
+
+      if (io && normalizedCode) {
+        io.to(normalizedCode).emit(SOCKET_EVENTS.ROOM_HOST_TRANSFERRED, {
+          roomCode: normalizedCode,
+          previousHostId: result.previousHostId,
+          newHostId: result.newHostId,
+          message: 'Host role has been transferred',
+        });
+      }
+
+      res.status(HTTP_STATUS.OK).json(result);
+    } catch (error) {
+      logger.error('Transfer host error:', error);
       res.status(error.statusCode || HTTP_STATUS.INTERNAL_ERROR).json({
         success: false,
         message: error.message,
