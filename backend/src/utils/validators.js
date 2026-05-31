@@ -79,6 +79,8 @@ export const roomValidation = {
       .min(2)
       .max(500)
       .optional(),
+    started_at: Joi.date().iso().optional()
+      .messages({ 'date.format': 'started_at must be a valid ISO 8601 date' }),
     settings: Joi.object({
       require_approval: Joi.boolean().optional(),
       allow_chat: Joi.boolean().optional(),

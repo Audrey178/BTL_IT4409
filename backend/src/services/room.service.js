@@ -30,7 +30,7 @@ class RoomService {
         status: { $ne: ROOM_STATUS.ENDED } 
       }).populate('host_id', '_id full_name email avatar').lean();
 
-      const memberEntries = await RoomMember.find({ user_id: userId });
+      const memberEntries = await RoomMember.find({ user_id: userId, status: { $in: [USER_STATUS.JOINED, USER_STATUS.PENDING] } });
       const memberRoomIds = memberEntries.map(e => e.room_id);
 
       const participantRooms = await Room.find({

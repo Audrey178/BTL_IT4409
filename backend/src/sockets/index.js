@@ -72,7 +72,7 @@ export const initializeSocket = (io, redisClient) => {
      * Dữ liệu: { roomCode, memberId }
      */
     socket.on(SOCKET_EVENTS.ROOM_REJECT_USER, (data) => {
-      handleRejectUser(socket, data);
+      handleRejectUser(io, socket, data);
     });
 
     /**
