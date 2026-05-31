@@ -65,7 +65,7 @@ const getExistingParticipants = async (roomCode, roomId, excludeUserId) => {
  * @param {Object} data - { userId, roomCode }
  * @returns {Promise<void>}
  */
-export const handleRoomJoin = async (socket, data) => {
+export const handleRoomJoin = async (io, socket, data) => {
   try {
     // Use JWT-authenticated userId from socket instead of client-provided data
     const userId = socket.userId;
@@ -143,7 +143,7 @@ export const handleRoomJoin = async (socket, data) => {
 
       const hostSocketId = await redis.get(`user:${room.host_id.toString()}:socket`);
       if (hostSocketId) {
-        socket.to(hostSocketId).emit(SOCKET_EVENTS.ROOM_REQUEST_APPROVAL, {
+        io.to(hostSocketId).emit(SOCKET_EVENTS.ROOM_REQUEST_APPROVAL, {
           userId: member.user_id._id,
           userName: member.user_id.full_name,
           memberId: member._id,

@@ -25,6 +25,7 @@ import { Switch } from "@/components/ui/switch";
 import { WaitingRoomPanel } from "@/components/pages/meeting/WaitingRoomPanel";
 import { ChatPanel } from "@/components/pages/meeting/ChatPanel";
 import { EndMeetingDialog } from "@/components/pages/meeting/EndMeetingDialog";
+import ParticipantsPanel from '@/components/pages/meeting/ParticipantsPanel';
 import { RecordingBanner } from "@/components/pages/meeting/RecordingBanner";
 import { RecordingConsentDialog } from "@/components/pages/meeting/RecordingConsentDialog";
 import { StopRecordingDialog } from "@/components/pages/meeting/StopRecordingDialog";
@@ -98,7 +99,7 @@ export function MeetingScreen() {
     toggleScreenShare: lkToggleScreenShare,
     disconnect: lkDisconnect,
   } = useLiveKit(roomCode || null);
-  useRoomEvents(roomCode || null);
+  useRoomEvents(roomCode || null, lkDisconnect);
   const { sendMessage } = useChatEvents(roomCode || null);
   
   useVideoFilter();
@@ -354,8 +355,7 @@ export function MeetingScreen() {
         </div>
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2 bg-surface-container rounded-full px-4 py-2">
-            <Users size={16} className="text-on-surface-variant" />
-            <span className="text-sm font-bold text-on-surface">{participants.length + 1}</span>
+            <span className="text-sm font-bold text-on-surface">{participants.length + 1} in room</span>
           </div>
           <div className="flex items-center gap-3 bg-white/50 px-4 py-2 rounded-full border border-outline-variant/20">
             <Avatar className="w-8 h-8">
@@ -507,8 +507,8 @@ export function MeetingScreen() {
             }
           />
           <ControlButton icon={<MessageSquare size={24} />} onClick={handleToggleChat} active={showChat} badge={unreadCount > 0 ? unreadCount : undefined} />
-          <ControlButton icon={<Users size={24} />} badge={participants.length + 1} />
           {isHost && roomCode && <WaitingRoomPanel roomCode={roomCode} waitingList={waitingList} removeWaitingUser={removeWaitingUser} />}
+          {isHost && roomCode && <ParticipantsPanel roomCode={roomCode} />}
           <ControlButton icon={<Sparkles size={24} />} onClick={() => setShowFilters(!showFilters)} active={showFilters} />
           {isHost && (
             <ControlButton

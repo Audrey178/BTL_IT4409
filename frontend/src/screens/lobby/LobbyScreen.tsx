@@ -216,6 +216,13 @@ export function LobbyScreen() {
       navigate("/", { replace: true });
     };
 
+    const handleUserKicked = () => {
+      setStatus("idle");
+      setJoining(false);
+      toast.error("You have been removed from the meeting");
+      navigate("/", { replace: true });
+    };
+
     const handleError = (data: { message?: string }) => {
       toast.error(data.message || "An error occurred");
       setJoining(false);
@@ -224,12 +231,16 @@ export function LobbyScreen() {
     socket.on(ROOM_EVENTS.PENDING, handlePending);
     socket.on(ROOM_EVENTS.USER_JOINED, handleUserJoined);
     socket.on(ROOM_EVENTS.USER_REJECTED, handleUserRejected);
+    socket.on(ROOM_EVENTS.USER_KICKED, handleUserKicked);
+    socket.on(ROOM_EVENTS.FORCE_DISCONNECT, handleUserKicked);
     socket.on(ROOM_EVENTS.ERROR, handleError);
 
     return () => {
       socket.off(ROOM_EVENTS.PENDING, handlePending);
       socket.off(ROOM_EVENTS.USER_JOINED, handleUserJoined);
       socket.off(ROOM_EVENTS.USER_REJECTED, handleUserRejected);
+      socket.off(ROOM_EVENTS.USER_KICKED, handleUserKicked);
+      socket.off(ROOM_EVENTS.FORCE_DISCONNECT, handleUserKicked);
       socket.off(ROOM_EVENTS.ERROR, handleError);
     };
   }, [socket, roomCode, authUser, navigate, setStatus, addParticipant]);
