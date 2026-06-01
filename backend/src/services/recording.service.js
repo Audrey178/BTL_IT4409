@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { EgressClient, EncodedFileOutput, S3Upload } from 'livekit-server-sdk';
 import { Recording, Room, RoomMember, MeetingEvent } from '../models/index.js';
 import { ERROR_MESSAGES, EVENT_TYPE, HTTP_STATUS, USER_STATUS } from '../utils/constants.js';
+import { generatePresignedUrl } from '../utils/helpers.js';
 import logger from '../utils/logger.js';
 import { getRedisClient } from '../config/redis.js';
 
@@ -110,9 +111,11 @@ class RecordingService {
 
       await this.ensureRoomAccess(recording.room_id, userId);
 
+      const signedUrl = await generatePresignedUrl(recording.file_url);
+
       return {
         success: true,
-        recording: this.mapRecording(recording),
+        recording: {...this.mapRecording(recording), file_url: signedUrl},
       };
     } catch (error) {
       logger.error('Get recording error:', error);
@@ -382,7 +385,6 @@ class RecordingService {
         
         try {
           const egressInfo = await egressClient.stopEgress(egressId);
-          await new Promise(resolve => setTimeout(resolve, 5000));
           const egressData = egressInfo.toJsonString ? JSON.parse(egressInfo.toJsonString()) : egressInfo;
           logger.info({ egress: egressData }, 'Egress stopped');
           const regionStr = process.env.S3_REGION && process.env.S3_REGION !== 'us-east-1' ? `-${process.env.S3_REGION}` : '';
@@ -391,7 +393,7 @@ class RecordingService {
           fileUrl = `https://${process.env.S3_BUCKET}.${endpointHost}/${file_path}`;
         } catch (stopError) {
           logger.error('Error calling stopEgress in LiveKit:', stopError);
-          fileUrl = 'https://www.w3schools.com/html/mov_bbb.mp4';
+          file_path = 'mov_bbb.mp4';
         }
       }
 
@@ -401,7 +403,7 @@ class RecordingService {
         owner_id: recorderId,
         title: `Bản ghi cuộc họp - ${room.title} - ${new Date().toLocaleDateString('vi-VN')}`,
         description: `Ghi hình tự động từ LiveKit Cloud`,
-        file_url: fileUrl,
+        file_url: file_path,
         thumbnail_url: 'https://picsum.photos/seed/recording/800/450',
         mime_type: 'video/mp4',
         size_bytes: 1024 * 1024 * 5,
