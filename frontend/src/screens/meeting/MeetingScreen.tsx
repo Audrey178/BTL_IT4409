@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import {
   Mic, MicOff, Video, VideoOff, ScreenShare, ScreenShareOff,
   PhoneOff, MessageSquare, Users, X, XCircle,
-  Sparkles, CheckCircle2, Badge, MonitorUp, Circle,
+  Sparkles, CheckCircle2, Badge, MonitorUp, Circle, Crown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -25,6 +25,7 @@ import { Switch } from "@/components/ui/switch";
 import { WaitingRoomPanel } from "@/components/pages/meeting/WaitingRoomPanel";
 import { ChatPanel } from "@/components/pages/meeting/ChatPanel";
 import { EndMeetingDialog } from "@/components/pages/meeting/EndMeetingDialog";
+import ParticipantsPanel from '@/components/pages/meeting/ParticipantsPanel';
 import { RecordingBanner } from "@/components/pages/meeting/RecordingBanner";
 import { RecordingConsentDialog } from "@/components/pages/meeting/RecordingConsentDialog";
 import { StopRecordingDialog } from "@/components/pages/meeting/StopRecordingDialog";
@@ -98,7 +99,7 @@ export function MeetingScreen() {
     toggleScreenShare: lkToggleScreenShare,
     disconnect: lkDisconnect,
   } = useLiveKit(roomCode || null);
-  useRoomEvents(roomCode || null);
+  useRoomEvents(roomCode || null, lkDisconnect);
   const { sendMessage } = useChatEvents(roomCode || null);
   
   useVideoFilter();
@@ -135,6 +136,7 @@ export function MeetingScreen() {
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [showStopRecordingDialog, setShowStopRecordingDialog] = useState(false);
   const [isEndingMeeting, setIsEndingMeeting] = useState(false);
+  const [transferringHostId, setTransferringHostId] = useState<string | null>(null);
   const prevMessageCountRef = useRef(messageCount);
 
   // Track unread messages when chat panel is closed
@@ -197,6 +199,25 @@ export function MeetingScreen() {
     }
   }, [isEndingMeeting, roomCode, socket, lkDisconnect, cleanupMedia, reset, navigate]);
 
+  const handleTransferHost = useCallback(
+    async (newHostId: string, participantName: string) => {
+      if (!roomCode || !isHost || transferringHostId) return;
+
+      const confirmed = window.confirm(`Transfer host role to ${participantName}?`);
+      if (!confirmed) return;
+
+      setTransferringHostId(newHostId);
+      try {
+        await roomService.transferHost(roomCode, newHostId);
+      } catch (error) {
+        toast.error('Failed to transfer host role');
+      } finally {
+        setTransferringHostId(null);
+      }
+    },
+    [roomCode, isHost, transferringHostId]
+  );
+
   // Is someone (me or remote) sharing screen?
   const isAnyoneSharing = isScreenSharing || !!screenSharingUserId;
   const isMeSharing = isScreenSharing;
@@ -223,8 +244,19 @@ export function MeetingScreen() {
 
   // Wrapped toggle handlers — emit socket event after toggle
   const handleToggleAudio = useCallback(async () => {
-    await lkToggleMicrophone();
-    // State already updated by lkToggleMicrophone → read directly
+    if (isConnected) {
+      await lkToggleMicrophone();
+    } else {
+      // Fallback when LiveKit not connected: toggle local audio tracks directly
+      const ms = useMediaStore.getState().localStream;
+      const currentlyMuted = useMediaStore.getState().isAudioMuted;
+      if (ms && ms.getAudioTracks().length > 0) {
+        ms.getAudioTracks().forEach(t => { t.enabled = currentlyMuted; });
+        useMediaStore.getState().setIsAudioMuted(!currentlyMuted);
+      }
+    }
+
+    // Read current state from store and emit to others
     const { isAudioMuted, isVideoMuted } = useMediaStore.getState();
     socket.emit(MEDIA_EVENTS.TOGGLE, {
       roomCode, userId: myUserId,
@@ -233,9 +265,20 @@ export function MeetingScreen() {
     });
   }, [socket, roomCode, myUserId, lkToggleMicrophone]);
 
+
   const handleToggleVideo = useCallback(async () => {
-    await lkToggleCamera();
-    // State already updated by lkToggleCamera → read directly
+    if (isConnected) {
+      await lkToggleCamera();
+    } else {
+      // Fallback when LiveKit not connected: toggle local video tracks directly
+      const ms = useMediaStore.getState().localStream;
+      const currentlyVideoMuted = useMediaStore.getState().isVideoMuted;
+      if (ms && ms.getVideoTracks().length > 0) {
+        ms.getVideoTracks().forEach(t => { t.enabled = currentlyVideoMuted; });
+        useMediaStore.getState().setIsVideoMuted(!currentlyVideoMuted);
+      }
+    }
+
     const { isAudioMuted, isVideoMuted } = useMediaStore.getState();
     socket.emit(MEDIA_EVENTS.TOGGLE, {
       roomCode, userId: myUserId,
@@ -267,10 +310,35 @@ export function MeetingScreen() {
     }
   }, [socket, roomCode, myUserId, authUser, isScreenSharing, screenSharingUserId, lkToggleScreenShare, setScreenSharingUserId]);
 
+  // Keyboard shortcuts: 'm' toggle mic, 'v' toggle camera
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // ignore when typing in inputs
+      const active = document.activeElement as HTMLElement | null;
+      const tag = active?.tagName?.toLowerCase() || '';
+      if (tag === 'input' || tag === 'textarea' || active?.isContentEditable) return;
+      if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        handleToggleAudio();
+      }
+      if (e.key === 'v' || e.key === 'V') {
+        e.preventDefault();
+        handleToggleVideo();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [handleToggleAudio, handleToggleVideo]);
+
   // Get screen share stream to display
   const screenShareStream = isMeSharing
     ? screenStream
     : sharingParticipant?.screenStream || null;
+
+  const totalVisibleTiles = participants.length + 1;
+  const meetingGridStyle = totalVisibleTiles >= 4
+    ? { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gridTemplateRows: 'repeat(2, minmax(0, 1fr))' }
+    : { gridTemplateColumns: `repeat(${totalVisibleTiles}, minmax(0, 1fr))` };
 
   return (
     <div className="h-screen flex flex-col bg-surface overflow-hidden">
@@ -287,8 +355,7 @@ export function MeetingScreen() {
         </div>
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2 bg-surface-container rounded-full px-4 py-2">
-            <Users size={16} className="text-on-surface-variant" />
-            <span className="text-sm font-bold text-on-surface">{participants.length + 1}</span>
+            <span className="text-sm font-bold text-on-surface">{participants.length + 1} in room</span>
           </div>
           <div className="flex items-center gap-3 bg-white/50 px-4 py-2 rounded-full border border-outline-variant/20">
             <Avatar className="w-8 h-8">
@@ -369,13 +436,19 @@ export function MeetingScreen() {
                   isMuted={p.isAudioMuted}
                   isVideoOff={p.isVideoMuted}
                   compact
+                  showTransferAction={isHost}
+                  isTransferPending={transferringHostId === p.id}
+                  onTransferHost={() => handleTransferHost(p.id, p.fullName)}
                 />
               ))}
             </div>
           </div>
         ) : (
           /* ============ NORMAL GRID MODE ============ */
-          <div className={`flex-1 grid grid-cols-2 grid-rows-2 gap-4 transition-all duration-500 ${showChat ? "mr-0" : ""}`}>
+          <div
+            className={`flex-1 grid gap-4 transition-all duration-500 ${showChat ? "mr-0" : ""}`}
+            style={meetingGridStyle}
+          >
             <VideoTile
               name={authUser?.full_name || "You"}
               stream={localStream}
@@ -392,6 +465,9 @@ export function MeetingScreen() {
                 stream={p.stream}
                 isMuted={p.isAudioMuted}
                 isVideoOff={p.isVideoMuted}
+                showTransferAction={isHost}
+                isTransferPending={transferringHostId === p.id}
+                onTransferHost={() => handleTransferHost(p.id, p.fullName)}
               />
             ))}
           </div>
@@ -431,8 +507,8 @@ export function MeetingScreen() {
             }
           />
           <ControlButton icon={<MessageSquare size={24} />} onClick={handleToggleChat} active={showChat} badge={unreadCount > 0 ? unreadCount : undefined} />
-          <ControlButton icon={<Users size={24} />} badge={participants.length + 1} />
-          {isHost && <WaitingRoomPanel roomCode={roomCode} waitingList={waitingList} removeWaitingUser={removeWaitingUser} />}
+          {isHost && roomCode && <WaitingRoomPanel roomCode={roomCode} waitingList={waitingList} removeWaitingUser={removeWaitingUser} />}
+          {isHost && roomCode && <ParticipantsPanel roomCode={roomCode} />}
           <ControlButton icon={<Sparkles size={24} />} onClick={() => setShowFilters(!showFilters)} active={showFilters} />
           {isHost && (
             <ControlButton
@@ -537,28 +613,39 @@ function SelfPreviewVideo({ stream, filterCss }: { stream: MediaStream, filterCs
 function VideoTile({
   name, stream, isMuted = false, isVideoOff = false,
   isHost = false, isLocal = false, compact = false, filterCss,
+  showTransferAction = false, isTransferPending = false, onTransferHost,
 }: {
   name: string; stream?: MediaStream | null; isMuted?: boolean;
   isVideoOff?: boolean; isHost?: boolean; isLocal?: boolean; compact?: boolean; filterCss?: string;
+  showTransferAction?: boolean; isTransferPending?: boolean; onTransferHost?: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     if (videoRef.current) {
-      // Always keep srcObject in sync — prevents stale dead-track when unpausing
-      videoRef.current.srcObject = stream ?? null;
+      // Chỉ gán lại srcObject nếu stream thực sự thay đổi
+      // Việc gán lại srcObject liên tục (ngay cả khi stream giống hệt) 
+      // sẽ khiến browser lập tức abort quá trình play trước đó, gây ra AbortError.
+      if (videoRef.current.srcObject !== (stream ?? null)) {
+        console.log("[LiveKit Debug] [VideoTile] Stream changed, setting new srcObject for", name, "| stream:", !!stream);
+        videoRef.current.srcObject = stream ?? null;
+      }
+      
       if (filterCss) {
         videoRef.current.style.filter = filterCss;
       }
+      
       if (isVideoOff || !stream) {
         videoRef.current.pause();
       } else {
         videoRef.current.play().catch((err) => {
-          console.warn("VideoTile play error:", err);
+          if (err.name !== "AbortError") {
+             console.warn("[LiveKit Debug] VideoTile play error:", err);
+          }
         });
       }
     }
-  }, [stream, isVideoOff, filterCss]);
+  }, [stream, isVideoOff, filterCss, name, isLocal]);
 
   return (
     <div className={`relative overflow-hidden bg-stone-900 shadow-sm group transition-all duration-500 flex flex-col justify-center items-center ${
@@ -588,6 +675,18 @@ function VideoTile({
           <span className="text-[10px] text-primary-fixed bg-primary/20 px-1.5 py-0.5 rounded">Host</span>
         )}
       </div>
+
+      {showTransferAction && !isLocal && onTransferHost && (
+        <button
+          type="button"
+          onClick={onTransferHost}
+          disabled={isTransferPending}
+          className="absolute top-3 right-3 px-3 py-1.5 rounded-full bg-black/45 text-white border border-white/15 text-[11px] font-semibold flex items-center gap-1.5 hover:bg-black/65 disabled:opacity-60"
+        >
+          <Crown size={12} />
+          {isTransferPending ? 'Transferring...' : 'Make host'}
+        </button>
+      )}
     </div>
   );
 }
@@ -601,6 +700,7 @@ function ControlButton({ icon, label, active = false, badge, className, onClick 
   return (
     <button
       onClick={onClick}
+      title={label}
       className={`relative h-14 w-14 rounded-full flex items-center justify-center transition-all active:scale-90 border border-outline-variant/20 ${
         active ? "bg-secondary-container text-primary border-primary/20" : "bg-surface-container-highest text-on-surface-variant hover:bg-orange-100"
       } ${className}`}

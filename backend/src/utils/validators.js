@@ -79,6 +79,8 @@ export const roomValidation = {
       .min(2)
       .max(500)
       .optional(),
+    started_at: Joi.date().iso().optional()
+      .messages({ 'date.format': 'started_at must be a valid ISO 8601 date' }),
     settings: Joi.object({
       require_approval: Joi.boolean().optional(),
       allow_chat: Joi.boolean().optional(),
@@ -104,6 +106,13 @@ export const roomValidation = {
     room_code: Joi.string()
       .required()
       .messages({ 'any.required': 'Room code is required' }),
+  }),
+
+  transferHost: Joi.object({
+    new_host_id: Joi.string()
+      .trim()
+      .required()
+      .messages({ 'any.required': 'new_host_id is required' }),
   }),
 };
 

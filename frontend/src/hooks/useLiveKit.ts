@@ -6,6 +6,7 @@ import {
   RemoteParticipant,
   RemoteTrackPublication,
   LocalParticipant,
+  LocalVideoTrack,
   ConnectionState,
   DisconnectReason,
 } from 'livekit-client';
@@ -13,6 +14,7 @@ import { livekitService } from '@/services/livekitService';
 import { useMeetingStore } from '@/stores/meetingStore';
 import { useMediaStore } from '@/stores/mediaStore';
 import { useAuthStore } from '@/stores/useAuthStore';
+import { useFilterStore } from '@/stores/filterStore';
 
 /**
  * Core LiveKit hook — replaces the old P2P useWebRTC hook.
@@ -23,14 +25,28 @@ import { useAuthStore } from '@/stores/useAuthStore';
  * 3. Sync remote participants → meetingStore
  * 4. Sync remote tracks → participant streams in store
  * 5. Expose media control functions (camera, mic, screen share)
- * 6. Clean up on unmount
+ * 6. Republish canvas/filter stream when AI filter is active
+ * 7. Clean up on unmount
  */
 export function useLiveKit(roomCode: string | null) {
   const roomRef = useRef<Room | null>(null);
+
+  /**
+   * Stores the original native camera MediaStreamTrack before a filter replaces it.
+   * Used to restore the native camera feed when the filter is turned off.
+   * When no filter is active, this is null.
+   */
+  const nativeCameraTrackRef = useRef<MediaStreamTrack | null>(null);
+
   const [room, setRoom] = useState<Room | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const myUserId = useAuthStore((s) => s.user?._id);
+
+  // Subscribe to filter and local stream for the track-replacement effect.
+  // These drive the effect that swaps native camera ↔ canvas track in the room.
+  const activeFilter = useFilterStore((s) => s.activeFilter);
+  const localStream = useMediaStore((s) => s.localStream);
 
   const {
     addParticipant,
@@ -58,7 +74,7 @@ export function useLiveKit(roomCode: string | null) {
 
     let cancelled = false;
     const newRoom = new Room({
-      adaptiveStream: true,
+      adaptiveStream: false, // MUST be false when manually managing MediaStream objects instead of using track.attach()
       dynacast: true,
       // Publish defaults — match existing quality expectations
       videoCaptureDefaults: {
@@ -75,6 +91,7 @@ export function useLiveKit(roomCode: string | null) {
     // ------- ROOM EVENT HANDLERS -------
 
     const handleParticipantConnected = (participant: RemoteParticipant) => {
+      console.log("[LiveKit Debug] Participant connected:", participant.identity, "camera:", participant.isCameraEnabled);
       addParticipant({
         id: participant.identity,
         fullName: participant.name || participant.identity,
@@ -93,6 +110,7 @@ export function useLiveKit(roomCode: string | null) {
       publication: RemoteTrackPublication,
       participant: RemoteParticipant,
     ) => {
+      console.log("[LiveKit Debug] Track subscribed:", publication.source, "for user:", participant.identity, "track:", track);
       if (!track) return;
 
       const mediaStream = new MediaStream([track.mediaStreamTrack]);
@@ -155,14 +173,22 @@ export function useLiveKit(roomCode: string | null) {
       }
     };
 
+    /**
+     * When a local track is published/unpublished, update localStream in the store —
+     * BUT only when there is NO active filter. When a filter is running, localStream
+     * is owned by useVideoFilter (it holds the canvas stream). We must not override
+     * it with a raw LiveKit stream, otherwise the filter preview would flicker and
+     * the track-replacement effect would fire spuriously.
+     */
     const handleLocalTrackPublished = () => {
-      // Update localStream in mediaStore whenever local tracks change
+      if (useFilterStore.getState().activeFilter !== 'none') return;
       const localP = newRoom.localParticipant;
       const localMediaStream = buildLocalStream(localP);
       setLocalStream(localMediaStream);
     };
 
     const handleLocalTrackUnpublished = () => {
+      if (useFilterStore.getState().activeFilter !== 'none') return;
       const localP = newRoom.localParticipant;
       const localMediaStream = buildLocalStream(localP);
       setLocalStream(localMediaStream);
@@ -202,7 +228,7 @@ export function useLiveKit(roomCode: string | null) {
         setLocalStream(localMediaStream);
 
         // Sync already-connected remote participants
-        room.remoteParticipants.forEach((participant) => {
+        newRoom.remoteParticipants.forEach((participant) => {
           handleParticipantConnected(participant);
 
           // Sync their existing tracks
@@ -238,9 +264,100 @@ export function useLiveKit(roomCode: string | null) {
       newRoom.off(RoomEvent.LocalTrackUnpublished, handleLocalTrackUnpublished);
       newRoom.disconnect();
       roomRef.current = null;
+      nativeCameraTrackRef.current = null;
       setRoom(null);
     };
   }, [roomCode, myUserId]);
+
+  // =========================================================================
+  // FILTER TRACK REPLACEMENT (Zero-Renegotiation)
+  //
+  // Uses LocalVideoTrack.replaceTrack() which calls RTCRtpSender.replaceTrack()
+  // under the hood. This swaps the underlying MediaStreamTrack on the existing
+  // WebRTC transceiver WITHOUT any SDP renegotiation — no unpublish/publish,
+  // no negotiation storm, no timeout. Remote users see the change instantly.
+  //
+  //   Filter ON  → save native camera MST → replaceTrack(canvasMediaStreamTrack)
+  //   Filter OFF → replaceTrack(savedNativeCameraTrack) → clear saved ref
+  // =========================================================================
+
+  useEffect(() => {
+    const currentRoom = roomRef.current;
+    if (!currentRoom?.localParticipant || !isConnected) return;
+
+    const localParticipant = currentRoom.localParticipant;
+
+    const handleFilterSwap = async () => {
+      // Get the existing Camera publication — this is the track we will "re-skin"
+      const cameraPub = localParticipant.getTrackPublication(Track.Source.Camera);
+      const publishedVideoTrack = cameraPub?.videoTrack as LocalVideoTrack | undefined;
+
+      if (activeFilter !== 'none') {
+        // ── FILTER IS ACTIVE ──────────────────────────────────────────────
+        // Guard: do nothing if camera is muted or canvas stream not ready yet
+        const isVideoMuted = useMediaStore.getState().isVideoMuted;
+        if (isVideoMuted || !localStream) return;
+
+        const canvasVideoMST = localStream.getVideoTracks()[0];
+        if (!canvasVideoMST) return;
+
+        // ── GUARD: Detect premature trigger (AI model still loading) ─────────
+        // canvas.captureStream() tracks have NO deviceId. Native camera tracks
+        // always have a non-empty deviceId. If deviceId is present → still the
+        // raw camera track → wait for useVideoFilter to emit the canvas stream.
+        const trackSettings = canvasVideoMST.getSettings();
+        if (trackSettings.deviceId) {
+          console.log('[LiveKit Filter] Waiting for canvas stream (AI loading)...');
+          return;
+        }
+
+        // Guard: need a published camera track to replace into
+        if (!publishedVideoTrack) {
+          console.warn('[LiveKit Filter] No published camera track to replace into.');
+          return;
+        }
+
+        // Idempotency guard: skip if this exact MST is already on the published track
+        if (publishedVideoTrack.mediaStreamTrack === canvasVideoMST) {
+          return;
+        }
+
+        // Save the native camera track BEFORE replacing (only once per filter session)
+        if (!nativeCameraTrackRef.current) {
+          nativeCameraTrackRef.current = publishedVideoTrack.mediaStreamTrack;
+          console.log('[LiveKit Filter] Saved native camera track for later restoration.');
+        }
+
+        // ── REPLACE TRACK: swap the underlying MST without SDP renegotiation ──
+        try {
+          await publishedVideoTrack.replaceTrack(canvasVideoMST, true);
+          console.log('[LiveKit Filter] ✅ Canvas track replaced into published camera (zero-renegotiation).');
+        } catch (e) {
+          console.error('[LiveKit Filter] Failed to replace track with canvas:', e);
+        }
+
+      } else {
+        // ── FILTER IS OFF ─────────────────────────────────────────────────
+        // Restore the native camera track if we previously saved one
+        if (nativeCameraTrackRef.current && publishedVideoTrack) {
+          // Only restore if the current track is NOT already the native one
+          if (publishedVideoTrack.mediaStreamTrack !== nativeCameraTrackRef.current) {
+            try {
+              await publishedVideoTrack.replaceTrack(nativeCameraTrackRef.current, true);
+              console.log('[LiveKit Filter] ✅ Native camera track restored (zero-renegotiation).');
+            } catch (e) {
+              console.error('[LiveKit Filter] Failed to restore native camera track:', e);
+            }
+          }
+          nativeCameraTrackRef.current = null;
+        }
+      }
+    };
+
+    handleFilterSwap();
+  // localStream is intentionally in the deps: when useVideoFilter replaces
+  // localStream with the canvas stream, this effect must fire to swap it in.
+  }, [activeFilter, localStream, isConnected]);
 
   // =========================================================================
   // MEDIA CONTROLS
@@ -250,12 +367,34 @@ export function useLiveKit(roomCode: string | null) {
     const room = roomRef.current;
     if (!room?.localParticipant) return;
 
-    const newEnabled = !room.localParticipant.isCameraEnabled;
-    await room.localParticipant.setCameraEnabled(newEnabled);
+    const localParticipant = room.localParticipant;
+    const isFilterActive = useFilterStore.getState().activeFilter !== 'none';
 
-    // Update local stream in store
-    const localMediaStream = buildLocalStream(room.localParticipant);
-    setLocalStream(localMediaStream);
+    // Use mediaStore as the source of truth for "is the camera currently on"
+    const isCurrentlyEnabled = !useMediaStore.getState().isVideoMuted;
+    const newEnabled = !isCurrentlyEnabled;
+
+    if (!newEnabled) {
+      // ── TURNING CAMERA OFF ────────────────────────────────────────────
+      await localParticipant.setCameraEnabled(false);
+      nativeCameraTrackRef.current = null; // Reset saved track since it's being destroyed
+    } else {
+      // ── TURNING CAMERA ON ─────────────────────────────────────────────
+      await localParticipant.setCameraEnabled(true);
+
+      if (!isFilterActive) {
+        // No filter: update localStream with the new native camera stream so
+        // the local preview tile refreshes.
+        const localMediaStream = buildLocalStream(localParticipant);
+        setLocalStream(localMediaStream);
+      }
+      // If filter IS active: handleLocalTrackPublished is suppressed (filter guard),
+      // and useVideoFilter's second effect will detect that localStream changed to
+      // the new raw camera stream and restart the canvas pipeline automatically.
+      // Once the pipeline emits a new canvas stream, setLocalStream(canvasStream)
+      // is called by useVideoFilter, which triggers our replaceTrack useEffect above.
+    }
+
     setIsVideoMuted(!newEnabled);
   }, [setLocalStream, setIsVideoMuted]);
 
@@ -365,6 +504,8 @@ function buildParticipantStream(participant: RemoteParticipant): MediaStream {
 
 /**
  * Build a MediaStream from local participant's camera + mic tracks.
+ * NOTE: Only called when no filter is active. When a filter is active,
+ * localStream is managed by useVideoFilter (canvas stream).
  */
 function buildLocalStream(localParticipant: LocalParticipant): MediaStream {
   const tracks: MediaStreamTrack[] = [];

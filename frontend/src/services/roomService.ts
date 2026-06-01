@@ -31,8 +31,20 @@ export const roomService = {
     return res.data;
   },
 
+  kickUser: async (roomCode: string, userId: string) => {
+    const res = await api.post(`/rooms/${roomCode}/kick/${userId}`);
+    return res.data;
+  },
+
   getRoomParticipants: async (roomCode: string) => {
     const res = await api.get(`/rooms/${roomCode}/participants`);
+    return res.data;
+  },
+
+  transferHost: async (roomCode: string, newHostId: string) => {
+    const res = await api.put(`/rooms/${roomCode}/transfer-host`, {
+      new_host_id: newHostId,
+    });
     return res.data;
   },
 
