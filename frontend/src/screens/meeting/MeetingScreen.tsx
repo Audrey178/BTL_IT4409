@@ -623,20 +623,29 @@ function VideoTile({
 
   useEffect(() => {
     if (videoRef.current) {
-      // Always keep srcObject in sync — prevents stale dead-track when unpausing
-      videoRef.current.srcObject = stream ?? null;
+      // Chỉ gán lại srcObject nếu stream thực sự thay đổi
+      // Việc gán lại srcObject liên tục (ngay cả khi stream giống hệt) 
+      // sẽ khiến browser lập tức abort quá trình play trước đó, gây ra AbortError.
+      if (videoRef.current.srcObject !== (stream ?? null)) {
+        console.log("[LiveKit Debug] [VideoTile] Stream changed, setting new srcObject for", name, "| stream:", !!stream);
+        videoRef.current.srcObject = stream ?? null;
+      }
+      
       if (filterCss) {
         videoRef.current.style.filter = filterCss;
       }
+      
       if (isVideoOff || !stream) {
         videoRef.current.pause();
       } else {
         videoRef.current.play().catch((err) => {
-          console.warn("VideoTile play error:", err);
+          if (err.name !== "AbortError") {
+             console.warn("[LiveKit Debug] VideoTile play error:", err);
+          }
         });
       }
     }
-  }, [stream, isVideoOff, filterCss]);
+  }, [stream, isVideoOff, filterCss, name, isLocal]);
 
   return (
     <div className={`relative overflow-hidden bg-stone-900 shadow-sm group transition-all duration-500 flex flex-col justify-center items-center ${

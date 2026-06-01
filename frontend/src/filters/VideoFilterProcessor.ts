@@ -23,6 +23,18 @@ export class VideoFilterProcessor {
   private TARGET_FRAME_TIME = 33; // ~30fps
   private lastFrameTime = 0;
 
+  /**
+   * Re-entrancy lock. Set to true while an async processFrame is in-flight.
+   * Any new rAF invocation that arrives while this is true is skipped immediately,
+   * preventing multiple async frames from sharing this.ctx simultaneously.
+   *
+   * Why a plain boolean is safe here: JS is single-threaded, so the assignment
+   * `isProcessingFrame = true` executes synchronously before the first `await`,
+   * making it impossible for another invocation to observe it as false until the
+   * current frame releases the lock in the finally block.
+   */
+  private isProcessingFrame = false;
+
   constructor() {
     this.sourceVideo = document.createElement("video");
     this.sourceVideo.autoplay = true;
@@ -85,50 +97,102 @@ export class VideoFilterProcessor {
     if (this.animFrameId) return;
 
     const processFrame = async (timestamp: number) => {
-      const elapsed = timestamp - this.lastFrameTime;
-      if (elapsed < this.TARGET_FRAME_TIME) {
-        this.animFrameId = requestAnimationFrame(processFrame);
-        return;
-      }
+      // ── IMMORTAL LOOP: rAF MUST be re-scheduled regardless of what happens below.
+      // Using a local flag instead of always-at-bottom scheduling so we can
+      // early-return safely while still queuing the next frame.
+      try {
+        const elapsed = timestamp - this.lastFrameTime;
+        if (elapsed < this.TARGET_FRAME_TIME) return; // schedules via finally
 
-      const startProcess = performance.now();
-      const config = useFilterStore.getState();
+        // ── GUARD: Video source readiness ──────────────────────────────────
+        // canvas.captureStream tracks and MediaPipe both require a fully decoded
+        // frame. If the video element is not yet playing or the track was briefly
+        // interrupted (e.g. during LiveKit track swap), videoWidth/videoHeight
+        // can be 0. Feeding a zero-size frame to texImage2D poisons the WebGL
+        // context with INVALID_VALUE errors and leaves MPMask instances unclosed.
+        // Skip this frame silently and wait for the next one.
+        if (
+          this.sourceVideo.readyState < 2 || // < HAVE_CURRENT_DATA
+          this.sourceVideo.videoWidth === 0 ||
+          this.sourceVideo.videoHeight === 0 ||
+          this.sourceVideo.paused ||
+          this.sourceVideo.ended
+        ) {
+          return; // schedules via finally
+        }
 
-      // Step 1: Draw source video frame to canvas (NO mirroring here!)
-      // Mirroring is handled by CSS -scale-x-100 on the <video> element.
-      // Keeping canvas un-mirrored ensures MediaPipe mask/landmark coordinates
-      // align correctly with canvas pixel positions.
-      this.ctx.save();
-      const colorFilterString = this.colorEffect.getFilterString(config);
-      this.ctx.filter = colorFilterString;
-      this.ctx.drawImage(this.sourceVideo, 0, 0, this.canvas.width, this.canvas.height);
-      this.ctx.restore();
+        // ── GUARD: Re-entrancy lock ─────────────────────────────────────────
+        // If the previous frame's AI processing (await bgEffect.apply / detect)
+        // is still running when rAF fires again, skip this frame entirely.
+        // Without this lock, multiple async processFrame calls interleave on the
+        // same this.ctx: frame A's mask gets composited onto frame B's pixels,
+        // producing the "invisible person" bug and WebGL lazy-init warnings.
+        if (this.isProcessingFrame) return; // schedules next frame via finally
+        this.isProcessingFrame = true;      // acquire lock (synchronous, before any await)
 
-      // Step 2: Apply AI Effects
-      if (config.activeFilter === "blur_bg" || config.activeFilter === "virtual_bg") {
-        if (this.segmenter) {
-          const segResult = this.segmenter.segment(this.sourceVideo, timestamp);
-          await this.bgEffect.apply(this.ctx, this.sourceVideo, segResult, config);
+        const startProcess = performance.now();
+        const config = useFilterStore.getState();
+
+        // Step 1: Draw source video frame to canvas (NO mirroring here!)
+        // Mirroring is handled by CSS scale-x-[-1] on the <video> element.
+        // Keeping canvas un-mirrored ensures MediaPipe mask/landmark coordinates
+        // align correctly with canvas pixel positions.
+        this.ctx.save();
+        const colorFilterString = this.colorEffect.getFilterString(config);
+        this.ctx.filter = colorFilterString;
+        this.ctx.drawImage(this.sourceVideo, 0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.restore();
+
+        // Step 2: Apply AI Effects
+        // Each AI block is wrapped independently so a crash in one model does
+        // NOT prevent the other from running, and does NOT kill the render loop.
+        if (config.activeFilter === "blur_bg" || config.activeFilter === "virtual_bg") {
+          if (this.segmenter) {
+            try {
+              const segResult = this.segmenter.segment(this.sourceVideo, timestamp);
+              await this.bgEffect.apply(this.ctx, this.sourceVideo, segResult, config);
+            } catch (e) {
+              console.warn("[VideoFilterProcessor] Segmentation error (frame skipped):", e);
+            }
+          }
+        }
+
+        if (config.activeFilter === "face_mask" && config.activeMasks.length > 0) {
+          if (this.faceLandmarker) {
+            try {
+              const faceResult = this.faceLandmarker.detect(this.sourceVideo, timestamp);
+              this.faceMaskEffect.apply(this.ctx, faceResult, config);
+            } catch (e) {
+              console.warn("[VideoFilterProcessor] Face landmark error (frame skipped):", e);
+            }
+          }
+        }
+
+        // Auto-adjust FPS if processing is too slow
+        const processTime = performance.now() - startProcess;
+        if (processTime > 40) {
+          this.TARGET_FRAME_TIME = 50; // drop to ~20fps under load
+        } else if (processTime < 25) {
+          this.TARGET_FRAME_TIME = 33; // restore ~30fps when fast
+        }
+
+        this.lastFrameTime = timestamp;
+
+      } catch (e) {
+        // Outer catch — unexpected errors (e.g. context lost, memory issues).
+        // Log but never let an exception escape to the rAF scheduler, which
+        // would silently stop the loop and leave the canvas black permanently.
+        console.error("[VideoFilterProcessor] Unexpected error in processFrame:", e);
+      } finally {
+        // ── IMMORTALITY GUARANTEE ──────────────────────────────────────────
+        // Release the re-entrancy lock BEFORE scheduling the next frame so
+        // the incoming rAF callback sees isProcessingFrame = false and can
+        // proceed normally. Order matters: unlock → then reschedule.
+        this.isProcessingFrame = false;
+        if (this.animFrameId !== null) {
+          this.animFrameId = requestAnimationFrame(processFrame);
         }
       }
-
-      if (config.activeFilter === "face_mask" && config.activeMasks.length > 0) {
-        if (this.faceLandmarker) {
-          const faceResult = this.faceLandmarker.detect(this.sourceVideo, timestamp);
-          this.faceMaskEffect.apply(this.ctx, faceResult, config);
-        }
-      }
-
-      // Auto-adjust FPS if processing is too slow
-      const processTime = performance.now() - startProcess;
-      if (processTime > 40) {
-        this.TARGET_FRAME_TIME = 50; // drop to 20fps
-      } else if (processTime < 25) {
-        this.TARGET_FRAME_TIME = 33; // restore 30fps
-      }
-
-      this.lastFrameTime = timestamp;
-      this.animFrameId = requestAnimationFrame(processFrame);
     };
 
     this.animFrameId = requestAnimationFrame(processFrame);
