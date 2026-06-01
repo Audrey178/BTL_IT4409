@@ -3,7 +3,7 @@ import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } fr
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { CallSessionState } from "@/stores/messageStore";
-import type { ConversationCallParticipant } from "@/hooks/useWebRTCCall";
+import type { ConversationCallParticipant } from "@/hooks/chat/useWebRTCCall";
 import { CallMediaTile } from "./CallMediaTile";
 
 interface IncomingCallCardProps {

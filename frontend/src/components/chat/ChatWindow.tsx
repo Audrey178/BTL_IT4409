@@ -1,5 +1,5 @@
 import type { ConversationItem, ChatMessage } from "@/services/chatService";
-import type { ComposerState } from "@/hooks/useMessages";
+import type { ComposerState } from "@/hooks/chat/useMessages";
 import type { PresenceEntry } from "@/stores/messageStore";
 import { ChatHeader } from "./ChatHeader";
 import { ChatTabs } from "./ChatTabs";

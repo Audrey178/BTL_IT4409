@@ -69,7 +69,6 @@ export function useChatEvents(roomCode: string | null) {
     if (!roomCode) return;
 
     const handleReceive = (data: ChatReceivePayload) => {
-      console.log('[CHAT RECEIVE]', { data });
       // If server returns a clientId, replace any optimistic message that used that clientId.
       const msg: ChatMessage = {
         id: data.messageId,

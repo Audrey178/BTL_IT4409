@@ -3,7 +3,6 @@ import { useParams, useNavigate } from "react-router";
 import { motion } from "motion/react";
 import {
   ArrowLeft,
-  Video,
   Clock,
   CalendarDays,
   User,
@@ -13,35 +12,13 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import SideBar from "@/components/layout/SideBar";
+import { ChatBubble } from "@/components/pages/archives/ChatBubble";
+import { formatDuration, formatDate } from "@/utils/dateFormat";
 import { recordingService, type Recording } from "@/services/recordingService";
 import { chatService, type ChatMessage } from "@/services/chatService";
 
-function formatDuration(seconds: number | null | undefined): string {
-  if (!seconds) return "--:--";
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  if (h > 0) return `${h}h ${m}m ${s}s`;
-  return `${m}m ${s}s`;
-}
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("vi-VN", {
-    weekday: "long",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
-function formatTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleTimeString("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 export function RecordingPlayerScreen() {
   const { id } = useParams<{ id: string }>();
@@ -266,39 +243,4 @@ export function RecordingPlayerScreen() {
   );
 }
 
-/* ---- Sub-components ---- */
 
-function ChatBubble({ message }: { message: ChatMessage }) {
-  if (message.type === "system") {
-    return (
-      <div className="flex justify-center">
-        <span className="text-[11px] text-on-surface-variant/50 bg-surface-container px-3 py-1 rounded-full italic">
-          {message.content}
-        </span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex gap-2.5 group">
-      <Avatar className="w-7 h-7 shrink-0 mt-0.5">
-        <AvatarFallback className="bg-surface-container-high text-on-surface-variant text-[11px] font-bold">
-          {message.sender_name?.[0]?.toUpperCase() || "?"}
-        </AvatarFallback>
-      </Avatar>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-2">
-          <span className="text-xs font-bold text-on-surface truncate">
-            {message.sender_name}
-          </span>
-          <span className="text-[10px] text-on-surface-variant/40 shrink-0">
-            {formatTime(message.timestamp)}
-          </span>
-        </div>
-        <p className="text-sm text-on-surface-variant leading-relaxed break-words mt-0.5">
-          {message.content}
-        </p>
-      </div>
-    </div>
-  );
-}

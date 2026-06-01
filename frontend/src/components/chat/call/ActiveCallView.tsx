@@ -2,7 +2,7 @@ import { LayoutGrid, UserPlus } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import type { CallSessionState } from "@/stores/messageStore";
-import type { ConversationCallParticipant } from "@/hooks/useWebRTCCall";
+import type { ConversationCallParticipant } from "@/hooks/chat/useWebRTCCall";
 import { CallControlBar } from "./CallControlBar";
 import { CallMediaTile } from "./CallMediaTile";
 

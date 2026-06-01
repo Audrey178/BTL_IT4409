@@ -1,0 +1,2 @@
+/home/ec2-user/SageMaker/VietASR/ASR/download/train
+/home/ec2-user/SageMaker/VietASR/dataset_tranthanh.zip

@@ -1,7 +1,7 @@
 import { PhoneOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import type { ConversationCallParticipant } from "@/hooks/useWebRTCCall";
+import type { ConversationCallParticipant } from "@/hooks/chat/useWebRTCCall";
 import type { CallSessionState } from "@/stores/messageStore";
 import { ActiveCallView } from "./call/ActiveCallView";
 import { IncomingCallCard } from "./call/IncomingCallCard";

@@ -2,13 +2,14 @@ import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { useMedia } from "@/hooks/useMedia";
+import { useMedia } from "@/hooks/camera/useMedia";
 import { useMediaStore } from "@/stores/mediaStore";
 import { useMeetingStore } from "@/stores/meetingStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useSocket } from "@/hooks/useSocket";
 import { ROOM_EVENTS } from "@/socket/events";
 import { roomService } from "@/services/roomService";
+import { VIDEO_FILTERS, type VideoFilterKey } from "@/constants/videoFilters";
 import type { Room } from "@/types";
 import {
   Mic,
@@ -16,9 +17,6 @@ import {
   Video,
   VideoOff,
   Settings,
-  ChevronLeft,
-  Bell,
-  HelpCircle,
   Loader2,
   Copy,
   Check,
@@ -28,19 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { WaitingScreen } from "@/components/pages/lobby/WaitingScreen";
 import { TopNav } from "@/components/layout/TopNav";
-
-type VideoFilterKey = "original" | "warm" | "mono" | "cool" | "golden";
-
-const VIDEO_FILTERS: Record<
-  VideoFilterKey,
-  { label: string; css: string; accent: string }
-> = {
-  original: { label: "Original", css: "none", accent: "bg-surface-container-highest" },
-  warm: { label: "Warm", css: "sepia(0.25) saturate(1.35) contrast(1.04) brightness(1.02)", accent: "bg-orange-200" },
-  mono: { label: "Mono", css: "grayscale(1) contrast(1.05)", accent: "bg-stone-300" },
-  cool: { label: "Cool", css: "saturate(1.15) hue-rotate(20deg) contrast(1.05)", accent: "bg-blue-100" },
-  golden: { label: "Golden", css: "sepia(0.18) saturate(1.55) brightness(1.08) contrast(1.03)", accent: "bg-rose-100" },
-};
+import { LobbyControl } from "@/components/pages/lobby/LobbyControl";
 
 export function LobbyScreen() {
   const [searchParams] = useSearchParams();
@@ -518,33 +504,5 @@ export function LobbyScreen() {
         </div>
       </footer>
     </div>
-  );
-}
-
-function LobbyControl({
-  icon,
-  label,
-  active = false,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  active?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <button onClick={onClick} className="flex flex-col items-center gap-1.5 group">
-      <div
-        className={`w-14 h-14 rounded-full flex items-center justify-center transition-all active:scale-90 ${active
-          ? "bg-primary text-white shadow-lg shadow-primary/20"
-          : "bg-surface-container-highest text-on-surface-variant hover:bg-surface-variant"
-          }`}
-      >
-        {icon}
-      </div>
-      <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">
-        {label}
-      </span>
-    </button>
   );
 }

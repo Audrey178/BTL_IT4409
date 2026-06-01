@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { Paperclip, Reply, Send, Smile, SquarePen, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import type { ComposerState } from "@/hooks/useMessages";
+import type { ComposerState } from "@/hooks/chat/useMessages";
 
 import { chatService, type MessageType } from "@/services/chatService";
 import EmojiPicker from "@/components/ui/EmojiPicker";

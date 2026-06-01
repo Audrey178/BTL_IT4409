@@ -1,27 +1,25 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useSocket } from "@/hooks/useSocket";
-import { useLiveKit } from "@/hooks/useLiveKit";
-import { useRoomEvents } from "@/hooks/useRoomEvents";
-import { useChatEvents } from "@/hooks/useChatEvents";
-import { useRecording } from "@/hooks/useRecording";
+import { useLiveKit } from "@/hooks/meetings/useLiveKit";
+import { useRoomEvents } from "@/hooks/meetings/useRoomEvents";
+import { useChatEvents } from "@/hooks/chat/useChatEvents";
+import { useRecording } from "@/hooks/meetings/useRecording";
 import { useMediaStore } from "@/stores/mediaStore";
 import { useMeetingStore } from "@/stores/meetingStore";
 import { useAuthStore } from "@/stores/useAuthStore";
-import { useVideoFilter } from "@/hooks/useVideoFilter";
+import { useVideoFilter } from "@/hooks/filter/useVideoFilter";
 import { useFilterStore } from "@/stores/filterStore";
 import { ROOM_EVENTS, MEDIA_EVENTS } from "@/socket/events";
+import { VIDEO_FILTERS } from "@/constants/videoFilters";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import {
   Mic, MicOff, Video, VideoOff, ScreenShare, ScreenShareOff,
-  PhoneOff, MessageSquare, Users, X, XCircle,
-  Sparkles, CheckCircle2, Badge, MonitorUp, Circle, Crown,
+  PhoneOff, MessageSquare, Users, Sparkles, MonitorUp, Circle, Badge,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Switch } from "@/components/ui/switch";
 import { WaitingRoomPanel } from "@/components/pages/meeting/WaitingRoomPanel";
 import { ChatPanel } from "@/components/pages/meeting/ChatPanel";
 import { EndMeetingDialog } from "@/components/pages/meeting/EndMeetingDialog";
@@ -29,60 +27,12 @@ import ParticipantsPanel from '@/components/pages/meeting/ParticipantsPanel';
 import { RecordingBanner } from "@/components/pages/meeting/RecordingBanner";
 import { RecordingConsentDialog } from "@/components/pages/meeting/RecordingConsentDialog";
 import { StopRecordingDialog } from "@/components/pages/meeting/StopRecordingDialog";
-import { roomService } from "@/services/roomService";
 import FilterPanel from "@/components/pages/meeting/FilterPanel";
-
-type VideoFilterKey = "original" | "warm" | "mono" | "cool" | "golden";
-
-type FaceBox = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
-
-const VIDEO_FILTERS: Record<
-  VideoFilterKey,
-  { label: string; css: string; accent: string }
-> = {
-  original: {
-    label: "Original",
-    css: "none",
-    accent: "bg-surface-container-highest",
-  },
-  warm: {
-    label: "Warm",
-    css: "sepia(0.25) saturate(1.35) contrast(1.04) brightness(1.02)",
-    accent: "bg-orange-200",
-  },
-  mono: {
-    label: "Mono",
-    css: "grayscale(1) contrast(1.05)",
-    accent: "bg-stone-300",
-  },
-  cool: {
-    label: "Cool",
-    css: "saturate(1.15) hue-rotate(20deg) contrast(1.05)",
-    accent: "bg-blue-100",
-  },
-  golden: {
-    label: "Golden",
-    css: "sepia(0.18) saturate(1.55) brightness(1.08) contrast(1.03)",
-    accent: "bg-rose-100",
-  },
-};
-
-type FaceDetectorInstance = {
-  detect: (
-    source: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
-  ) => Promise<Array<{ boundingBox: DOMRectReadOnly }>>;
-};
-
-type FaceDetectorConstructor = new (options?: {
-  fastMode?: boolean;
-  maxDetectedFaces?: number;
-}) => FaceDetectorInstance;
-
+import { ScreenShareVideo } from "@/components/pages/meeting/ScreenShareVideo";
+import { SelfPreviewVideo } from "@/components/pages/meeting/SelfPreviewVideo";
+import { VideoTile } from "@/components/pages/meeting/VideoTile";
+import { ControlButton } from "@/components/pages/meeting/ControlButton";
+import { roomService } from "@/services/roomService";
 
 export function MeetingScreen() {
   const { id } = useParams<{ id: string }>();
@@ -581,139 +531,3 @@ export function MeetingScreen() {
     </div>
   );
 }
-
-/* ====================== Sub-components ====================== */
-
-function ScreenShareVideo({ stream }: { stream: MediaStream }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream;
-      videoRef.current.play().catch(err => console.warn("Screen share play error:", err));
-    }
-  }, [stream]);
-  return <video ref={videoRef} autoPlay playsInline className="w-full h-full object-contain bg-black" />;
-}
-
-function SelfPreviewVideo({ stream, filterCss }: { stream: MediaStream, filterCss?: string }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el) return;
-    if (el.srcObject !== stream) {
-      el.srcObject = stream;
-      el.play().catch(err => console.warn("Self preview play error:", err));
-    }
-    // Apply CSS filter only when no AI filter is active (canvas handles it otherwise)
-    el.style.filter = filterCss && filterCss !== "none" ? filterCss : "";
-  }, [stream, filterCss]);
-  return <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover -scale-x-100" />;
-}
-
-function VideoTile({
-  name, stream, isMuted = false, isVideoOff = false,
-  isHost = false, isLocal = false, compact = false, filterCss,
-  showTransferAction = false, isTransferPending = false, onTransferHost,
-}: {
-  name: string; stream?: MediaStream | null; isMuted?: boolean;
-  isVideoOff?: boolean; isHost?: boolean; isLocal?: boolean; compact?: boolean; filterCss?: string;
-  showTransferAction?: boolean; isTransferPending?: boolean; onTransferHost?: () => void;
-}) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    if (videoRef.current) {
-      // Chỉ gán lại srcObject nếu stream thực sự thay đổi
-      // Việc gán lại srcObject liên tục (ngay cả khi stream giống hệt) 
-      // sẽ khiến browser lập tức abort quá trình play trước đó, gây ra AbortError.
-      if (videoRef.current.srcObject !== (stream ?? null)) {
-        console.log("[LiveKit Debug] [VideoTile] Stream changed, setting new srcObject for", name, "| stream:", !!stream);
-        videoRef.current.srcObject = stream ?? null;
-      }
-      
-      if (filterCss) {
-        videoRef.current.style.filter = filterCss;
-      }
-      
-      if (isVideoOff || !stream) {
-        videoRef.current.pause();
-      } else {
-        videoRef.current.play().catch((err) => {
-          if (err.name !== "AbortError") {
-             console.warn("[LiveKit Debug] VideoTile play error:", err);
-          }
-        });
-      }
-    }
-  }, [stream, isVideoOff, filterCss, name, isLocal]);
-
-  return (
-    <div className={`relative overflow-hidden bg-stone-900 shadow-sm group transition-all duration-500 flex flex-col justify-center items-center ${
-      compact ? "rounded-2xl aspect-video" : "rounded-[2.5rem]"
-    } ${isHost && !compact ? "scale-[1.02] border-2 border-primary/20" : ""}`}>
-      
-      {/* Video Container (always in DOM, smooth transition) */}
-      <div className={`absolute inset-0 w-full h-full transition-opacity duration-500 ${stream && !isVideoOff ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
-        <video ref={videoRef} autoPlay playsInline muted={isLocal} className="w-full h-full object-cover -scale-x-100" />
-      </div>
-
-      {/* Avatar Fallback Container (always in DOM, smooth transition) */}
-      <div className={`absolute inset-0 w-full h-full flex items-center justify-center transition-opacity duration-500 ${stream && !isVideoOff ? "opacity-0 pointer-events-none" : "opacity-100 pointer-events-auto"}`}>
-        <Avatar className={compact ? "w-10 h-10" : "w-24 h-24"}>
-          <AvatarFallback className={`bg-surface-container-highest text-on-surface-variant ${compact ? "text-lg" : "text-4xl"}`}>
-            {name?.[0]?.toUpperCase() || "G"}
-          </AvatarFallback>
-        </Avatar>
-      </div>
-      
-      <div className={`absolute bottom-3 left-3 flex items-center gap-2 px-3 py-1.5 bg-black/40 backdrop-blur-md rounded-full text-white border border-white/10 ${
-        compact ? "text-[10px]" : "text-sm bottom-6 left-6 gap-3 px-4 py-2"
-      }`}>
-        {isMuted ? <MicOff size={compact ? 10 : 14} className="text-error" /> : <Mic size={compact ? 10 : 14} />}
-        <span className="font-bold truncate max-w-20">{name}</span>
-        {isHost && !compact && (
-          <span className="text-[10px] text-primary-fixed bg-primary/20 px-1.5 py-0.5 rounded">Host</span>
-        )}
-      </div>
-
-      {showTransferAction && !isLocal && onTransferHost && (
-        <button
-          type="button"
-          onClick={onTransferHost}
-          disabled={isTransferPending}
-          className="absolute top-3 right-3 px-3 py-1.5 rounded-full bg-black/45 text-white border border-white/15 text-[11px] font-semibold flex items-center gap-1.5 hover:bg-black/65 disabled:opacity-60"
-        >
-          <Crown size={12} />
-          {isTransferPending ? 'Transferring...' : 'Make host'}
-        </button>
-      )}
-    </div>
-  );
-}
-
-
-
-function ControlButton({ icon, label, active = false, badge, className, onClick }: {
-  icon: React.ReactNode; label?: string; active?: boolean;
-  badge?: number; className?: string; onClick?: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      title={label}
-      className={`relative h-14 w-14 rounded-full flex items-center justify-center transition-all active:scale-90 border border-outline-variant/20 ${
-        active ? "bg-secondary-container text-primary border-primary/20" : "bg-surface-container-highest text-on-surface-variant hover:bg-orange-100"
-      } ${className}`}
-    >
-      {icon}
-      {label && <span className="ml-2 font-bold text-sm">{label}</span>}
-      {badge !== undefined && (
-        <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
-          {badge}
-        </span>
-      )}
-    </button>
-  );
-}
-
-
