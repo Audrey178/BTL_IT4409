@@ -52,4 +52,8 @@ export const roomService = {
     const res = await api.put(`/rooms/${roomCode}/end`);
     return res.data;
   },
+  deleteRoom: async (roomCode: string) => {
+    const res = await api.delete(`/rooms/${roomCode}`);
+    return res.data;
+  },
 };

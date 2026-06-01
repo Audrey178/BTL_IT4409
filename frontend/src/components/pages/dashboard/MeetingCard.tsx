@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Clock, ShieldCheck, Video, MoreVertical } from "lucide-react";
+import { Clock, ShieldCheck, Video, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ScheduledMeeting } from "@/types";
 
 interface MeetingCardProps {
   meeting: ScheduledMeeting;
   onJoin: (code: string) => void;
+  onDelete?: (code: string) => void;
+  currentUserId?: string | null;
+  isDeleting?: boolean;
 }
 
-const MeetingCard = ({ meeting, onJoin }: MeetingCardProps) => {
+const MeetingCard = ({ meeting, onJoin, onDelete, currentUserId, isDeleting = false }: MeetingCardProps) => {
   const [timeDiffMinutes, setTimeDiffMinutes] = useState<number | null>(null);
 
   useEffect(() => {
@@ -46,6 +49,8 @@ const MeetingCard = ({ meeting, onJoin }: MeetingCardProps) => {
   }
 
   const isTooEarly = timeDiffMinutes !== null && timeDiffMinutes > 15;
+  const hostId = typeof meeting.host_id === "object" ? meeting.host_id._id : meeting.host_id;
+  const canDelete = !!onDelete && !!currentUserId && hostId?.toString() === currentUserId.toString();
 
   return (
     <motion.div
@@ -99,6 +104,19 @@ const MeetingCard = ({ meeting, onJoin }: MeetingCardProps) => {
       </div>
       
       <div className="flex items-center gap-3">
+        {canDelete && (
+          <Button
+            type="button"
+            onClick={() => onDelete(meeting.room_code)}
+            disabled={isDeleting}
+            variant="outline"
+            className="h-12 rounded-full border-red-200 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800 px-5 font-bold gap-2"
+          >
+            {isDeleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+            {isDeleting ? "Deleting" : "Delete"}
+          </Button>
+        )}
+
         {/* Only show join button if it's not too early or if it's an instant meeting */}
         <Button
           onClick={() => onJoin(meeting.room_code)}

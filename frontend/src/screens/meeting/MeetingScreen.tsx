@@ -558,7 +558,7 @@ export function MeetingScreen() {
       <EndMeetingDialog
         open={showEndDialog}
         onOpenChange={setShowEndDialog}
-        isHost={isHost}
+        isHost={!!isHost}
         onLeave={handleLeaveMeeting}
         onEndForAll={handleEndMeetingForAll}
         isLoading={isEndingMeeting}

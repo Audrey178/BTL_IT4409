@@ -231,6 +231,26 @@ router.put('/:roomCode/end', roomController.endRoom.bind(roomController));
 
 /**
  * @swagger
+ * /rooms/{roomCode}:
+ *   delete:
+ *     summary: Permanently delete a room (host only)
+ *     tags: [Rooms]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: roomCode
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Room deleted successfully
+ */
+router.delete('/:roomCode', roomController.deleteRoom.bind(roomController));
+
+/**
+ * @swagger
  * /rooms/{roomCode}/participants:
  *   get:
  *     summary: Get room participants

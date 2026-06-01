@@ -13,7 +13,7 @@
  * Tác giả: Meeting Team
  */
 
-import { Room, RoomMember, MeetingEvent } from '../models/index.js';
+import { Room, RoomMember, MeetingEvent, Recording } from '../models/index.js';
 import { getRedisClient, addToSet, removeFromSet, deleteRedisKey } from '../config/redis.js';
 import { HTTP_STATUS, ERROR_MESSAGES, ROOM_STATUS, USER_STATUS, EVENT_TYPE } from '../utils/constants.js';
 import logger from '../utils/logger.js';
@@ -511,6 +511,63 @@ class RoomService {
       return { success: true, room: this.mapRoom(room) };
     } catch (error) {
       logger.error('End room error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete room (permanently remove room and associated data)
+   * @param {String} roomCode
+   * @param {String} hostId
+   */
+  async deleteRoom(roomCode, hostId) {
+    try {
+      const normalizedCode = roomCode ? roomCode.toUpperCase() : '';
+      const room = await Room.findOne({ room_code: normalizedCode });
+      if (!room) {
+        const error = new Error(ERROR_MESSAGES.ROOM_NOT_FOUND);
+        error.statusCode = HTTP_STATUS.NOT_FOUND;
+        throw error;
+      }
+
+      if (room.host_id.toString() !== hostId.toString()) {
+        const error = new Error(ERROR_MESSAGES.NOT_HOST);
+        error.statusCode = HTTP_STATUS.FORBIDDEN;
+        throw error;
+      }
+
+      // If recording is active, attempt to stop it first
+      try {
+        const recordingStatus = await recordingService.getLiveKitRecordingStatus(normalizedCode);
+        if (recordingStatus.isRecording) {
+          await recordingService.stopLiveKitRecording(normalizedCode, hostId);
+          logger.info(`✓ Auto-stopped recording for room ${normalizedCode} before delete`);
+        }
+      } catch (err) {
+        logger.warn('Failed to auto-stop recording on room delete:', err.message);
+      }
+
+      // Remove related documents: members, events, recordings
+      await RoomMember.deleteMany({ room_id: room._id });
+      await MeetingEvent.deleteMany({ room_id: room._id });
+      await Recording.deleteMany({ room_id: room._id });
+
+      // Remove Redis keys
+      await deleteRedisKey(`room:${normalizedCode}:members`);
+      await deleteRedisKey(`room:${normalizedCode}:host`);
+      await deleteRedisKey(`room:${normalizedCode}:host:socket`);
+      await deleteRedisKey(`room:${normalizedCode}:egress_id`);
+      await deleteRedisKey(`room:${normalizedCode}:egress_start_time`);
+      await deleteRedisKey(`room:${normalizedCode}:egress_recorder_id`);
+      await deleteRedisKey(`room:${normalizedCode}:recording_path`);
+
+      // Finally remove the room document
+      await Room.deleteOne({ _id: room._id });
+
+      logger.info(`✓ Room deleted permanently: ${normalizedCode}`);
+      return { success: true, message: 'Room deleted successfully', roomCode: normalizedCode };
+    } catch (error) {
+      logger.error('Delete room error:', error);
       throw error;
     }
   }

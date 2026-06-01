@@ -22,16 +22,41 @@ import { ScheduleMeetingDialog } from "@/components/pages/dashboard/room/Schedul
 import { useUpcomingMeetings } from "@/hooks/useUpcomingMeetings";
 import { useMeetingReminder } from "@/hooks/useMeetingReminder";
 import { useFcmMeetingReminders } from "@/hooks/useFcmMeetingReminders";
+import { useAuthStore } from "@/stores/useAuthStore";
+import { roomService } from "@/services/roomService";
+import { toast } from "sonner";
 
 export function DashboardScreen() {
   const navigate = useNavigate();
+  const authUser = useAuthStore((state) => state.user);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
   const [showJoinDialog, setShowJoinDialog] = useState(false);
+  const [deletingRoomCode, setDeletingRoomCode] = useState<string | null>(null);
 
   const { meetings, loading, refetch } = useUpcomingMeetings();
   useMeetingReminder(meetings);
   useFcmMeetingReminders();
+
+  const handleDeleteMeeting = async (roomCode: string) => {
+    const confirmed = window.confirm(
+      "Delete this meeting permanently? This will remove the room and all related data."
+    );
+    if (!confirmed) return;
+
+    setDeletingRoomCode(roomCode);
+    try {
+      await roomService.deleteRoom(roomCode);
+      toast.success("Meeting deleted successfully");
+      await refetch();
+    } catch (error) {
+      toast.error("Failed to delete meeting");
+    } finally {
+      setDeletingRoomCode(null);
+    }
+  };
+
+  const currentUserId = authUser?._id?.toString();
 
   return (
     <div className="flex min-h-screen">
@@ -67,7 +92,7 @@ export function DashboardScreen() {
             </Button>
             <Button
               onClick={() => setShowScheduleDialog(true)}
-              className="h-14 px-8 bg-gradient-to-r from-primary to-primary-container text-white rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3 group"
+              className="h-14 px-8 bg-linear-to-r from-primary to-primary-container text-white rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3 group"
             >
               <Plus
                 className="group-hover:rotate-90 transition-transform"
@@ -189,7 +214,10 @@ export function DashboardScreen() {
                   <MeetingCard
                     key={meeting.room_code}
                     meeting={meeting}
+                    currentUserId={currentUserId}
+                    isDeleting={deletingRoomCode === meeting.room_code}
                     onJoin={(code) => navigate(`/lobby?code=${code}`)}
+                    onDelete={(code) => handleDeleteMeeting(code)}
                   />
                 ))
               )}

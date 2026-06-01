@@ -219,6 +219,50 @@ class RoomController {
   }
 
   /**
+   * DELETE /api/v1/rooms/:roomCode - Permanently delete a room (host only)
+   */
+  async deleteRoom(req, res) {
+    try {
+      const { roomCode } = req.params;
+      const result = await roomService.deleteRoom(roomCode, req.userId);
+
+      const io = req.app.locals.io;
+      const normalizedCode = roomCode ? roomCode.toUpperCase() : '';
+
+      if (io && normalizedCode) {
+        // Notify clients in the room that it has been ended/deleted
+        io.to(normalizedCode).emit(SOCKET_EVENTS.ROOM_ENDED, {
+          roomCode: normalizedCode,
+          message: 'This meeting has been deleted by the host',
+        });
+
+        // Force-disconnect all sockets in the room
+        const roomSockets = io.sockets.adapter.rooms.get(normalizedCode) || new Set();
+        for (const socketId of roomSockets) {
+          try {
+            io.to(socketId).emit(SOCKET_EVENTS.FORCE_DISCONNECT, {
+              roomCode: normalizedCode,
+              message: 'Meeting deleted by host',
+            });
+            const s = io.sockets.sockets.get(socketId);
+            if (s) s.disconnect(true);
+          } catch (e) {
+            // ignore
+          }
+        }
+      }
+
+      res.status(HTTP_STATUS.OK).json(result);
+    } catch (error) {
+      logger.error('Delete room error:', error);
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+
+  /**
    * GET /api/v1/rooms/:roomCode/participants - Danh sách người tham gia
    */
   async getRoomParticipants(req, res) {
