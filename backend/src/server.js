@@ -9,6 +9,12 @@ import notificationService from './services/notification.service.js';
 import { verifyAccessToken } from './utils/jwt.js';
 import logger from './utils/logger.js';
 
+const parseCorsOrigins = () =>
+  (process.env.CORS_ORIGIN || 'http://localhost:3000')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || 'localhost';
 
@@ -18,7 +24,7 @@ const httpServer = http.createServer(app);
 // Socket.IO Configuration with JWT Authentication Middleware
 const io = new SocketIOServer(httpServer, {
   cors: {
-    origin: (process.env.CORS_ORIGIN || 'http://localhost:3000').split(','),
+    origin: parseCorsOrigins(),
     credentials: true,
   },
   transports: ['websocket', 'polling'],

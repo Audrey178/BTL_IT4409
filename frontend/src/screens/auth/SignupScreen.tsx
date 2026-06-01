@@ -9,11 +9,17 @@ import { useNavigate } from "react-router";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useState } from "react";
 
-const signUpSchema = z.object({
-  fullname: z.string().min(1, "FullName must be have!"),
-  email: z.email("Email is not valid!"),
-  password: z.string().min(8, "Password have least 8 characters."),
-});
+const signUpSchema = z
+  .object({
+    fullname: z.string().min(1, "FullName must be have!"),
+    email: z.string().email("Email is not valid!"),
+    password: z.string().min(8, "Password have least 8 characters."),
+    confirmPassword: z.string().min(8, "Confirm password is required"),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    path: ["confirmPassword"],
+    message: "Passwords do not match",
+  });
 
 type SignUpFormValue = z.infer<typeof signUpSchema>;
 
@@ -123,6 +129,24 @@ export function SignupScreen() {
           {/* Error */}
           {errors.password && (
             <p className="text-xs text-red-500">{errors.password.message}</p>
+          )}
+        </div>
+        <div className="space-y-2">
+          <label
+            htmlFor="confirmPassword"
+            className="block text-sm font-semibold text-on-surface-variant px-1"
+          >
+            Confirm Password
+          </label>
+          <Input
+            id="confirmPassword"
+            className="h-14 rounded-xl border-none bg-surface-container-highest text-on-surface placeholder:text-outline focus-visible:ring-2 focus-visible:ring-primary/20"
+            placeholder="••••••••"
+            type={isHide ? "password" : "text"}
+            {...register("confirmPassword")}
+          />
+          {errors.confirmPassword && (
+            <p className="text-xs text-red-500">{errors.confirmPassword.message}</p>
           )}
         </div>
         <Button

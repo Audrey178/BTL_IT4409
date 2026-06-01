@@ -104,6 +104,65 @@ class AuthController {
   }
 
   /**
+   * POST /api/v1/auth/google
+   * Verify Google token via middleware and sign in / register user
+   */
+  async googleAuth(req, res) {
+    try {
+      const googleUser = req.googleUser;
+      const result = await authService.loginOrRegisterWithGoogle(googleUser);
+      res.status(200).json(result);
+    } catch (error) {
+      logger.error('Google auth controller error:', error);
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        message: error.message || 'Google auth failed',
+      });
+    }
+  }
+
+  /**
+   * GET /api/v1/auth/verify-email?token=...
+   */
+  async verifyEmail(req, res) {
+    try {
+      const token = req.query.token;
+      if (!token) {
+        return res.status(400).json({ success: false, message: 'Missing token' });
+      }
+
+      const user = await authService.verifyEmail(String(token));
+      res.status(200).json({ success: true, message: 'Email verified', user });
+    } catch (error) {
+      logger.error('Verify email controller error:', error);
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        message: error.message || 'Verification failed',
+      });
+    }
+  }
+
+  /**
+   * POST /api/v1/auth/resend-verification
+   * Body: { email }
+   */
+  async resendVerification(req, res) {
+    try {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ success: false, message: 'Email required' });
+
+      await authService.resendVerification(email);
+      res.status(200).json({ success: true, message: 'Verification email resent' });
+    } catch (error) {
+      logger.error('Resend verification controller error:', error);
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        message: error.message || 'Resend failed',
+      });
+    }
+  }
+
+  /**
    * POST /api/v1/auth/logout
    * Blacklist refresh token in Redis
    */

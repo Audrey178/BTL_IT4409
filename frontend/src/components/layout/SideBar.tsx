@@ -23,7 +23,10 @@ const SideBar = ({ onNewMeeting }: SideBarProps) => {
   const location = useLocation();
   const { logout } = useAuthStore();
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) => {
+    if (path === "/") return location.pathname === "/";
+    return location.pathname.startsWith(path);
+  };
 
   return (
     <div>
@@ -53,7 +56,12 @@ const SideBar = ({ onNewMeeting }: SideBarProps) => {
             active={isActive("/schedule")}
             onClick={() => navigate("/schedule")}
           />
-          <NavItem icon={<MessageSquare size={20} />} label="Messages" />
+          <NavItem
+            icon={<MessageSquare size={20} />}
+            label="Messages"
+            active={isActive("/messages")}
+            onClick={() => navigate("/messages")}
+          />
           <NavItem
             icon={<Archive size={20} />}
             label="Archives"
@@ -79,7 +87,7 @@ const SideBar = ({ onNewMeeting }: SideBarProps) => {
           </button>
           <button
             onClick={() => navigate("/profile")}
-            className="flex items-center gap-4 text-on-surface-variant hover:text-primary transition-colors w-full"
+            className={`flex items-center gap-4 transition-colors w-full px-1 py-2 rounded ${isActive("/profile") ? 'text-primary font-bold' : 'text-on-surface-variant hover:text-primary'}`}
           >
             <Settings size={20} />
             <span className="text-sm font-medium">Settings</span>

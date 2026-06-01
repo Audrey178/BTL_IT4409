@@ -117,6 +117,7 @@ export function ProfileScreen() {
               </div>
 
               <Button
+                type="submit"
                 disabled={loading}
                 className="w-full h-14 mt-4 bg-gradient-to-r from-primary to-primary-container text-white font-bold text-lg rounded-full shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
               >

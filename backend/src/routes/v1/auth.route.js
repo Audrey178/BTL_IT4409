@@ -3,6 +3,7 @@ import authController from '../../controllers/auth.controller.js';
 import { validate } from '../../utils/validators.js';
 import { authValidation } from '../../utils/validators.js';
 import { authenticate } from '../../middlewares/auth.js';
+import { verifyGoogleToken } from '../../middlewares/googleVerify.js';
 
 const router = express.Router();
 
@@ -140,5 +141,17 @@ router.get('/me', authenticate, authController.getProfile.bind(authController));
  *         description: Profile updated
  */
 router.put('/me', authenticate, authController.updateProfile.bind(authController));
+
+/**
+ * POST /auth/google
+ * Body: { id_token }
+ */
+router.post('/google', verifyGoogleToken, authController.googleAuth.bind(authController));
+
+/**
+ * Email verification
+ */
+router.get('/verify-email', authController.verifyEmail.bind(authController));
+router.post('/resend-verification', authController.resendVerification.bind(authController));
 
 export default router;
