@@ -1,4 +1,26 @@
 import { v4 as uuidv4 } from 'uuid';
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+
+const s3Client = new S3Client({
+  region: process.env.S3_REGION,
+  credentials: {
+    accessKeyId: process.env.S3_ACCESS_KEY,
+    secretAccessKey: process.env.S3_SECRET_KEY,
+  },
+});
+
+
+export async function generatePresignedUrl(key) {
+  const command = new GetObjectCommand({
+    Bucket: process.env.S3_BUCKET,
+    Key: key,
+  });
+
+  return getSignedUrl(s3Client, command, {
+    expiresIn: 3600, // 1 giờ
+  });
+}
 
 export const generateRoomCode = () => {
   // Format: abc-xyz-def
@@ -30,4 +52,5 @@ export default {
   generateSocketEventName,
   calculateDuration,
   formatDuration,
+  generatePresignedUrl
 };
