@@ -10,7 +10,7 @@ import { verifyAccessToken } from './utils/jwt.js';
 import logger from './utils/logger.js';
 
 const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || 'localhost';
+const HOST = process.env.HOST || '0.0.0.0';
 
 // Create HTTP server
 const httpServer = http.createServer(app);
