@@ -7,10 +7,12 @@ import { HTTP_STATUS } from '../utils/constants.js';
 const uploadRoot = path.resolve(process.cwd(), process.env.UPLOAD_DIR || 'uploads');
 const recordingDir = path.join(uploadRoot, 'recordings');
 const thumbnailDir = path.join(uploadRoot, 'thumbnails');
+const chatDir = path.join(uploadRoot, 'chat');
 
 for (const dir of [recordingDir, thumbnailDir]) {
   fs.mkdirSync(dir, { recursive: true });
 }
+fs.mkdirSync(chatDir, { recursive: true });
 
 const extensionFromMime = (mimeType) => {
   const map = {
@@ -60,6 +62,39 @@ export const uploadRecording = multer({
   { name: 'video', maxCount: 1 },
   { name: 'thumbnail', maxCount: 1 },
 ]);
+
+// Generic chat attachment uploader (images, audio, video, documents)
+const chatStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, chatDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname) || '';
+    cb(null, `${Date.now()}-${uuidv4()}${ext}`);
+  },
+});
+
+const chatFileFilter = (req, file, cb) => {
+  // Allow common attachment types, including browser/OS fallback octet-stream
+  const allowedExact = new Set([
+    'application/pdf',
+    'application/zip',
+    'application/x-zip-compressed',
+    'application/octet-stream',
+  ]);
+  const allowedPrefixes = ['image/', 'video/', 'audio/', 'text/', 'application/msword', 'application/vnd.', 'application/json'];
+
+  if (allowedExact.has(file.mimetype) || allowedPrefixes.some((p) => file.mimetype.startsWith(p))) {
+    return cb(null, true);
+  }
+  const error = new Error(`File type not allowed for chat attachments: ${file.mimetype || 'unknown'}`);
+  error.statusCode = HTTP_STATUS.BAD_REQUEST;
+  return cb(error);
+};
+
+export const uploadChatFile = multer({
+  storage: chatStorage,
+  fileFilter: chatFileFilter,
+  limits: { fileSize: Number(process.env.MAX_CHAT_FILE_SIZE || 104857600) },
+}).single('file');
 
 export const buildUploadUrl = (req, file) => {
   if (!file) return null;

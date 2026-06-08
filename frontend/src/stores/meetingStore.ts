@@ -30,6 +30,7 @@ interface MeetingState {
   clearParticipantScreenStream: (userId: string) => void;
 
   addMessage: (msg: ChatMessage) => void;
+  upsertMessage: (msg: ChatMessage) => void;
   setMessages: (msgs: ChatMessage[]) => void;
   prependMessages: (msgs: ChatMessage[]) => void;
 
@@ -75,6 +76,17 @@ export const useMeetingStore = create<MeetingState>((set) => ({
     return state;
   }),
 
+  setMessages: (msgs) => set({ messages: msgs }),
+  prependMessages: (msgs) => set((state) => ({ messages: [...msgs, ...state.messages] })),
+
+  setWaitingList: (list) => set({ waitingList: list }),
+  addWaitingUser: (user) => set((state) => {
+    if (!state.waitingList.find(u => u.id === user.id)) {
+      return { waitingList: [...state.waitingList, user] };
+    }
+    return state;
+  }),
+
   removeParticipant: (userId) => set((state) => ({
     participants: state.participants.filter(p => p.id !== userId),
     // Clear screen sharing if the user who left was sharing
@@ -105,17 +117,52 @@ export const useMeetingStore = create<MeetingState>((set) => ({
     )
   })),
 
-  addMessage: (msg) => set((state) => ({ messages: [...state.messages, msg] })),
-  setMessages: (msgs) => set({ messages: msgs }),
-  prependMessages: (msgs) => set((state) => ({ messages: [...msgs, ...state.messages] })),
+  addMessage: (msg) => set((state) => {
+    // Deduplicate by id, messageId, or clientId
+    const exists = state.messages.some((m) => {
+      if (!m) return false;
+      if (m.id && msg.id && m.id === msg.id) return true;
+      if ((m as any).messageId && (msg as any).messageId && (m as any).messageId === (msg as any).messageId) return true;
+      const mc = (m as any).clientId || (m as any).client_id || null;
+      const nc = (msg as any).clientId || (msg as any).client_id || null;
+      if (mc && nc && mc === nc) return true;
+      return false;
+    });
+    if (exists) return state;
 
-  setWaitingList: (list) => set({ waitingList: list }),
+    return { messages: [...state.messages, msg] };
+  }),
+  upsertMessage: (msg) => set((state) => {
+    const incomingId = (msg as any).id || null;
+    const incomingMessageId = (msg as any).messageId || (msg as any)._id || null;
+    const incomingClientId = (msg as any).clientId || (msg as any).client_id || null;
 
-  addWaitingUser: (user) => set((state) => {
-    if (!state.waitingList.find(u => u.id === user.id)) {
-      return { waitingList: [...state.waitingList, user] };
+    const existingIndex = state.messages.findIndex((m) => {
+      if (!m) return false;
+      const mId = (m as any).id || null;
+      const mMessageId = (m as any).messageId || (m as any)._id || null;
+      const mClientId = (m as any).clientId || (m as any).client_id || null;
+
+      if (incomingId && mId && incomingId === mId) return true;
+      if (incomingMessageId && mMessageId && incomingMessageId === mMessageId) return true;
+      if (incomingClientId && mClientId && incomingClientId === mClientId) return true;
+      return false;
+    });
+
+    if (existingIndex !== -1) {
+      const next = [...state.messages];
+      const existing = next[existingIndex];
+      // Preserve optimistic local id to avoid React key churn
+      const preserveId = (existing as any).id && String((existing as any).id).startsWith('local-');
+      const merged = { ...existing, ...msg };
+      if (preserveId) {
+        merged.id = (existing as any).id;
+      }
+      next[existingIndex] = merged;
+      return { messages: next };
     }
-    return state;
+
+    return { messages: [...state.messages, msg] };
   }),
 
   removeWaitingUser: (userId) => set((state) => ({

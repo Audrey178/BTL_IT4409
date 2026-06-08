@@ -1,7 +1,6 @@
 import { useState, useCallback } from "react";
 import { motion } from "motion/react";
 import {
-  Archive,
   Search,
   CalendarDays,
   ChevronLeft,
@@ -13,7 +12,10 @@ import { Button } from "@/components/ui/button";
 import SideBar from "@/components/layout/SideBar";
 import { RecordingCard } from "@/components/pages/archives/RecordingCard";
 import { DeleteRecordingDialog } from "@/components/pages/archives/DeleteRecordingDialog";
-import { useRecordings } from "@/hooks/useRecordings";
+import { ArchivesLoadingSkeleton } from "@/components/pages/archives/ArchivesLoadingSkeleton";
+import { ArchivesEmptyState } from "@/components/pages/archives/ArchivesEmptyState";
+import { ArchivesErrorState } from "@/components/pages/archives/ArchivesErrorState";
+import { useRecordings } from "@/hooks/recordings/useRecordings";
 import type { Recording } from "@/services/recordingService";
 
 export function ArchivesScreen() {
@@ -187,11 +189,11 @@ export function ArchivesScreen() {
 
         {/* Content */}
         {loading ? (
-          <LoadingSkeleton />
+          <ArchivesLoadingSkeleton />
         ) : error ? (
-          <ErrorState message={error} onRetry={() => fetchRecordings({ page: 1 })} />
+          <ArchivesErrorState message={error} onRetry={() => fetchRecordings({ page: 1 })} />
         ) : recordings.length === 0 ? (
-          <EmptyState hasFilters={!!hasActiveFilters} onClear={handleClearFilters} />
+          <ArchivesEmptyState hasFilters={!!hasActiveFilters} onClear={handleClearFilters} />
         ) : (
           <>
             {/* Recording Grid */}
@@ -281,85 +283,4 @@ export function ArchivesScreen() {
   );
 }
 
-/* ---- Sub-components ---- */
 
-function LoadingSkeleton() {
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-      {Array.from({ length: 8 }).map((_, i) => (
-        <div
-          key={i}
-          className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 overflow-hidden"
-          aria-busy="true"
-        >
-          <div className="aspect-video bg-surface-container-high animate-pulse" />
-          <div className="p-4 space-y-3">
-            <div className="h-4 bg-surface-container-high rounded-lg animate-pulse w-3/4" />
-            <div className="h-3 bg-surface-container-high rounded-lg animate-pulse w-1/2" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function EmptyState({
-  hasFilters,
-  onClear,
-}: {
-  hasFilters: boolean;
-  onClear: () => void;
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
-      <div className="w-20 h-20 rounded-3xl bg-surface-container flex items-center justify-center">
-        <Archive size={40} className="text-on-surface-variant/30" />
-      </div>
-      <div className="space-y-1">
-        <p className="font-bold text-on-surface text-lg">
-          {hasFilters ? "No recordings found" : "No recordings yet"}
-        </p>
-        <p className="text-sm text-on-surface-variant/60 max-w-sm">
-          {hasFilters
-            ? "Try adjusting your search or filters."
-            : "Recordings from your meetings will appear here."}
-        </p>
-      </div>
-      {hasFilters && (
-        <Button
-          onClick={onClear}
-          variant="outline"
-          className="mt-2 rounded-full px-6 font-bold"
-        >
-          Clear filters
-        </Button>
-      )}
-    </div>
-  );
-}
-
-function ErrorState({
-  message,
-  onRetry,
-}: {
-  message: string;
-  onRetry: () => void;
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
-      <div className="w-20 h-20 rounded-3xl bg-red-50 flex items-center justify-center">
-        <Video size={40} className="text-error/40" />
-      </div>
-      <div className="space-y-1">
-        <p className="font-bold text-on-surface text-lg">Something went wrong</p>
-        <p className="text-sm text-on-surface-variant/60 max-w-sm">{message}</p>
-      </div>
-      <Button
-        onClick={onRetry}
-        className="mt-2 rounded-full px-6 font-bold bg-primary text-white"
-      >
-        Try again
-      </Button>
-    </div>
-  );
-}

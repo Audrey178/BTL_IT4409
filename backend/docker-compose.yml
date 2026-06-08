@@ -12,8 +12,8 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: admin123
       MONGO_INITDB_DATABASE: meeting_db
     volumes:
-      - mongo_data:/data/db
-      - mongo_config:/data/configdb
+      - mongo_data_v2:/data/db
+      - mongo_config_v2:/data/configdb
     networks:
       - meeting-network
     healthcheck:
@@ -40,8 +40,8 @@ services:
       retries: 5
 
 volumes:
-  mongo_data:
-  mongo_config:
+  mongo_data_v2:
+  mongo_config_v2:
   redis_data:
 
 networks:

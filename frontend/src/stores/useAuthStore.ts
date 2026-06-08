@@ -69,7 +69,10 @@ export const useAuthStore = create<AuthState>()(
       logout: async () => {
         try {
           set({ loading: true });
-          await authService.logout().catch(() => { });
+          const refreshToken = get().refreshToken;
+          const { disconnectSocket } = await import("@/socket/socket");
+          disconnectSocket();
+          await authService.logout(refreshToken).catch(() => { });
         } finally {
           get().clearState();
           set({ loading: false });

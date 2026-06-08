@@ -54,6 +54,10 @@
   .editorial-shadow {
     @apply shadow-[0_12px_40px_rgba(140,113,105,0.08)];
   }
+
+  .message-gradient {
+    background: linear-gradient(135deg, #802300 0%, #a4370f 100%);
+  }
 }
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";

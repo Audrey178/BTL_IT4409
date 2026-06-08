@@ -1,4 +1,4 @@
-import { Room, RoomMember } from '../models/index.js';
+import { Conversation, Room, RoomMember } from '../models/index.js';
 import { SOCKET_EVENTS, USER_STATUS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
 
@@ -6,18 +6,29 @@ const emitSocketError = (socket, message) => {
   socket.emit(SOCKET_EVENTS.ERROR, { message });
 };
 
-const ensureCanSignal = async ({ socket, roomCode, recipientUserId }) => {
+const ensureCanSignal = async ({ socket, roomCode, conversationId, recipientUserId }) => {
   const fromUserId = socket.userId;
   if (!fromUserId) {
     throw new Error('Unauthorized socket');
   }
 
-  if (!roomCode) {
-    throw new Error('roomCode is required for WebRTC signaling');
-  }
-
   if (!recipientUserId) {
     throw new Error('Target user ID is required for WebRTC signaling');
+  }
+
+  if (conversationId) {
+    const conversation = await Conversation.findOne({
+      _id: conversationId,
+      member_ids: { $all: [fromUserId, recipientUserId] },
+    }).lean();
+    if (!conversation) {
+      throw new Error('Both peers must belong to the same conversation');
+    }
+    return fromUserId;
+  }
+
+  if (!roomCode) {
+    throw new Error('roomCode or conversationId is required for WebRTC signaling');
   }
 
   const room = await Room.findOne({ room_code: roomCode }).lean();
@@ -33,10 +44,7 @@ const ensureCanSignal = async ({ socket, roomCode, recipientUserId }) => {
     user_id: { $in: nonHostParticipantIds },
     status: USER_STATUS.JOINED,
   });
-  const allowedIds = new Set([
-    hostId,
-    ...memberships.map((id) => id.toString()),
-  ]);
+  const allowedIds = new Set([hostId, ...memberships.map((id) => id.toString())]);
 
   if (!participantIds.every((id) => allowedIds.has(id.toString()))) {
     throw new Error('Both peers must be joined in the same room');
@@ -48,7 +56,6 @@ const ensureCanSignal = async ({ socket, roomCode, recipientUserId }) => {
 const forwardSignal = async (socket, data, eventName, payloadKey) => {
   const recipientUserId = data.targetUserId || data.to;
   const payload = data[payloadKey];
-
   if (!payload) {
     throw new Error(`Missing ${payloadKey} payload`);
   }
@@ -56,6 +63,7 @@ const forwardSignal = async (socket, data, eventName, payloadKey) => {
   const fromUserId = await ensureCanSignal({
     socket,
     roomCode: data.roomCode,
+    conversationId: data.conversationId,
     recipientUserId,
   });
 
@@ -63,7 +71,8 @@ const forwardSignal = async (socket, data, eventName, payloadKey) => {
     from: fromUserId,
     fromUserId,
     targetUserId: recipientUserId,
-    roomCode: data.roomCode,
+    roomCode: data.roomCode || null,
+    conversationId: data.conversationId || null,
     [payloadKey]: payload,
   });
 };

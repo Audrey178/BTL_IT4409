@@ -1,16 +1,17 @@
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import type { EventClickArg, EventContentArg } from "@fullcalendar/core";
 import { motion } from "motion/react";
-import { Calendar, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import SideBar from "@/components/layout/SideBar";
 import { ScheduleMeetingDialog } from "@/components/pages/dashboard/room/ScheduleMeetingDialog";
 import { MeetingDetailDialog } from "@/components/pages/schedule/MeetingDetailDialog";
 import { CalendarEventContent } from "@/components/pages/schedule/CalendarEventContent";
-import { useUpcomingMeetings } from "@/hooks/useUpcomingMeetings";
+import { ScheduleEmptyState } from "@/components/pages/schedule/ScheduleEmptyState";
+import { useUpcomingMeetings } from "@/hooks/dashboard/useUpcomingMeetings";
 import type { ScheduledMeeting } from "@/types";
 
 export function ScheduleScreen() {
@@ -87,7 +88,7 @@ export function ScheduleScreen() {
               Loading schedule…
             </div>
           ) : events.length === 0 ? (
-            <EmptyState onSchedule={() => setShowScheduleDialog(true)} />
+            <ScheduleEmptyState onSchedule={() => setShowScheduleDialog(true)} />
           ) : (
             <FullCalendar
               plugins={[dayGridPlugin, interactionPlugin]}
@@ -118,29 +119,6 @@ export function ScheduleScreen() {
         onOpenChange={setDetailOpen}
         meeting={selectedMeeting}
       />
-    </div>
-  );
-}
-
-function EmptyState({ onSchedule }: { onSchedule: () => void }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
-      <div className="w-16 h-16 rounded-2xl bg-surface-container flex items-center justify-center">
-        <Calendar size={32} className="text-on-surface-variant/40" />
-      </div>
-      <div className="space-y-1">
-        <p className="font-bold text-on-surface">No meetings this month</p>
-        <p className="text-sm text-on-surface-variant/60">
-          Schedule a session to see it appear here.
-        </p>
-      </div>
-      <Button
-        onClick={onSchedule}
-        className="mt-2 h-11 px-6 bg-primary text-white rounded-full font-bold hover:scale-[1.02] active:scale-95 transition-all"
-      >
-        <Plus size={18} className="mr-2" />
-        Schedule Meeting
-      </Button>
     </div>
   );
 }

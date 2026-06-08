@@ -53,7 +53,12 @@ const SideBar = ({ onNewMeeting }: SideBarProps) => {
             active={isActive("/schedule")}
             onClick={() => navigate("/schedule")}
           />
-          <NavItem icon={<MessageSquare size={20} />} label="Messages" />
+          <NavItem
+            icon={<MessageSquare size={20} />}
+            label="Messages"
+            onClick={() => navigate("/messages")}
+            active={isActive("/messages")}
+          />
           <NavItem
             icon={<Archive size={20} />}
             label="Archives"

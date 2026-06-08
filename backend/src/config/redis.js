@@ -65,6 +65,9 @@ const createMemoryRedisClient = () => {
     async sMembers(key) {
       return Array.from(sets.get(key) || []);
     },
+    async sCard(key) {
+      return (sets.get(key) || new Set()).size;
+    },
   };
 };
 
