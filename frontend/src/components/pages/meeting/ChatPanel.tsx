@@ -1,27 +1,48 @@
 import { useState, useRef, useEffect, KeyboardEvent } from "react";
-import { motion } from "motion/react";
-import { toast } from "sonner";
-import { MessageSquare, Send, X, Info, Paperclip, Smile } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import {
+  MessageSquare,
+  Send,
+  X,
+  Info,
+  Paperclip,
+  Smile,
+  CornerUpLeft,
+  Pencil,
+  Trash2,
+  Undo
+} from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMeetingStore } from "@/stores/meetingStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { cn } from "@/lib/utils";
 import { chatService } from "@/services/chatService";
 import EmojiPicker from "@/components/ui/EmojiPicker";
+import type { ChatMessage } from "@/types";
 
 interface ChatPanelProps {
   roomCode: string;
   onClose: () => void;
   sendMessage: (content: string | any) => void;
+  editMessage: (messageId: string, content: string, expectedVersion: number) => void;
+  deleteMessage: (messageId: string, expectedVersion: number) => void;
+  addReaction: (messageId: string, emoji: string) => void;
+  removeReaction: (messageId: string, emoji: string) => void;
 }
 
-/**
- * Chat sidebar panel for in-meeting messaging.
- * Handles send/receive via useChatEvents hook, auto-scrolls on new messages,
- * and supports system message styling.
- */
-export function ChatPanel({ roomCode, onClose, sendMessage }: ChatPanelProps) {
+const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+
+export function ChatPanel({
+  roomCode,
+  onClose,
+  sendMessage,
+  editMessage,
+  deleteMessage,
+  addReaction,
+  removeReaction,
+}: ChatPanelProps) {
   const myUserId = useAuthStore((s) => s.user?._id);
+  const isHost = useMeetingStore((s) => s.isHost);
   const messages = useMeetingStore((s) => s.messages);
 
   const [input, setInput] = useState("");
@@ -29,6 +50,10 @@ export function ChatPanel({ roomCode, onClose, sendMessage }: ChatPanelProps) {
   const isNearBottomRef = useRef(true);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
+  const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
+  const [activeReactionMenu, setActiveReactionMenu] = useState<string | null>(null);
+
   const [pendingAttachment, setPendingAttachment] = useState<{
     filename: string;
     size: number;
@@ -56,7 +81,9 @@ export function ChatPanel({ roomCode, onClose, sendMessage }: ChatPanelProps) {
   }, []);
 
   useEffect(() => {
-    if (isNearBottomRef.current) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (isNearBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages.length]);
 
   useEffect(() => {
@@ -81,21 +108,40 @@ export function ChatPanel({ roomCode, onClose, sendMessage }: ChatPanelProps) {
   };
 
   const handleSend = () => {
+    if (editingMessage) {
+      if (!input.trim()) return;
+      editMessage(editingMessage.id, input.trim(), editingMessage.version || 1);
+      setEditingMessage(null);
+      setInput("");
+      return;
+    }
+
     if (pendingAttachment) {
       if (pendingAttachment.uploading || pendingAttachment.error || !pendingAttachment.file) return;
 
-      const clientId = `local-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
-      const payload = {
+      const clientId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const payload: any = {
         type: "file",
         content: pendingAttachment.file.filename || pendingAttachment.file.url || '',
         attachment: pendingAttachment.file,
         clientId,
       };
-        console.log('[CHAT PANEL] send payload (file)', payload);
-        try { toast.info(`Sending file: ${payload.attachment?.filename || payload.content}`); } catch (e) {}
-      sendMessage(payload);
 
+      if (replyingTo) {
+        payload.replyToMessageId = replyingTo.id;
+        payload.replyTo = {
+          messageId: replyingTo.id,
+          senderId: replyingTo.senderId,
+          senderName: replyingTo.senderName,
+          content: replyingTo.content,
+          type: replyingTo.type || 'text',
+          timestamp: replyingTo.timestamp,
+        };
+      }
+
+      sendMessage(payload);
       clearPendingAttachment();
+      setReplyingTo(null);
       setInput("");
       isNearBottomRef.current = true;
       requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
@@ -103,9 +149,28 @@ export function ChatPanel({ roomCode, onClose, sendMessage }: ChatPanelProps) {
     }
 
     if (!input.trim()) return;
-      console.log('[CHAT PANEL] send payload (text)', input);
-      try { toast.info(`Sending: ${input}`); } catch (e) {}
+
+    if (replyingTo) {
+      const clientId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      sendMessage({
+        type: "text",
+        content: input.trim(),
+        clientId,
+        replyToMessageId: replyingTo.id,
+        replyTo: {
+          messageId: replyingTo.id,
+          senderId: replyingTo.senderId,
+          senderName: replyingTo.senderName,
+          content: replyingTo.content,
+          type: replyingTo.type || 'text',
+          timestamp: replyingTo.timestamp,
+        },
+      });
+      setReplyingTo(null);
+    } else {
       sendMessage(input);
+    }
+
     setInput("");
     isNearBottomRef.current = true;
     requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
@@ -118,13 +183,29 @@ export function ChatPanel({ roomCode, onClose, sendMessage }: ChatPanelProps) {
     }
   };
 
+  const startEdit = (msg: ChatMessage) => {
+    setReplyingTo(null);
+    setEditingMessage(msg);
+    setInput(msg.content);
+  };
+
+  const cancelEdit = () => {
+    setEditingMessage(null);
+    setInput("");
+  };
+
+  const cancelReply = () => {
+    setReplyingTo(null);
+  };
+
   return (
     <motion.aside
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 20 }}
-      className="w-80 flex flex-col bg-surface-container-low rounded-[2rem] shadow-sm overflow-hidden border border-outline-variant/10 z-[120] pointer-events-auto"
+      className="w-100 flex flex-col bg-surface-container-low rounded-[2rem] shadow-sm overflow-hidden border border-outline-variant/10 z-[120] pointer-events-auto"
     >
+      {/* Header */}
       <div className="p-6 bg-surface-container-high flex justify-between items-center border-b border-outline-variant/10">
         <div className="flex items-center gap-2">
           <h3 className="font-bold text-on-surface">Meeting Chat</h3>
@@ -138,8 +219,10 @@ export function ChatPanel({ roomCode, onClose, sendMessage }: ChatPanelProps) {
           <X size={20} />
         </button>
       </div>
+
+      {/* Messages Scroll Area */}
       <ScrollArea className="h-[calc(100vh-24rem)]">
-        <div className="p-4 h-full px-6 py-4 flex flex-col gap-2">
+        <div className="p-4 h-full px-6 py-4 flex flex-col gap-4">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-32 text-center">
               <MessageSquare size={24} className="text-on-surface-variant/30 mb-2" />
@@ -150,8 +233,100 @@ export function ChatPanel({ roomCode, onClose, sendMessage }: ChatPanelProps) {
             messages.map((msg) => {
               if (msg.type === "system") return <SystemMessage key={msg.id} content={msg.content} />;
               const isSelf = msg.senderId === myUserId;
+              const canDelete = isSelf || isHost;
+              const isDeleted = Boolean(msg.deletedForEveryoneAt);
+
               return (
-                <ChatBubble key={msg.id} name={msg.senderName} time={new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} message={msg.content} type={msg.type} attachment={(msg as any).attachment} isSelf={isSelf} />
+                <div key={msg.id} className="group relative flex flex-col">
+                  {/* Hover action menu */}
+                  {!isDeleted && (
+                    <div className="absolute top-[-10px] right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex items-center bg-white/95 border border-outline-variant/20 rounded-full shadow-md px-1.5 py-0.5 gap-1.5">
+                      <button
+                        onClick={() => setReplyingTo(msg)}
+                        className="text-on-surface-variant/70 hover:text-primary p-1 rounded-full hover:bg-surface-container transition-colors"
+                        title="Reply"
+                      >
+                        <CornerUpLeft size={13} />
+                      </button>
+
+                      <div className="relative">
+                        <button
+                          onClick={() => setActiveReactionMenu(activeReactionMenu === msg.id ? null : msg.id)}
+                          className="text-on-surface-variant/70 hover:text-primary p-1 rounded-full hover:bg-surface-container transition-colors"
+                          title="React"
+                        >
+                          <Smile size={13} />
+                        </button>
+                        {activeReactionMenu === msg.id && (
+                          <div className="absolute bottom-6 right-[-20px] bg-white border border-outline-variant/20 rounded-full shadow-xl px-2 py-1 flex items-center gap-1.5 z-30">
+                            {QUICK_REACTIONS.map((emoji) => (
+                              <button
+                                key={emoji}
+                                onClick={() => {
+                                  const alreadyReacted = msg.myReactions?.includes(emoji);
+                                  if (alreadyReacted) {
+                                    removeReaction(msg.id, emoji);
+                                  } else {
+                                    addReaction(msg.id, emoji);
+                                  }
+                                  setActiveReactionMenu(null);
+                                }}
+                                className={cn(
+                                  "hover:scale-125 transition-transform text-base",
+                                  msg.myReactions?.includes(emoji) && "bg-primary/10 rounded-md px-0.5"
+                                )}
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {isSelf && (
+                        <button
+                          onClick={() => startEdit(msg)}
+                          className="text-on-surface-variant/70 hover:text-primary p-1 rounded-full hover:bg-surface-container transition-colors"
+                          title="Edit"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                      )}
+
+                      {canDelete && (
+                        <button
+                          onClick={() => deleteMessage(msg.id, msg.version || 1)}
+                          className="text-error/70 hover:text-error p-1 rounded-full hover:bg-error/10 transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  <ChatBubble
+                    name={msg.senderName}
+                    time={new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    message={msg.content}
+                    type={msg.type}
+                    attachment={msg.attachment}
+                    isSelf={isSelf}
+                    isEdited={msg.isEdited}
+                    replyTo={msg.replyTo}
+                    reactionCounts={msg.reactionCounts}
+                    myReactions={msg.myReactions}
+                    isDeleted={isDeleted}
+                    onReactionClick={(emoji) => {
+                      const alreadyReacted = msg.myReactions?.includes(emoji);
+                      if (alreadyReacted) {
+                        removeReaction(msg.id, emoji);
+                      } else {
+                        addReaction(msg.id, emoji);
+                      }
+                    }}
+                  />
+                </div>
               );
             })
           )}
@@ -159,63 +334,105 @@ export function ChatPanel({ roomCode, onClose, sendMessage }: ChatPanelProps) {
         </div>
       </ScrollArea>
 
-      <div className="p-4 bg-surface-container-low border-t border-outline-variant/10">
+      {/* Input composer area */}
+      <div className="p-4 bg-surface-container-low border-t border-outline-variant/10 flex flex-col gap-2">
+        {/* Reply Preview */}
+        {replyingTo && (
+          <div className="bg-surface-container p-2.5 rounded-2xl border border-outline-variant/10 flex items-start justify-between gap-2 text-xs">
+            <div className="flex-1 min-w-0 border-l-2 border-primary pl-2">
+              <span className="font-bold text-primary block truncate">Replying to {replyingTo.senderName}</span>
+              <span className="text-on-surface-variant/70 block truncate text-[11px]">
+                {replyingTo.type === 'file' ? '[File]' : replyingTo.content}
+              </span>
+            </div>
+            <button onClick={cancelReply} className="text-on-surface-variant/60 hover:text-primary transition-colors shrink-0">
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
+        {/* Edit Preview */}
+        {editingMessage && (
+          <div className="bg-primary/5 p-2.5 rounded-2xl border border-primary/20 flex items-start justify-between gap-2 text-xs">
+            <div className="flex-1 min-w-0 border-l-2 border-primary pl-2">
+              <span className="font-bold text-primary block">Editing message</span>
+              <span className="text-on-surface-variant/70 block truncate text-[11px] mt-0.5">
+                {editingMessage.content}
+              </span>
+            </div>
+            <button onClick={cancelEdit} className="text-on-surface-variant/60 hover:text-primary transition-colors shrink-0">
+              <Undo size={14} />
+            </button>
+          </div>
+        )}
+
         <div className="flex items-end gap-2">
+          {/* Paperclip + Emoji toggle */}
           <div className="flex items-center gap-2 mr-1">
-            <label onClick={() => { try { fileInputRef.current?.click(); } catch (e) {} }} className="relative w-9 h-9 rounded-xl flex items-center justify-center text-on-surface-variant/60 bg-surface-container-highest cursor-pointer overflow-hidden pointer-events-auto">
-              <Paperclip size={16} />
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer pointer-events-auto"
-                onClick={() => console.log('file input clicked')}
-                onChange={async (e) => {
-                  const f = e.target.files?.[0];
-                  console.log('ChatPanel: file input change', !!f, f?.name);
-                  if (!f) return;
-                  const previewUrl = URL.createObjectURL(f);
-                  setPendingAttachment({
-                    filename: f.name,
-                    size: f.size,
-                    mimeType: f.type || 'application/octet-stream',
-                    previewUrl,
-                    uploading: true,
-                    error: null,
-                  });
+            {!editingMessage && (
+              <label onClick={() => { try { fileInputRef.current?.click(); } catch (e) {} }} className="relative w-9 h-9 rounded-xl flex items-center justify-center text-on-surface-variant/60 bg-surface-container-highest cursor-pointer overflow-hidden pointer-events-auto">
+                <Paperclip size={16} />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer pointer-events-auto"
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    const previewUrl = URL.createObjectURL(f);
+                    setPendingAttachment({
+                      filename: f.name,
+                      size: f.size,
+                      mimeType: f.type || 'application/octet-stream',
+                      previewUrl,
+                      uploading: true,
+                      error: null,
+                    });
 
-                  const form = new FormData(); form.append('file', f);
-                  try {
-                    const res = await chatService.uploadChatFile(form);
-                    const file = res.file;
-                    console.log('ChatPanel: upload result', res);
-                    setPendingAttachment((current) => current ? ({
-                      ...current,
-                      uploading: false,
-                      file,
-                    }) : null);
-                  } catch (err: any) {
-                    console.error('Upload failed', err, err.response?.status, err.response?.data);
-                    setPendingAttachment((current) => current ? ({
-                      ...current,
-                      uploading: false,
-                      error: 'Upload failed',
-                    }) : null);
-                  } finally {
-                    if (fileInputRef.current) fileInputRef.current.value = '';
-                  }
-                }}
-              />
-            </label>
+                    const form = new FormData();
+                    form.append('file', f);
+                    try {
+                      const res = await chatService.uploadChatFile(form);
+                      const file = res.file;
+                      setPendingAttachment((current) => current ? ({
+                        ...current,
+                        uploading: false,
+                        file,
+                      }) : null);
+                    } catch (err: any) {
+                      console.error('Upload failed', err);
+                      setPendingAttachment((current) => current ? ({
+                        ...current,
+                        uploading: false,
+                        error: 'Upload failed',
+                      }) : null);
+                    } finally {
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }
+                  }}
+                />
+              </label>
+            )}
 
-            <button onClick={() => { console.debug('emoji button clicked'); setShowEmojiPicker((s) => !s); }} className="w-9 h-9 rounded-xl flex items-center justify-center text-on-surface-variant/60 bg-surface-container-highest pointer-events-auto" aria-label="Emoji picker">
+            <button onClick={() => setShowEmojiPicker((s) => !s)} className="w-9 h-9 rounded-xl flex items-center justify-center text-on-surface-variant/60 bg-surface-container-highest pointer-events-auto" aria-label="Emoji picker">
               <Smile size={16} />
             </button>
           </div>
 
+          {/* Composer Input & File attachment UI */}
           <div className="relative flex-1">
             {showEmojiPicker && (
               <div className="absolute bottom-14 left-0 z-50">
-                <EmojiPicker onSelect={(emo) => { sendMessage({ type: 'emoji', content: emo, emoji: emo }); setShowEmojiPicker(false); }} />
+                <EmojiPicker
+                  onSelect={(emo) => {
+                    if (editingMessage) {
+                      setInput((prev) => prev + emo);
+                    } else {
+                      sendMessage({ type: 'emoji', content: emo, emoji: emo });
+                    }
+                    setShowEmojiPicker(false);
+                  }}
+                />
               </div>
             )}
 
@@ -232,13 +449,13 @@ export function ChatPanel({ roomCode, onClose, sendMessage }: ChatPanelProps) {
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-medium text-on-surface">{pendingAttachment.filename}</div>
                     <div className="text-xs text-on-surface-variant/60">
-                      {pendingAttachment.size} bytes · {pendingAttachment.mimeType}
+                      {pendingAttachment.size} bytes
                     </div>
                     <div className="mt-1 text-xs">
                       {pendingAttachment.error ? (
                         <span className="text-error font-medium">{pendingAttachment.error}</span>
                       ) : pendingAttachment.uploading ? (
-                        <span>Uploading… preview ready</span>
+                        <span>Uploading…</span>
                       ) : (
                         <span>Ready to send</span>
                       )}
@@ -265,10 +482,32 @@ export function ChatPanel({ roomCode, onClose, sendMessage }: ChatPanelProps) {
               </div>
             )}
 
-            <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown} rows={1} className={cn("flex-1 min-h-[44px] max-h-[120px] resize-none bg-surface-container-highest","border-none rounded-2xl px-4 py-3 text-sm","focus:ring-2 focus:ring-primary/20 focus:outline-none","placeholder:text-on-surface-variant/40")} placeholder="Send a message..." aria-label="Chat message input" />
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              rows={1}
+              className={cn(
+                "flex-1 min-h-[44px] max-h-[120px] w-full resize-none bg-surface-container-highest",
+                "border-none rounded-2xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 focus:outline-none",
+                "placeholder:text-on-surface-variant/40"
+              )}
+              placeholder={editingMessage ? "Edit your message..." : "Send a message..."}
+              aria-label="Chat message input"
+            />
           </div>
 
-          <button onClick={handleSend} disabled={!input.trim()} className={cn("shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-all", input.trim() ? "bg-primary text-white shadow-sm hover:bg-primary/90 active:scale-95" : "bg-surface-container-highest text-on-surface-variant/30 cursor-not-allowed")} aria-label="Send message">
+          <button
+            onClick={handleSend}
+            disabled={!input.trim() && !pendingAttachment}
+            className={cn(
+              "shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-all",
+              (input.trim() || pendingAttachment)
+                ? "bg-primary text-white shadow-sm hover:bg-primary/90 active:scale-95"
+                : "bg-surface-container-highest text-on-surface-variant/30 cursor-not-allowed"
+            )}
+            aria-label="Send message"
+          >
             <Send size={18} />
           </button>
         </div>
@@ -279,6 +518,21 @@ export function ChatPanel({ roomCode, onClose, sendMessage }: ChatPanelProps) {
 
 /* ====================== Sub-components ====================== */
 
+interface ChatBubbleProps {
+  name: string;
+  time: string;
+  message: string;
+  type?: string;
+  attachment?: any;
+  isSelf?: boolean;
+  isEdited?: boolean;
+  isDeleted?: boolean;
+  replyTo?: any;
+  reactionCounts?: Array<{ emoji: string; count: number }>;
+  myReactions?: string[];
+  onReactionClick: (emoji: string) => void;
+}
+
 function ChatBubble({
   name,
   time,
@@ -286,14 +540,13 @@ function ChatBubble({
   type,
   attachment,
   isSelf = false,
-}: {
-  name: string;
-  time: string;
-  message: string;
-  type?: string;
-  attachment?: any;
-  isSelf?: boolean;
-}) {
+  isEdited = false,
+  isDeleted = false,
+  replyTo,
+  reactionCounts = [],
+  myReactions = [],
+  onReactionClick,
+}: ChatBubbleProps) {
   const parsedAttachment = (() => {
     const candidate = attachment && typeof attachment === "object" ? attachment : null;
     if (candidate) return candidate;
@@ -308,9 +561,9 @@ function ChatBubble({
         // not JSON, ignore
       }
     }
-
     return null;
   })();
+
   const looksLikeFileUrl = typeof message === "string" && /^https?:\/\//i.test(message);
   const fileUrl = parsedAttachment?.url || (looksLikeFileUrl ? message : null);
   const fileLabel = parsedAttachment?.filename || parsedAttachment?.name || parsedAttachment?.storedFilename || (looksLikeFileUrl ? message.split("/").pop() || message : message);
@@ -320,36 +573,52 @@ function ChatBubble({
   );
 
   return (
-    <div
-      className={cn(
-        "flex flex-col gap-1.5",
-        isSelf ? "items-end" : "items-start",
-      )}
-    >
+    <div className={cn("flex flex-col gap-1 w-full max-w-[240px]", isSelf ? "self-end items-end" : "self-start items-start")}>
+      {/* Sender name & time */}
       <div className="flex justify-between w-full items-end px-1">
         {!isSelf && (
           <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface">
             {name}
           </span>
         )}
-        <span className="text-[10px] text-on-surface-variant/40 uppercase tracking-widest">
+        <span className="text-[10px] text-on-surface-variant/40 uppercase tracking-widest ml-auto">
           {time}
         </span>
         {isSelf && (
-          <span className="text-[10px] font-bold uppercase tracking-widest text-primary">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-primary ml-1.5">
             You
           </span>
         )}
       </div>
+
+      {/* Reply Snapshot quote */}
+      {replyTo && !isDeleted && (
+        <div className={cn(
+          "px-2.5 py-1.5 rounded-2xl text-[11px] border border-outline-variant/10 w-full mb-0.5 truncate bg-surface-container-highest/60 opacity-80",
+          isSelf ? "rounded-br-none text-right" : "rounded-bl-none text-left"
+        )}>
+          <span className="font-semibold text-primary block">Replying to {replyTo.senderName}</span>
+          <span className="truncate block mt-0.5">
+            {replyTo.type === 'file' ? '[File]' : replyTo.content}
+          </span>
+        </div>
+      )}
+
+      {/* Main message bubble content */}
       <div
         className={cn(
-          "p-4 rounded-3xl text-sm shadow-sm border max-w-[240px] break-words whitespace-pre-wrap",
-          isSelf
-            ? "bg-primary text-white rounded-tr-none border-primary"
-            : "bg-white inline text-on-surface rounded-tl-none border-outline-variant/10",
+          "p-4 rounded-3xl text-sm shadow-sm border w-full break-words whitespace-pre-wrap relative",
+          isDeleted
+            ? "bg-surface-container-high/60 text-on-surface-variant/50 border-outline-variant/10 rounded-2xl italic"
+            : isSelf
+              ? "bg-primary text-white rounded-tr-none border-primary"
+              : "bg-white text-on-surface rounded-tl-none border-outline-variant/10",
         )}
       >
-          {(() => {
+        {isDeleted ? (
+          <span>This message was deleted</span>
+        ) : (
+          (() => {
             if (type === 'emoji') {
               return <span className="text-2xl leading-none">{message}</span>;
             }
@@ -359,17 +628,17 @@ function ChatBubble({
               return (
                 <div className="flex flex-col gap-2">
                   {isImage && fileUrl ? (
-                    <a href={fileUrl} target="_blank" rel="noreferrer">
-                      <img src={fileUrl} alt={fileLabel} className="max-h-44 rounded-2xl object-cover border border-white/20" />
+                    <a href={fileUrl} target="_blank" rel="noreferrer" className="block max-w-full overflow-hidden rounded-xl">
+                      <img src={fileUrl} alt={fileLabel} className="max-h-36 w-full object-cover border border-white/20 hover:scale-[1.02] transition-transform" />
                     </a>
                   ) : null}
 
-                  {caption ? (
+                  {caption && (
                     <div className="text-sm leading-snug break-words">{caption}</div>
-                  ) : null}
+                  )}
 
                   {fileUrl ? (
-                    <a href={fileUrl} target="_blank" rel="noreferrer" className="underline break-all font-medium">
+                    <a href={fileUrl} target="_blank" rel="noreferrer" className="underline break-all font-medium hover:text-white/95">
                       {fileLabel}
                     </a>
                   ) : (
@@ -390,13 +659,48 @@ function ChatBubble({
                   );
                 }
               } catch {
-                // ignore and render as text
+                // ignore
               }
               return message.trim();
             }
             return "";
-          })()}
+          })()
+        )}
+
+        {/* Edited indicator */}
+        {isEdited && !isDeleted && (
+          <span className={cn(
+            "text-[9px] block mt-1 select-none",
+            isSelf ? "text-white/60 text-right" : "text-on-surface-variant/40 text-left"
+          )}>
+            (edited)
+          </span>
+        )}
       </div>
+
+      {/* Emoji reactions badge list */}
+      {!isDeleted && reactionCounts.length > 0 && (
+        <div className={cn("flex flex-wrap gap-1 mt-1", isSelf ? "justify-end" : "justify-start")}>
+          {reactionCounts.map((entry) => {
+            const hasReacted = myReactions.includes(entry.emoji);
+            return (
+              <button
+                key={entry.emoji}
+                onClick={() => onReactionClick(entry.emoji)}
+                className={cn(
+                  "flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border transition-all hover:scale-105 active:scale-95 shadow-sm",
+                  hasReacted
+                    ? "bg-primary/10 text-primary border-primary/20 font-semibold"
+                    : "bg-surface-container text-on-surface border-outline-variant/15"
+                )}
+              >
+                <span>{entry.emoji}</span>
+                <span>{entry.count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

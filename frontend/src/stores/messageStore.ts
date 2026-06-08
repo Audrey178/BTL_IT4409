@@ -2,35 +2,10 @@ import { create } from "zustand";
 import type { ChatMessage, ConversationItem, MessageDelivery, MessageStatus, UserSearchResult } from "@/services/chatService";
 
 export type PresenceState = "online" | "offline";
-export type CallViewState =
-  | "idle"
-  | "ringing-outgoing"
-  | "ringing-incoming"
-  | "connecting"
-  | "active"
-  | "ended"
-  | "rejected"
-  | "missed";
 
 export interface PresenceEntry {
   status: PresenceState;
   lastSeenAt: string | null;
-}
-
-export interface CallSessionState {
-  callId: string;
-  conversationId: string | null;
-  roomCode: string | null;
-  callType: "audio" | "video";
-  direction: "incoming" | "outgoing";
-  state: CallViewState;
-  callerId: string;
-  callerName: string;
-  targetUserIds: string[];
-  startedAt: string;
-  answeredAt?: string | null;
-  durationSeconds?: number;
-  acceptedUserIds?: string[];
 }
 
 interface MessageState {
@@ -39,7 +14,6 @@ interface MessageState {
   messagesByConversationId: Record<string, ChatMessage[]>;
   presenceByUserId: Record<string, PresenceEntry>;
   typingByConversationId: Record<string, { userId: string; userName: string } | null>;
-  activeCall: CallSessionState | null;
   userSearchResults: UserSearchResult[];
 
   setConversations: (conversations: ConversationItem[]) => void;
@@ -57,7 +31,6 @@ interface MessageState {
 
   setPresence: (entries: Array<{ userId: string; status: PresenceState; lastSeenAt: string | null }>) => void;
   setTyping: (conversationId: string, typing: { userId: string; userName: string } | null) => void;
-  setActiveCall: (call: CallSessionState | null) => void;
   setUserSearchResults: (users: UserSearchResult[]) => void;
 }
 
@@ -98,7 +71,6 @@ export const useMessageStore = create<MessageState>((set) => ({
   messagesByConversationId: {},
   presenceByUserId: {},
   typingByConversationId: {},
-  activeCall: null,
   userSearchResults: [],
 
   setConversations: (conversations) => set({ conversations }),
@@ -224,20 +196,6 @@ export const useMessageStore = create<MessageState>((set) => ({
         [conversationId]: typing,
       },
     };
-  }),
-
-  setActiveCall: (call) => set((state) => {
-    const previous = state.activeCall;
-    if (
-      previous?.callId === call?.callId &&
-      previous?.state === call?.state &&
-      previous?.answeredAt === call?.answeredAt &&
-      previous?.durationSeconds === call?.durationSeconds &&
-      JSON.stringify(previous?.acceptedUserIds || []) === JSON.stringify(call?.acceptedUserIds || [])
-    ) {
-      return state;
-    }
-    return { activeCall: call };
   }),
 
   setUserSearchResults: (users) => set({ userSearchResults: users }),

@@ -12,7 +12,7 @@
 
 import { AccessToken } from 'livekit-server-sdk';
 import { HTTP_STATUS, ERROR_MESSAGES } from '../utils/constants.js';
-import { CallSession, Room } from '../models/index.js';
+import { Room } from '../models/index.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -90,85 +90,4 @@ export const generateToken = async (req, res) => {
   }
 };
 
-export const generateCallToken = async (req, res) => {
-  try {
-    const { callId } = req.body;
-
-    if (!callId) {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        message: 'callId is required',
-      });
-    }
-
-    const session = await CallSession.findById(callId).lean();
-    if (!session || !session.conversation_id) {
-      return res.status(HTTP_STATUS.NOT_FOUND).json({
-        success: false,
-        message: 'Call session not found',
-      });
-    }
-
-    const userId = req.userId.toString();
-    const allowedUserIds = [
-      session.caller_id?.toString(),
-      ...(session.receiver_ids || []).map((id) => id.toString()),
-    ];
-
-    if (!allowedUserIds.includes(userId)) {
-      return res.status(HTTP_STATUS.FORBIDDEN).json({
-        success: false,
-        message: 'Unauthorized to join this call',
-      });
-    }
-
-    if (['ended', 'rejected', 'missed'].includes(session.status)) {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        message: 'Call is no longer active',
-      });
-    }
-
-    const { LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_URL } = process.env;
-    if (!LIVEKIT_API_KEY || !LIVEKIT_API_SECRET || !LIVEKIT_URL) {
-      logger.error('LiveKit credentials not configured in environment');
-      return res.status(HTTP_STATUS.INTERNAL_ERROR).json({
-        success: false,
-        message: 'LiveKit is not configured on the server',
-      });
-    }
-
-    const identity = req.userId;
-    const name = req.user.full_name || req.user.email || 'Anonymous';
-    const roomName = `call-${session._id.toString()}`;
-
-    const token = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
-      identity,
-      name,
-      ttl: '24h',
-    });
-
-    token.addGrant({
-      roomJoin: true,
-      room: roomName,
-      canPublish: true,
-      canSubscribe: true,
-      canPublishData: true,
-    });
-
-    res.json({
-      success: true,
-      token: await token.toJwt(),
-      url: LIVEKIT_URL,
-      roomName,
-    });
-  } catch (error) {
-    logger.error('Error generating LiveKit call token:', error);
-    res.status(HTTP_STATUS.INTERNAL_ERROR).json({
-      success: false,
-      message: 'Failed to generate LiveKit call token',
-    });
-  }
-};
-
-export default { generateToken, generateCallToken };
+export default { generateToken };

@@ -50,7 +50,7 @@ export function MeetingScreen() {
     disconnect: lkDisconnect,
   } = useLiveKit(roomCode || null);
   useRoomEvents(roomCode || null, lkDisconnect);
-  const { sendMessage } = useChatEvents(roomCode || null);
+  const { sendMessage, editMessage, deleteMessage, addReaction, removeReaction } = useChatEvents(roomCode || null);
   
   useVideoFilter();
 
@@ -425,7 +425,15 @@ export function MeetingScreen() {
         {/* Chat Sidebar */}
         <AnimatePresence>
           {showChat && roomCode && (
-            <ChatPanel roomCode={roomCode} onClose={() => setShowChat(false)} sendMessage={sendMessage} />
+            <ChatPanel
+              roomCode={roomCode}
+              onClose={() => setShowChat(false)}
+              sendMessage={sendMessage}
+              editMessage={editMessage}
+              deleteMessage={deleteMessage}
+              addReaction={addReaction}
+              removeReaction={removeReaction}
+            />
           )}
         </AnimatePresence>
         {/* Filters Panel */}

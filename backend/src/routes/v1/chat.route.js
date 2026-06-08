@@ -8,6 +8,8 @@ const router = express.Router();
 
 router.use(authenticate);
 
+// Chat messages
+
 router.get(
   '/users/search',
   validateQuery(messageValidation.searchUsers),
@@ -121,6 +123,8 @@ router.get(
   validateQuery(messageValidation.listReactions),
   chatController.listMessageReactions.bind(chatController)
 );
+
+// Room chat
 
 router.get(
   '/rooms/:roomCode/messages',

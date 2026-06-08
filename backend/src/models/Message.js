@@ -1,82 +1,7 @@
 import mongoose from 'mongoose';
+ 
 
-const deliverySchema = new mongoose.Schema(
-  {
-    user_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-    },
-    status: {
-      type: String,
-      enum: ['sent', 'delivered', 'read'],
-      default: 'sent',
-    },
-    delivered_at: {
-      type: Date,
-      default: null,
-    },
-    read_at: {
-      type: Date,
-      default: null,
-    },
-  },
-  { _id: false }
-);
-
-const systemEventSchema = new mongoose.Schema(
-  {
-    category: {
-      type: String,
-      enum: ['call'],
-      default: null,
-    },
-    call_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'CallSession',
-      default: null,
-    },
-    call_type: {
-      type: String,
-      enum: ['audio', 'video'],
-      default: null,
-    },
-    call_status: {
-      type: String,
-      enum: ['ended', 'missed', 'rejected'],
-      default: null,
-    },
-    caller_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      default: null,
-    },
-    receiver_ids: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-      },
-    ],
-    started_at: {
-      type: Date,
-      default: null,
-    },
-    answered_at: {
-      type: Date,
-      default: null,
-    },
-    ended_at: {
-      type: Date,
-      default: null,
-    },
-    duration_seconds: {
-      type: Number,
-      default: null,
-    },
-  },
-  { _id: false }
-);
-
+// For reply and forwarded message reference
 const messageReferenceSchema = new mongoose.Schema(
   {
     message_id: {
@@ -99,8 +24,16 @@ const messageReferenceSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['text', 'system', 'file'],
+      enum: ['text', 'system', 'file', 'emoji', 'sticker'],
       default: 'text',
+    },
+    attachment: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    emoji: {
+      type: String,
+      default: null,
     },
     timestamp: {
       type: Date,
@@ -120,21 +53,6 @@ const messageReferenceSchema = new mongoose.Schema(
   { _id: false }
 );
 
-const reactionCountSchema = new mongoose.Schema(
-  {
-    emoji: {
-      type: String,
-      enum: ['like', 'love', 'haha', 'wow', 'sad', 'angry'],
-      required: true,
-    },
-    count: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-  },
-  { _id: false }
-);
 
 const messageSchema = new mongoose.Schema(
   {
@@ -165,7 +83,7 @@ const messageSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['text', 'system', 'file', 'sticker', 'emoji'],
+      enum: ['text', 'system', 'file', 'emoji', 'sticker'],
       default: 'text',
     },
     content: {
@@ -177,12 +95,11 @@ const messageSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: null,
     },
-    // Sticker or emoji fields
-    sticker_id: {
+    emoji: {
       type: String,
       default: null,
     },
-    emoji: {
+    sticker_id: {
       type: String,
       default: null,
     },
@@ -199,14 +116,6 @@ const messageSchema = new mongoose.Schema(
       type: String,
       enum: ['sent', 'delivered', 'read'],
       default: 'sent',
-    },
-    delivery: {
-      type: [deliverySchema],
-      default: [],
-    },
-    system_event: {
-      type: systemEventSchema,
-      default: null,
     },
     edited_at: {
       type: Date,
@@ -248,9 +157,16 @@ const messageSchema = new mongoose.Schema(
       type: messageReferenceSchema,
       default: null,
     },
-    reaction_counts: {
-      type: [reactionCountSchema],
-      default: [],
+    // Lightweight denormalized cache: { "like": 2, "love": 1 }
+    // Updated atomically when reactions are added/removed via the
+    // MessageReaction collection.
+    reaction_summary: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+    system_event: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
     },
     timestamp: {
       type: Date,
@@ -282,8 +198,6 @@ messageSchema.pre('validate', function (next) {
 messageSchema.index({ room_id: 1, timestamp: -1 });
 messageSchema.index({ conversation_id: 1, timestamp: -1 });
 messageSchema.index({ sender_id: 1, timestamp: -1 });
-messageSchema.index({ room_id: 1, 'delivery.user_id': 1 });
-messageSchema.index({ 'system_event.call_id': 1 });
 messageSchema.index(
   { deleted_for_everyone_at: 1 },
   { partialFilterExpression: { deleted_for_everyone_at: { $type: 'date' } } }

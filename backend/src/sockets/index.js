@@ -25,7 +25,6 @@ import { SOCKET_EVENTS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
 import { getRedisClient } from '../config/redis.js';
 import { handleRoomJoin, handleApproveUser, handleRejectUser, handleUserLeft, handleEndMeeting } from './room.handler.js';
-import { handleWebRTCOffer, handleWebRTCAnswer, handleICECandidate } from './webrtc.handler.js';
 import {
   handleChatSubscribe,
   handleChatUnsubscribe,
@@ -43,8 +42,9 @@ import {
 } from './chat.handler.js';
 import { handleMediaToggle, handleScreenShareStart, handleScreenShareStop } from './media.handler.js';
 import { markUserOnline, markUserOffline, handlePresenceSubscribe, handlePresenceUnsubscribe } from './presence.handler.js';
-import { handleCallStart, handleCallAccept, handleCallReject, handleCallCancel, handleCallEnd } from './call.handler.js';
 import recordingService from '../services/recording.service.js';
+import { handleWebRTCOffer, handleWebRTCAnswer, handleICECandidate } from './webrtc.handler.js';
+
 
 /**
  * Khởi tạo tất cả Socket.IO event handlers
@@ -194,26 +194,6 @@ export const initializeSocket = (io, redisClient) => {
 
     socket.on(SOCKET_EVENTS.PRESENCE_UNSUBSCRIBE, (data) => {
       handlePresenceUnsubscribe(socket, data);
-    });
-
-    socket.on(SOCKET_EVENTS.CALL_START, (data) => {
-      handleCallStart(io, socket, data);
-    });
-
-    socket.on(SOCKET_EVENTS.CALL_ACCEPT, (data) => {
-      handleCallAccept(io, socket, data);
-    });
-
-    socket.on(SOCKET_EVENTS.CALL_REJECT, (data) => {
-      handleCallReject(io, socket, data);
-    });
-
-    socket.on(SOCKET_EVENTS.CALL_CANCEL, (data) => {
-      handleCallCancel(io, socket, data);
-    });
-
-    socket.on(SOCKET_EVENTS.CALL_END, (data) => {
-      handleCallEnd(io, socket, data);
     });
 
     // =========================================================================

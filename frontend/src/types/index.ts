@@ -33,6 +33,22 @@ export interface ChatMessage {
     mime_type?: string;
     size?: number;
   } | null;
+  clientId?: string | null;
+  version?: number;
+  isEdited?: boolean;
+  editedAt?: string | null;
+  deletedForEveryoneAt?: string | null;
+  deletedBy?: string | null;
+  replyTo?: {
+    messageId: string | null;
+    senderId: string | null;
+    senderName: string;
+    content: string;
+    type: string;
+    timestamp: string | null;
+  } | null;
+  reactionCounts?: Array<{ emoji: string; count: number }>;
+  myReactions?: string[];
 }
 
 export interface Room {

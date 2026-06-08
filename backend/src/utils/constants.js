@@ -47,10 +47,6 @@ export const SOCKET_EVENTS = {
   ROOM_HOST_TRANSFERRED: 'room:host_transferred',
   ROOM_ENDED: 'room:ended',
 
-  // WebRTC events
-  WEBRTC_OFFER: 'webrtc:offer',
-  WEBRTC_ANSWER: 'webrtc:answer',
-  WEBRTC_ICE_CANDIDATE: 'webrtc:ice_candidate',
 
   // Chat events
   CHAT_SUBSCRIBE: 'chat:subscribe',
@@ -83,27 +79,10 @@ export const SOCKET_EVENTS = {
   PRESENCE_ONLINE: 'presence:online',
   PRESENCE_OFFLINE: 'presence:offline',
 
-  // Call events
-  CALL_START: 'call:start',
-  CALL_RINGING: 'call:ringing',
-  CALL_ACCEPT: 'call:accept',
-  CALL_ACCEPTED: 'call:accepted',
-  CALL_REJECT: 'call:reject',
-  CALL_REJECTED: 'call:rejected',
-  CALL_CANCEL: 'call:cancel',
-  CALL_MISSED: 'call:missed',
-  CALL_END: 'call:end',
-  CALL_ENDED: 'call:ended',
-  CALL_ERROR: 'call:error',
-
   // Media events
   MEDIA_TOGGLE: 'media:toggle',
   MEDIA_SCREEN_SHARE_START: 'media:screen_share_start',
   MEDIA_SCREEN_SHARE_STOP: 'media:screen_share_stop',
-
-  // Attendance events
-  ATTENDANCE_CHECK_IN: 'attendance:check_in',
-  ATTENDANCE_CHECK_OUT: 'attendance:check_out',
 
   // Recording events
   RECORDING_START: 'recording:start',
@@ -148,20 +127,6 @@ export const MESSAGE_STATUS = {
   READ: 'read',
 };
 
-export const CALL_TYPE = {
-  AUDIO: 'audio',
-  VIDEO: 'video',
-};
-
-export const CALL_STATUS = {
-  RINGING: 'ringing',
-  ACCEPTED: 'accepted',
-  REJECTED: 'rejected',
-  MISSED: 'missed',
-  ENDED: 'ended',
-  FAILED: 'failed',
-};
-
 export const EVENT_TYPE = {
   ROOM_CREATED: 'room_created',
   USER_JOINED: 'user_joined',
@@ -183,7 +148,5 @@ export default {
   USER_STATUS,
   MESSAGE_TYPE,
   MESSAGE_STATUS,
-  CALL_TYPE,
-  CALL_STATUS,
   EVENT_TYPE,
 };

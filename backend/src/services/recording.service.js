@@ -359,7 +359,7 @@ class RecordingService {
       const egressId = await redis.get(`room:${roomCode}:egress_id`);
       const startTimeStr = await redis.get(`room:${roomCode}:egress_start_time`);
       const recorderId = await redis.get(`room:${roomCode}:egress_recorder_id`) || userId;
-      const file_path = await redis.get(`room:${roomCode}:recording_path`);
+      let file_path = await redis.get(`room:${roomCode}:recording_path`);
 
       if (!egressId) {
         const error = new Error('No active recording found for this room');

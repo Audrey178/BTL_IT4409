@@ -28,6 +28,11 @@ const conversationSchema = new mongoose.Schema(
       default: 'direct',
       index: true,
     },
+    direct_key: {
+      type: String,
+      default: null,
+      index: true,
+    },
     member_ids: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -80,6 +85,17 @@ const conversationSchema = new mongoose.Schema(
 );
 
 conversationSchema.index({ member_ids: 1, updated_at: -1 });
+conversationSchema.index(
+  { direct_key: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      type: 'direct',
+      direct_key: { $type: 'string' },
+      deleted_at: null,
+    },
+  }
+);
 
 const Conversation = mongoose.model('Conversation', conversationSchema);
 

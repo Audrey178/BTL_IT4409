@@ -1,24 +1,25 @@
 import { useMemo, useState } from "react";
 import SideBar from "@/components/layout/SideBar";
-import { AddPersonDialog } from "@/components/chat/AddPersonDialog";
-import { ChatWindow } from "@/components/chat/ChatWindow";
-import { ConversationsSidebar } from "@/components/chat/ConversationsSidebar";
-import { ConversationInfoDialog } from "@/components/chat/ConversationInfoDialog";
-import { CallDialog } from "@/components/chat/CallDialog";
-import { MessageEditHistoryDialog } from "@/components/chat/MessageEditHistoryDialog";
-import { MessageForwardDialog } from "@/components/chat/MessageForwardDialog";
-import { MessageReactionDialog } from "@/components/chat/MessageReactionDialog";
+import { AddPersonDialog } from "@/components/pages/chat/AddPersonDialog";
+import { ChatWindow } from "@/components/pages/chat/ChatWindow";
+import { ConversationsSidebar } from "@/components/pages/chat/ConversationsSidebar";
+import { ConversationInfoDialog } from "@/components/pages/chat/ConversationInfoDialog";
+import { MessageEditHistoryDialog } from "@/components/pages/chat/MessageEditHistoryDialog";
+import { MessageForwardDialog } from "@/components/pages/chat/MessageForwardDialog";
+import { MessageReactionDialog } from "@/components/pages/chat/MessageReactionDialog";
 import { useConversations } from "@/hooks/chat/useConversations";
 import { useMessages } from "@/hooks/chat/useMessages";
 import { usePresence } from "@/hooks/chat/usePresence";
-import { useWebRTCCall } from "@/hooks/chat/useWebRTCCall";
 import { useSocket } from "@/hooks/useSocket";
 import { useMessageStore } from "@/stores/messageStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import type { ChatMessage, MessageEditHistoryItem, MessageReactionUser, ReactionEmoji } from "@/services/chatService";
+import { toast } from "sonner";
+import { useNavigate } from "react-router";
 
 export function MessagesScreen() {
   useSocket();
+  const navigate = useNavigate();
 
   const authUser = useAuthStore((state) => state.user);
   const {
@@ -86,21 +87,6 @@ export function MessagesScreen() {
     loadEditHistory,
     loadReactionUsers,
   } = useMessages(activeConversationId);
-  const {
-    activeCall,
-    localStream,
-    remoteParticipants,
-    error,
-    isMicEnabled,
-    isCameraEnabled,
-    startCall,
-    acceptCall,
-    rejectCall,
-    endCall,
-    dismissCall,
-    toggleMicrophone,
-    toggleCamera,
-  } = useWebRTCCall(activeConversationId);
 
   return (
     <div className="flex min-h-screen bg-surface">
@@ -144,12 +130,6 @@ export function MessagesScreen() {
             setReactionUsers(reactions);
             setReactionEmoji(emoji);
             setShowReactionUsers(true);
-          }}
-          onStartCall={(callType) => {
-            const targetIds = activeConversation?.participants.map((participant) => participant.id) || [];
-            if (targetIds.length > 0 && activeConversationId) {
-              startCall(targetIds, callType);
-            }
           }}
           onOpenAddPerson={() => setShowAddPersonDialog(true)}
           onOpenConversationInfo={() => setShowConversationInfo(true)}
@@ -224,21 +204,6 @@ export function MessagesScreen() {
         onOpenChange={setShowReactionUsers}
         emoji={reactionEmoji}
         reactions={reactionUsers}
-      />
-
-      <CallDialog
-        call={activeCall}
-        localStream={localStream}
-        remoteParticipants={remoteParticipants}
-        error={error}
-        isMicEnabled={isMicEnabled}
-        isCameraEnabled={isCameraEnabled}
-        onAccept={acceptCall}
-        onReject={rejectCall}
-        onEnd={endCall}
-        onClose={dismissCall}
-        onToggleMicrophone={toggleMicrophone}
-        onToggleCamera={toggleCamera}
       />
     </div>
   );

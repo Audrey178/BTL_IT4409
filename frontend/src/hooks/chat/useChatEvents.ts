@@ -6,34 +6,18 @@ import { useMeetingStore } from '@/stores/meetingStore';
 import { useAuthStore } from '@/stores/useAuthStore';
 import type { ChatMessage } from '@/types';
 
-interface ChatHistoryResponse {
-  messages: Array<{
-    _id: string;
-    sender_id: string;
-    sender_name: string;
-    content: string;
-    type: 'text' | 'system' | 'file';
-    timestamp: string;
-    attachment?: {
-      url: string;
-      filename: string;
-      storedFilename?: string;
-      mime_type?: string;
-      size?: number;
-    } | null;
-  }>;
-  page: number;
-  hasMore: boolean;
-}
-
-interface ChatReceivePayload {
+/**
+ * Shape returned by backend mapMessage() for room-based chat history.
+ */
+interface MappedMessage {
+  _id: string;
   messageId: string;
-  senderId: string;
+  senderId: string | null;
   senderName: string;
+  senderAvatar?: string | null;
   content: string;
-  type?: 'text' | 'system' | 'file';
+  type: 'text' | 'system' | 'file' | 'sticker' | 'emoji';
   timestamp: string;
-  isOwn?: boolean;
   attachment?: {
     url: string;
     filename: string;
@@ -41,18 +25,53 @@ interface ChatReceivePayload {
     mime_type?: string;
     size?: number;
   } | null;
-  clientId?: string;
-  client_id?: string;
+  clientId?: string | null;
+  client_id?: string | null;
+  conversationId?: string | null;
+  version?: number;
+  status?: string;
+  isEdited?: boolean;
+  editedAt?: string | null;
+  deletedForEveryoneAt?: string | null;
+  deletedBy?: string | null;
+  replyTo?: {
+    messageId: string | null;
+    senderId: string | null;
+    senderName: string;
+    content: string;
+    type: string;
+    timestamp: string | null;
+  } | null;
+  reactionCounts?: Array<{ emoji: string; count: number }>;
+  myReactions?: string[];
 }
 
-/**
- * Hook xử lý toàn bộ chat socket events:
- * - Gửi tin nhắn qua `chat:send`
- * - Nhận tin nhắn qua `chat:receive`
- * - Load lịch sử chat qua `chat:history`
- *
- * Returns: { sendMessage, loadMoreHistory, hasMore, isLoadingHistory }
- */
+interface ChatHistoryResponse {
+  messages: MappedMessage[];
+  page: number;
+  hasMore: boolean;
+  roomCode?: string;
+}
+
+const toLocalMessage = (m: MappedMessage): ChatMessage => ({
+  id: m.messageId || m._id,
+  senderId: m.senderId || (m as any).sender_id || '',
+  senderName: m.senderName || (m as any).sender_name || '',
+  content: m.content,
+  timestamp: m.timestamp,
+  type: (m.type ?? 'text') as ChatMessage['type'],
+  attachment: m.attachment ?? null,
+  clientId: m.clientId || m.client_id || null,
+  version: m.version ?? 1,
+  isEdited: m.isEdited || Boolean(m.editedAt),
+  editedAt: m.editedAt || null,
+  deletedForEveryoneAt: m.deletedForEveryoneAt || null,
+  deletedBy: m.deletedBy || null,
+  replyTo: m.replyTo || null,
+  reactionCounts: m.reactionCounts || [],
+  myReactions: m.myReactions || [],
+});
+
 export function useChatEvents(roomCode: string | null) {
   const socket = getSocket();
   const authUser = useAuthStore((s) => s.user);
@@ -64,46 +83,43 @@ export function useChatEvents(roomCode: string | null) {
   const isLoadingRef = useRef(false);
   const initialLoadDoneRef = useRef(false);
 
-  // --- Listen for incoming messages ---
+  // --- Subscribe to room chat channel on mount ---
   useEffect(() => {
     if (!roomCode) return;
 
-    const handleReceive = (data: ChatReceivePayload) => {
-      // If server returns a clientId, replace any optimistic message that used that clientId.
-      const msg: ChatMessage = {
-        id: data.messageId,
-        senderId: data.senderId,
-        senderName: data.senderName,
-        content: data.content,
-        timestamp: data.timestamp,
-        type: data.type ?? 'text',
-        attachment: data.attachment ?? null,
-        // preserve clientId for upsert matching
-        // @ts-ignore
-        clientId: data.clientId || data.client_id || null,
-      } as any;
+    socket.emit(CHAT_EVENTS.SUBSCRIBE, { roomCode });
+
+    return () => {
+      socket.emit(CHAT_EVENTS.UNSUBSCRIBE, { roomCode });
+    };
+  }, [socket, roomCode]);
+
+  // --- Listen for incoming messages and updates ---
+  useEffect(() => {
+    if (!roomCode) return;
+
+    const handleReceive = (data: MappedMessage) => {
+      const msg = toLocalMessage(data);
 
       if (msg.senderId && msg.senderId !== authUser?._id) {
         const preview = msg.type === 'file'
           ? msg.attachment?.filename || msg.content || 'Attachment'
-          : msg.type === 'emoji'
-            ? msg.content
-            : msg.content;
+          : msg.content;
         try {
           toast.info(`Tin nhắn mới từ ${msg.senderName}`, {
             description: preview,
           });
-        } catch (e) {}
+        } catch {
+          // ignore toast errors
+        }
       }
 
-      if (data.clientId || (data as any).client_id) {
-        console.log('[CHAT RECEIVE] upsert by clientId', { clientId: data.clientId || (data as any).client_id, content: data.content });
-        upsertMessage(msg);
+      const serverClientId = data.clientId || data.client_id || (data as any).client_id;
+      if (serverClientId) {
+        upsertMessage({ ...msg, clientId: serverClientId });
         return;
       }
 
-      // Fallback: just append message
-      console.log('[CHAT RECEIVE] append', { messageId: data.messageId, content: data.content });
       addMessage(msg);
     };
 
@@ -119,14 +135,50 @@ export function useChatEvents(roomCode: string | null) {
       addMessage(msg);
     };
 
+    const handleMessageUpdated = (payload: { message?: MappedMessage }) => {
+      if (payload?.message) {
+        upsertMessage(toLocalMessage(payload.message));
+      }
+    };
+
+    const handleMessageDeleted = (payload: { message?: MappedMessage }) => {
+      if (payload?.message) {
+        upsertMessage(toLocalMessage(payload.message));
+      }
+    };
+
+    const handleReactionUpdated = (payload: { message?: MappedMessage }) => {
+      if (payload?.message) {
+        upsertMessage(toLocalMessage(payload.message));
+      }
+    };
+
+    const handleConnect = () => {
+      console.log('Socket reconnected, resubscribing and syncing chat history...');
+      socket.emit(CHAT_EVENTS.SUBSCRIBE, { roomCode });
+      socket.emit(CHAT_EVENTS.HISTORY, {
+        roomCode,
+        page: 1,
+        limit: 50,
+      });
+    };
+
     socket.on(CHAT_EVENTS.RECEIVE, handleReceive);
     socket.on(CHAT_EVENTS.SYSTEM_ALERT, handleSystemAlert);
+    socket.on(CHAT_EVENTS.MESSAGE_UPDATED, handleMessageUpdated);
+    socket.on(CHAT_EVENTS.MESSAGE_DELETED, handleMessageDeleted);
+    socket.on(CHAT_EVENTS.REACTION_UPDATED, handleReactionUpdated);
+    socket.on('connect', handleConnect);
 
     return () => {
       socket.off(CHAT_EVENTS.RECEIVE, handleReceive);
       socket.off(CHAT_EVENTS.SYSTEM_ALERT, handleSystemAlert);
+      socket.off(CHAT_EVENTS.MESSAGE_UPDATED, handleMessageUpdated);
+      socket.off(CHAT_EVENTS.MESSAGE_DELETED, handleMessageDeleted);
+      socket.off(CHAT_EVENTS.REACTION_UPDATED, handleReactionUpdated);
+      socket.off('connect', handleConnect);
     };
-  }, [socket, roomCode, addMessage]);
+  }, [socket, roomCode, addMessage, upsertMessage, authUser?._id]);
 
   // --- Listen for history response ---
   useEffect(() => {
@@ -136,15 +188,7 @@ export function useChatEvents(roomCode: string | null) {
       isLoadingRef.current = false;
       hasMoreRef.current = data.hasMore;
 
-      const mapped: ChatMessage[] = data.messages.map((m) => ({
-        id: m._id,
-        senderId: m.sender_id,
-        senderName: m.sender_name,
-        content: m.content,
-        timestamp: m.timestamp,
-        type: m.type ?? 'text',
-        attachment: m.attachment ?? null,
-      }));
+      const mapped: ChatMessage[] = data.messages.map(toLocalMessage);
 
       if (data.page === 1) {
         setMessages(mapped);
@@ -184,12 +228,11 @@ export function useChatEvents(roomCode: string | null) {
     };
   }, [roomCode]);
 
-  // --- Send message ---
+  // --- Actions ---
   const sendMessage = useCallback(
     (payload: string | any) => {
       if (!roomCode) return;
 
-      // If payload is a plain string, treat as text
       if (typeof payload === 'string') {
         const content = payload.trim();
         if (!content) return;
@@ -197,14 +240,12 @@ export function useChatEvents(roomCode: string | null) {
         const localId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         const optimisticMsg: ChatMessage = {
           id: localId,
-          // keep clientId for upsert matching
-          // @ts-ignore
-          clientId: localId,
           senderId: authUser?._id ?? '',
           senderName: authUser?.full_name ?? 'You',
           content,
           timestamp: new Date().toISOString(),
           type: 'text',
+          clientId: localId,
         };
         addMessage(optimisticMsg);
 
@@ -221,15 +262,10 @@ export function useChatEvents(roomCode: string | null) {
         return;
       }
 
-      // Otherwise payload is an object with richer fields
       const data = payload || {};
       const localId = data.clientId || data.client_id || `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      // allow empty content for file/sticker/emoji
       const optimisticMsg: ChatMessage = {
         id: localId,
-        // keep clientId on optimistic message so upsert can match server echo
-        // @ts-ignore
-        clientId: localId,
         senderId: authUser?._id ?? '',
         senderName: authUser?.full_name ?? 'You',
         content:
@@ -239,6 +275,8 @@ export function useChatEvents(roomCode: string | null) {
         timestamp: new Date().toISOString(),
         type: (data.type as any) || 'text',
         attachment: data.attachment ?? null,
+        clientId: localId,
+        replyTo: data.replyTo || null,
       };
       addMessage(optimisticMsg);
 
@@ -246,23 +284,57 @@ export function useChatEvents(roomCode: string | null) {
         roomCode,
         ...data,
         clientId: data.clientId || data.client_id || localId,
-        // also include legacy snake_case for server compatibility
         client_id: data.clientId || data.client_id || localId,
         senderName: authUser?.full_name ?? 'You',
         senderAvatar: null,
-        // file messages should not carry a caption; content is only a display label
         content: data.type === 'file' ? (data.attachment?.filename || data.attachment?.url || '') : data.content,
       };
 
-        console.log('[CHAT SEND] emit', { payload: normalizedPayload });
-        socket.emit(CHAT_EVENTS.SEND, {
-          ...normalizedPayload,
-        });
+      socket.emit(CHAT_EVENTS.SEND, normalizedPayload);
     },
     [socket, roomCode, authUser, addMessage],
   );
 
-  // --- Load older messages ---
+  const editMessage = useCallback((messageId: string, content: string, expectedVersion: number) => {
+    if (!roomCode) return;
+    socket.emit(CHAT_EVENTS.EDIT, {
+      roomCode,
+      messageId,
+      content,
+      expectedVersion,
+      clientMutationId: `local-${Date.now()}`,
+    });
+  }, [socket, roomCode]);
+
+  const deleteMessage = useCallback((messageId: string, expectedVersion: number) => {
+    if (!roomCode) return;
+    socket.emit(CHAT_EVENTS.DELETE, {
+      roomCode,
+      messageId,
+      expectedVersion,
+      clientMutationId: `local-${Date.now()}`,
+    });
+  }, [socket, roomCode]);
+
+  const addReaction = useCallback((messageId: string, emoji: string) => {
+    if (!roomCode) return;
+    socket.emit(CHAT_EVENTS.REACTION_ADD, {
+      roomCode,
+      messageId,
+      emoji,
+      clientMutationId: `local-${Date.now()}`,
+    });
+  }, [socket, roomCode]);
+
+  const removeReaction = useCallback((messageId: string, emoji: string) => {
+    if (!roomCode) return;
+    socket.emit(CHAT_EVENTS.REACTION_REMOVE, {
+      roomCode,
+      messageId,
+      emoji,
+    });
+  }, [socket, roomCode]);
+
   const loadMoreHistory = useCallback(() => {
     if (!roomCode || isLoadingRef.current || !hasMoreRef.current) return;
 
@@ -278,6 +350,10 @@ export function useChatEvents(roomCode: string | null) {
 
   return {
     sendMessage,
+    editMessage,
+    deleteMessage,
+    addReaction,
+    removeReaction,
     loadMoreHistory,
     hasMore: hasMoreRef.current,
   };

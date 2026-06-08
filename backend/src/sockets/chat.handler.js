@@ -1,5 +1,5 @@
 import chatService from '../services/chat.service.js';
-import { User } from '../models/index.js';
+import { User, Room } from '../models/index.js';
 import { SOCKET_EVENTS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
 
@@ -37,6 +37,7 @@ export const handleChatSubscribe = async (socket, data = {}) => {
         messageIds: deliveryUpdate.updatedMessageIds,
         userId: socket.userId,
       });
+
       return;
     }
 
@@ -89,8 +90,9 @@ export const handleChatSend = async (io, socket, data = {}) => {
         result.message.clientId = cid;
         // Also include legacy snake_case for clients that expect it
         result.message.client_id = cid;
-      } catch (e) {}
-      console.log('chat.send conversation result', { conversationId, clientId: data.clientId || data.client_id || null, message: result.message });
+      } catch (e) {
+        // ignore client_id assignment errors
+      }
       io.to(getConversationChannel(conversationId)).emit(SOCKET_EVENTS.CHAT_RECEIVE, result.message);
       return;
     }
@@ -100,8 +102,9 @@ export const handleChatSend = async (io, socket, data = {}) => {
       const cid = data.clientId || data.client_id || result.message.clientId || null;
       result.message.clientId = cid;
       result.message.client_id = cid;
-    } catch (e) {}
-    console.log('chat.send room result', { roomCode, clientId: data.clientId || data.client_id || null, message: result.message });
+    } catch (e) {
+      // ignore client_id assignment errors
+    }
     io.to(roomCode).emit(SOCKET_EVENTS.CHAT_RECEIVE, result.message);
   } catch (error) {
     logger.error('handleChatSend error:', error);
