@@ -40,13 +40,13 @@ export function DashboardScreen() {
         onNewMeeting={() => setShowCreateDialog(true)}
       />
       {/* Main Content */}
-      <main className="ml-64 flex-1 p-8 lg:p-12 bg-surface">
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+      <main className="lg:ml-64 flex-1 pt-16 lg:pt-0 px-4 md:px-8 lg:px-12 py-6 lg:py-12 bg-surface min-h-screen">
+        <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8 lg:mb-12">
           <div className="space-y-2">
             <span className="text-primary font-semibold tracking-widest uppercase text-xs">
               Overview
             </span>
-            <h1 className="text-5xl font-extrabold tracking-tighter text-on-surface">
+            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tighter text-on-surface">
               Meeting Schedule
             </h1>
             <p className="text-on-surface-variant max-w-md text-lg">
@@ -54,7 +54,7 @@ export function DashboardScreen() {
               sessions are ready.
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Button
               onClick={() => setShowJoinDialog(true)}
               className="h-14 px-8 bg-surface-container-highest text-on-surface rounded-full font-bold shadow-sm hover:bg-surface-container-high hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3 group border border-outline-variant/20"
@@ -125,36 +125,7 @@ export function DashboardScreen() {
               </div>
             </div>
 
-            <div className="bg-surface-container-low rounded-3xl p-8 space-y-6">
-              <div className="flex justify-between items-center">
-                <h3 className="font-bold text-on-surface-variant">
-                  Recent Recordings
-                </h3>
-                <button className="text-primary text-sm font-bold hover:underline">
-                  View all
-                </button>
-              </div>
-              <div className="group cursor-pointer">
-                <div className="relative rounded-2xl overflow-hidden mb-4 aspect-video">
-                  <img
-                    src="https://picsum.photos/seed/room/800/450"
-                    alt="Recording"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <PlayCircle className="text-white" size={48} />
-                  </div>
-                  <span className="absolute bottom-3 right-3 bg-black/60 text-white text-[10px] px-2 py-1 rounded-lg backdrop-blur-md font-bold">
-                    45:12
-                  </span>
-                </div>
-                <h4 className="font-bold text-on-surface">Weekly Brand Sync</h4>
-                <p className="text-xs text-on-surface-variant/60">
-                  Oct 2, 2023
-                </p>
-              </div>
-            </div>
+
           </div>
 
           {/* Right Column: Meetings */}
@@ -194,46 +165,7 @@ export function DashboardScreen() {
                 ))
               )}
             </div>
-            {/* stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
-              <div className="bg-linear-to-br from-primary to-primary-container p-8 rounded-3xl text-white flex flex-col justify-between aspect-square md:aspect-auto">
-                <LayoutDashboard size={32} />
-                <div>
-                  <h3 className="text-2xl font-bold">Total Meeting Time</h3>
-                  <p className="text-white/70 text-sm mt-1">
-                    This month you've spent 24 hours in focused sessions.
-                  </p>
-                </div>
-              </div>
-              <div className="bg-surface-container-high p-8 rounded-3xl flex flex-col justify-between aspect-square md:aspect-auto">
-                <div className="flex justify-between items-start">
-                  <Star className="text-primary fill-current" size={32} />
-                  <span className="text-on-surface-variant/40 font-bold text-[10px] tracking-widest">
-                    GOAL MET
-                  </span>
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-on-surface">
-                    98% Satisfaction
-                  </h3>
-                  <p className="text-on-surface-variant text-sm mt-1">
-                    Your feedback score for last week's workshops was
-                    exceptional.
-                  </p>
-                </div>
-              </div>
-              <div className="bg-primary-fixed p-8 rounded-3xl flex flex-col justify-between aspect-square md:aspect-auto">
-                <Bot className="text-primary" size={32} />
-                <div>
-                  <h3 className="text-2xl font-bold text-on-primary-fixed">
-                    New Hearth AI Beta
-                  </h3>
-                  <p className="text-on-primary-fixed-variant text-sm mt-1">
-                    Automated summaries are now available for your recordings.
-                  </p>
-                </div>
-              </div>
-            </div>
+
           </div>
         </div>
       </main>

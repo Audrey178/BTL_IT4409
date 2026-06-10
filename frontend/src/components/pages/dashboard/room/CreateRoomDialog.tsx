@@ -101,11 +101,11 @@ export function CreateRoomDialog({ open, onOpenChange }: CreateRoomDialogProps) 
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[480px] bg-surface-container-lowest rounded-3xl border-outline-variant/10 p-0 overflow-hidden">
+      <DialogContent className="w-full max-w-[480px] mx-auto bg-surface-container-lowest rounded-3xl border-outline-variant/10 p-0 overflow-hidden max-h-[90dvh] flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-br from-primary to-primary-container p-8 text-white">
+        <div className="bg-gradient-to-br from-primary to-primary-container p-6 md:p-8 text-white shrink-0">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-extrabold tracking-tight text-white">
+            <DialogTitle className="text-xl md:text-2xl font-extrabold tracking-tight text-white">
               {createdRoomCode ? 'Meeting Ready!' : 'Start Instant Meeting'}
             </DialogTitle>
             <DialogDescription className="text-white/70 text-sm mt-1">
@@ -116,7 +116,7 @@ export function CreateRoomDialog({ open, onOpenChange }: CreateRoomDialogProps) 
           </DialogHeader>
         </div>
 
-        <div className="p-8 space-y-6">
+        <div className="p-6 md:p-8 space-y-5 overflow-y-auto flex-1">
           {!createdRoomCode ? (
             <>
               {/* Title */}

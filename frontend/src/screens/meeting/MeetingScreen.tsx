@@ -286,32 +286,38 @@ export function MeetingScreen() {
     : sharingParticipant?.screenStream || null;
 
   const totalVisibleTiles = participants.length + 1;
-  const meetingGridStyle = totalVisibleTiles >= 4
-    ? { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gridTemplateRows: 'repeat(2, minmax(0, 1fr))' }
-    : { gridTemplateColumns: `repeat(${totalVisibleTiles}, minmax(0, 1fr))` };
+  const getGridClass = (count: number) => {
+    if (count === 1) return "grid-cols-1 grid-rows-1";
+    if (count === 2) return "grid-cols-1 grid-rows-2 md:grid-cols-2 md:grid-rows-1";
+    if (count >= 3 && count <= 4) return "grid-cols-2 grid-rows-2";
+    if (count >= 5 && count <= 6) return "grid-cols-2 grid-rows-3 md:grid-cols-3 md:grid-rows-2";
+    return "grid-cols-3 md:grid-cols-4";
+  };
 
   return (
     <div className="h-screen flex flex-col bg-surface overflow-hidden">
       {/* Header */}
-      <header className="bg-surface-container-low/50 backdrop-blur-xl px-8 py-4 flex justify-between items-center border-b border-outline-variant/10 z-50">
-        <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold tracking-tighter text-orange-900">The Digital Hearth</h1>
-          <div className="px-3 py-1 bg-primary/10 rounded-full flex items-center gap-2">
-            <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-            <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Live: {roomCode}</span>
+      <header className="bg-surface-container-low/50 backdrop-blur-xl px-3 md:px-8 py-3 md:py-4 flex justify-between items-center border-b border-outline-variant/10 z-50">
+        <div className="flex items-center gap-2 md:gap-4 min-w-0">
+          <h1 className="text-base md:text-2xl font-bold tracking-tighter text-orange-900 truncate">The Digital Hearth</h1>
+          <div className="px-2 md:px-3 py-1 bg-primary/10 rounded-full flex items-center gap-1.5 shrink-0">
+            <span className="w-1.5 h-1.5 md:w-2 md:h-2 bg-primary rounded-full animate-pulse" />
+            <span className="text-[9px] md:text-[10px] font-bold text-primary uppercase tracking-widest">
+              <span className="hidden sm:inline">Live: </span>{roomCode}
+            </span>
           </div>
           {/* Recording indicator — blinking red dot in header */}
           <RecordingBanner isRecording={isRecording} formattedDuration={formattedDuration} />
         </div>
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2 bg-surface-container rounded-full px-4 py-2">
+        <div className="flex items-center gap-2 md:gap-6 shrink-0">
+          <div className="hidden sm:flex items-center gap-2 bg-surface-container rounded-full px-3 py-1.5">
             <span className="text-sm font-bold text-on-surface">{participants.length + 1} in room</span>
           </div>
-          <div className="flex items-center gap-3 bg-white/50 px-4 py-2 rounded-full border border-outline-variant/20">
-            <Avatar className="w-8 h-8">
+          <div className="flex items-center gap-2 bg-white/50 px-2 md:px-4 py-1.5 md:py-2 rounded-full border border-outline-variant/20">
+            <Avatar className="w-7 h-7 md:w-8 md:h-8">
               <AvatarFallback>{authUser?.full_name?.[0]?.toUpperCase() || "U"}</AvatarFallback>
             </Avatar>
-            <span className="font-bold text-orange-900 text-sm">{authUser?.full_name || "You"}</span>
+            <span className="font-bold text-orange-900 text-sm hidden md:inline">{authUser?.full_name || "You"}</span>
             {isHost && (
               <Badge className="bg-primary/10 text-primary hover:bg-primary/10 text-[10px] px-2">Host</Badge>
             )}
@@ -347,7 +353,7 @@ export function MeetingScreen() {
 
 
 
-      <div className="flex-1 flex overflow-hidden p-6 gap-6 relative">
+      <div className="flex-1 flex overflow-hidden p-2 pb-24 md:p-6 gap-2 md:gap-6 relative">
         {/* ============ PRESENTATION MODE ============ */}
         {isAnyoneSharing ? (
           <div className="flex-1 flex gap-4">
@@ -396,8 +402,7 @@ export function MeetingScreen() {
         ) : (
           /* ============ NORMAL GRID MODE ============ */
           <div
-            className={`flex-1 grid gap-4 transition-all duration-500 ${showChat ? "mr-0" : ""}`}
-            style={meetingGridStyle}
+            className={`flex-1 grid gap-2 md:gap-4 transition-all duration-500 ${showChat ? "md:mr-0" : ""} ${getGridClass(totalVisibleTiles)}`}
           >
             <VideoTile
               name={authUser?.full_name || "You"}
@@ -441,53 +446,61 @@ export function MeetingScreen() {
       </div>
 
       {/* Controls Bar */}
-      <div className="h-24 bg-surface-container-low/30 flex items-center justify-center px-8 relative z-50">
-        <div className="flex items-center gap-4 bg-white/80 backdrop-blur-2xl px-8 py-4 rounded-full shadow-2xl border border-white/40">
+      <div className="fixed bottom-0 left-0 w-full md:relative bg-white/90 md:bg-surface-container-low/30 backdrop-blur-xl border-t border-outline-variant/10 md:border-none flex items-center justify-center px-3 py-3 md:px-8 md:py-4 z-50">
+        <div className="flex items-center justify-center gap-2 md:gap-3 max-w-full">
+          {/* Mic */}
           <ControlButton
-            icon={isAudioMuted ? <MicOff size={24} /> : <Mic size={24} />}
+            icon={isAudioMuted ? <MicOff size={20} /> : <Mic size={20} />}
             onClick={handleToggleAudio}
             active={isAudioMuted}
           />
+          {/* Camera */}
           <ControlButton
-            icon={isVideoMuted ? <VideoOff size={24} /> : <Video size={24} />}
+            icon={isVideoMuted ? <VideoOff size={20} /> : <Video size={20} />}
             onClick={handleToggleVideo}
             active={isVideoMuted}
           />
-          <div className="w-px h-10 bg-outline-variant/30 mx-2" />
+          {/* Share Screen — shown on all, smaller on mobile */}
           <ControlButton
-            icon={isScreenSharing ? <ScreenShareOff size={24} /> : <ScreenShare size={24} />}
-            label={isScreenSharing ? "Stop Share" : "Share Screen"}
+            icon={isScreenSharing ? <ScreenShareOff size={20} /> : <ScreenShare size={20} />}
             onClick={handleToggleScreenShare}
             active={isScreenSharing}
             className={isScreenSharing
-              ? "px-8 w-auto bg-error text-white shadow-lg shadow-error/20 border-none"
-              : "px-8 w-auto bg-linear-to-r from-primary to-primary-container text-white shadow-lg shadow-primary/20 border-none"
+              ? "bg-error text-white shadow-lg shadow-error/20 border-none"
+              : "bg-gradient-to-r from-primary to-primary-container text-white shadow-lg shadow-primary/20 border-none"
             }
           />
-          <ControlButton icon={<MessageSquare size={24} />} onClick={handleToggleChat} active={showChat} badge={unreadCount > 0 ? unreadCount : undefined} />
+          {/* Chat */}
+          <ControlButton icon={<MessageSquare size={20} />} onClick={handleToggleChat} active={showChat} badge={unreadCount > 0 ? unreadCount : undefined} />
+          {/* Waiting Room — host only */}
           {isHost && roomCode && <WaitingRoomPanel roomCode={roomCode} waitingList={waitingList} removeWaitingUser={removeWaitingUser} />}
+          {/* Participants — host only */}
           {isHost && roomCode && <ParticipantsPanel roomCode={roomCode} />}
-          <ControlButton icon={<Sparkles size={24} />} onClick={() => setShowFilters(!showFilters)} active={showFilters} />
+          {/* Filters */}
+          <ControlButton icon={<Sparkles size={20} />} onClick={() => setShowFilters(!showFilters)} active={showFilters} />
+          {/* Recording — host only */}
           {isHost && (
             <ControlButton
               icon={
                 isRecording ? (
-                  <div className="flex items-center gap-1.5 px-1">
-                    <span className="w-2.5 h-2.5 bg-red-600 rounded-full animate-pulse" />
-                    <span className="text-xs font-bold text-red-600 tracking-tight">{formattedDuration}</span>
+                  <div className="flex items-center gap-1 px-0.5">
+                    <span className="w-2 h-2 bg-red-600 rounded-full animate-pulse shrink-0" />
+                    <span className="text-[10px] font-bold text-red-600 tracking-tight hidden md:inline">{formattedDuration}</span>
                   </div>
                 ) : (
-                  <Circle size={24} className="fill-stone-600/30 text-stone-600 stroke-[3px]" />
+                  <Circle size={20} className="fill-stone-600/30 text-stone-600 stroke-[3px]" />
                 )
               }
               onClick={isRecording ? () => setShowStopRecordingDialog(true) : startRecording}
               active={isRecording}
-              className={isRecording ? "w-auto px-4 border-red-200 bg-red-50 hover:bg-red-100 shadow-lg shadow-red-500/10 text-red-600 animate-pulse" : ""}
+              className={isRecording ? "border-red-200 bg-red-50 hover:bg-red-100 shadow-lg shadow-red-500/10 text-red-600" : ""}
             />
           )}
-          <div className="w-px h-10 bg-outline-variant/30 mx-2" />
+          {/* Divider */}
+          <div className="w-px h-8 bg-outline-variant/30 mx-1" />
+          {/* End Call */}
           <ControlButton
-            icon={<PhoneOff size={24} />}
+            icon={<PhoneOff size={20} />}
             className="bg-error text-white shadow-lg shadow-error/20 border-none hover:bg-error/90"
             onClick={() => setShowEndDialog(true)}
           />
@@ -495,7 +508,7 @@ export function MeetingScreen() {
 
         {/* Self Preview Floating — hide during presentation mode */}
         {!isAnyoneSharing && (
-          <div className="absolute right-8 bottom-8 w-48 aspect-video rounded-2xl overflow-hidden border-2 border-primary shadow-2xl bg-stone-900">
+          <div className="fixed bottom-24 right-4 md:absolute md:right-8 md:bottom-32 w-28 md:w-48 aspect-video rounded-2xl overflow-hidden border-2 border-primary shadow-2xl bg-stone-900 z-40">
             {/* Local Video Preview */}
             <div className={`absolute inset-0 w-full h-full transition-opacity duration-500 ${localStream && !isVideoMuted ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
               {localStream && <SelfPreviewVideo stream={localStream} filterCss={effectiveCssFilter} />}

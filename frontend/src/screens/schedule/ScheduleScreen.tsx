@@ -7,6 +7,7 @@ import { motion } from "motion/react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import SideBar from "@/components/layout/SideBar";
+import { CreateRoomDialog } from "@/components/pages/dashboard/room/CreateRoomDialog";
 import { ScheduleMeetingDialog } from "@/components/pages/dashboard/room/ScheduleMeetingDialog";
 import { MeetingDetailDialog } from "@/components/pages/schedule/MeetingDetailDialog";
 import { CalendarEventContent } from "@/components/pages/schedule/CalendarEventContent";
@@ -15,6 +16,7 @@ import { useUpcomingMeetings } from "@/hooks/dashboard/useUpcomingMeetings";
 import type { ScheduledMeeting } from "@/types";
 
 export function ScheduleScreen() {
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<ScheduledMeeting | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -51,19 +53,19 @@ export function ScheduleScreen() {
 
   return (
     <div className="flex min-h-screen">
-      <SideBar onNewMeeting={() => setShowScheduleDialog(true)} />
+      <SideBar onNewMeeting={() => setShowCreateDialog(true)} />
 
-      <main className="ml-64 flex-1 p-8 lg:p-12 bg-surface">
+      <main className="lg:ml-64 flex-1 pt-16 lg:pt-0 px-4 md:px-8 lg:px-12 py-6 lg:py-12 bg-surface min-h-screen">
         {/* Header */}
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+        <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8 lg:mb-10">
           <div className="space-y-2">
             <span className="text-primary font-semibold tracking-widest uppercase text-xs">
               Calendar
             </span>
-            <h1 className="text-5xl font-extrabold tracking-tighter text-on-surface">
+            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tighter text-on-surface">
               Schedule
             </h1>
-            <p className="text-on-surface-variant max-w-md text-lg">
+            <p className="text-on-surface-variant max-w-md">
               Your upcoming meetings at a glance.
             </p>
           </div>
@@ -109,6 +111,10 @@ export function ScheduleScreen() {
       </main>
 
       {/* Dialogs */}
+      <CreateRoomDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+      />
       <ScheduleMeetingDialog
         open={showScheduleDialog}
         onOpenChange={setShowScheduleDialog}
