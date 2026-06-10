@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import SideBar from "@/components/layout/SideBar";
+import { CreateRoomDialog } from "@/components/pages/dashboard/room/CreateRoomDialog";
 import { RecordingCard } from "@/components/pages/archives/RecordingCard";
 import { DeleteRecordingDialog } from "@/components/pages/archives/DeleteRecordingDialog";
 import { ArchivesLoadingSkeleton } from "@/components/pages/archives/ArchivesLoadingSkeleton";
@@ -22,6 +23,7 @@ export function ArchivesScreen() {
   const { recordings, loading, error, pagination, fetchRecordings, removeRecording } =
     useRecordings();
 
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [searchCode, setSearchCode] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -71,19 +73,19 @@ export function ArchivesScreen() {
 
   return (
     <div className="flex min-h-screen">
-      <SideBar />
+      <SideBar onNewMeeting={() => setShowCreateDialog(true)} />
 
-      <main className="ml-64 flex-1 p-8 lg:p-12 bg-surface">
+      <main className="lg:ml-64 flex-1 pt-16 lg:pt-0 px-4 md:px-8 lg:px-12 py-6 lg:py-12 bg-surface min-h-screen">
         {/* Header */}
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+        <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8 lg:mb-10">
           <div className="space-y-2">
             <span className="text-primary font-semibold tracking-widest uppercase text-xs">
               Library
             </span>
-            <h1 className="text-5xl font-extrabold tracking-tighter text-on-surface">
+            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tighter text-on-surface">
               Archives
             </h1>
-            <p className="text-on-surface-variant max-w-md text-lg">
+            <p className="text-on-surface-variant max-w-md">
               Browse and manage your meeting recordings.
             </p>
           </div>
@@ -268,6 +270,12 @@ export function ArchivesScreen() {
           </>
         )}
       </main>
+
+      {/* Dialogs */}
+      <CreateRoomDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+      />
 
       {/* Delete Dialog */}
       <DeleteRecordingDialog

@@ -78,7 +78,7 @@ export function ParticipantsPanel({ roomCode }: { roomCode: string }) {
           </span>
         )}
       </SheetTrigger>
-      <SheetContent className="w-[380px] bg-surface-container-lowest border-outline-variant/10 p-0 flex flex-col">
+      <SheetContent className="w-full sm:w-[380px] bg-surface-container-lowest border-outline-variant/10 p-0 flex flex-col z-[120]">
         <SheetHeader className="p-6 pb-4 border-b border-outline-variant/10">
           <SheetTitle className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">

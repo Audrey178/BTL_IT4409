@@ -61,7 +61,7 @@ export function ConversationsSidebar({
   }, [onSearchUsers, query]);
 
   return (
-    <section className="w-80 h-full bg-surface-container-low border-r border-outline-variant/30 flex flex-col">
+    <section className="w-full h-full bg-surface-container-low border-r border-outline-variant/30 flex flex-col">
       <div className="p-6 border-b border-outline-variant/20">
         <h2 className="font-headline-md text-headline-md text-primary mb-6">
           Messages

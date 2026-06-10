@@ -49,7 +49,7 @@ export function ChatHeader({
   );
 
   return (
-    <header className="sticky top-0 z-20 flex h-20 shrink-0 items-center justify-between border-b border-outline-variant/30 bg-surface/95 px-8 backdrop-blur-xl">
+    <header className="sticky top-0 z-20 flex h-16 md:h-20 shrink-0 items-center justify-between border-b border-outline-variant/30 bg-surface/95 px-4 md:px-8 backdrop-blur-xl">
       <div className="flex items-center gap-4 min-w-0">
         <div className="flex -space-x-3">
           {participants.slice(0, 3).map((participant) => (

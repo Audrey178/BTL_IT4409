@@ -302,7 +302,7 @@ export function LobbyScreen() {
       <TopNav />
 
       <main className="flex-grow flex items-center justify-center p-8 lg:p-12">
-        <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
+        <div className="w-full max-w-6xl flex flex-col-reverse lg:grid lg:grid-cols-12 gap-8 lg:gap-16 lg:items-center">
           {/* Left: Content */}
           <div className="lg:col-span-5 space-y-8">
             <div className="space-y-4">

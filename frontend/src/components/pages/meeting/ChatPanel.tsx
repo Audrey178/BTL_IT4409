@@ -203,7 +203,7 @@ export function ChatPanel({
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 20 }}
-      className="w-100 flex flex-col bg-surface-container-low rounded-[2rem] shadow-sm overflow-hidden border border-outline-variant/10 z-[120] pointer-events-auto"
+      className="fixed inset-y-0 right-0 md:relative w-full md:w-96 flex flex-col bg-surface-container-low md:rounded-[2rem] shadow-2xl md:shadow-sm overflow-hidden border-l md:border border-outline-variant/10 z-[120] pointer-events-auto h-full"
     >
       {/* Header */}
       <div className="p-6 bg-surface-container-high flex justify-between items-center border-b border-outline-variant/10">

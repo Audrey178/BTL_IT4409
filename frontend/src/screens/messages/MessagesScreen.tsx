@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import SideBar from "@/components/layout/SideBar";
+import { CreateRoomDialog } from "@/components/pages/dashboard/room/CreateRoomDialog";
 import { AddPersonDialog } from "@/components/pages/chat/AddPersonDialog";
 import { ChatWindow } from "@/components/pages/chat/ChatWindow";
 import { ConversationsSidebar } from "@/components/pages/chat/ConversationsSidebar";
@@ -62,6 +63,8 @@ export function MessagesScreen() {
 
   usePresence(participantIds);
 
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
   const [showAddPersonDialog, setShowAddPersonDialog] = useState(false);
   const [showConversationInfo, setShowConversationInfo] = useState(false);
   const [forwardMessageTarget, setForwardMessageTarget] = useState<ChatMessage | null>(null);
@@ -90,20 +93,49 @@ export function MessagesScreen() {
 
   return (
     <div className="flex min-h-screen bg-surface">
-      <SideBar />
+      <SideBar onNewMeeting={() => setShowCreateDialog(true)} />
 
-      <main className="ml-64 flex h-screen overflow-hidden w-[calc(100%-16rem)]">
-        <ConversationsSidebar
-          conversations={conversations}
-          activeConversationId={activeConversationId}
-          userSearchResults={userSearchResults}
-          isSearchingUsers={isSearchingUsers}
-          presenceByUserId={presenceByUserId}
-          onSelectConversation={setActiveConversationId}
-          onSearchUsers={searchUsers}
-          onStartConversation={startConversation}
-        />
-        <ChatWindow
+      <main className="lg:ml-64 flex-1 flex h-screen overflow-hidden pt-14 lg:pt-0 min-w-0">
+        {/* ── ConversationsSidebar: full-width on mobile (list view), fixed-width on desktop ── */}
+        <div className={`
+          w-full lg:w-80 h-full flex-shrink-0
+          ${mobileView === 'chat' ? 'hidden lg:flex' : 'flex'}
+        `}>
+          <ConversationsSidebar
+            conversations={conversations}
+            activeConversationId={activeConversationId}
+            userSearchResults={userSearchResults}
+            isSearchingUsers={isSearchingUsers}
+            presenceByUserId={presenceByUserId}
+            onSelectConversation={(id) => {
+              setActiveConversationId(id);
+              setMobileView('chat'); // switch to chat view on mobile
+            }}
+            onSearchUsers={searchUsers}
+            onStartConversation={startConversation}
+          />
+        </div>
+
+        {/* ── ChatWindow: hidden on mobile (list view), full-width on mobile (chat view) ── */}
+        <div className={`
+          flex-1 h-full min-w-0
+          ${mobileView === 'list' ? 'hidden lg:flex' : 'flex'}
+          flex-col
+        `}>
+          {/* Mobile back button */}
+          {mobileView === 'chat' && activeConversation && (
+            <div className="lg:hidden flex items-center gap-3 px-4 py-3 border-b border-outline-variant/20 bg-surface-container-low shrink-0">
+              <button
+                onClick={() => setMobileView('list')}
+                className="flex items-center gap-2 text-primary font-semibold text-sm"
+                aria-label="Back to conversations"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                Conversations
+              </button>
+            </div>
+          )}
+          <ChatWindow
           conversation={activeConversation}
           messages={messages}
           typing={activeConversationId ? typingByConversationId[activeConversationId] || null : null}
@@ -131,10 +163,16 @@ export function MessagesScreen() {
             setReactionEmoji(emoji);
             setShowReactionUsers(true);
           }}
-          onOpenAddPerson={() => setShowAddPersonDialog(true)}
-          onOpenConversationInfo={() => setShowConversationInfo(true)}
-        />
+            onOpenAddPerson={() => setShowAddPersonDialog(true)}
+            onOpenConversationInfo={() => setShowConversationInfo(true)}
+          />
+        </div>
       </main>
+
+      <CreateRoomDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+      />
 
       <AddPersonDialog
         open={showAddPersonDialog}
