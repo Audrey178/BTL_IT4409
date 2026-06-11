@@ -336,6 +336,24 @@ class AuthService {
       throw error;
     }
   }
+
+  async searchUsers(emailQuery, excludeUserId) {
+    try {
+      if (!emailQuery) return [];
+      const users = await User.find({
+        email: { $regex: emailQuery, $options: 'i' },
+        _id: { $ne: excludeUserId },
+      })
+        .limit(10)
+        .select('_id full_name email avatar')
+        .lean();
+      return users;
+    } catch (error) {
+      logger.error('Search users service error:', error);
+      throw error;
+    }
+  }
 }
 
 export default new AuthService();
+

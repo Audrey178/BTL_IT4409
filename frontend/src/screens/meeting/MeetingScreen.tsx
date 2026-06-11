@@ -149,6 +149,21 @@ export function MeetingScreen() {
     prevMessageCountRef.current = messageCount;
   }, [messageCount, showChat]);
 
+  // Listen for invitation decline notifications (only if user is host)
+  useEffect(() => {
+    if (!isHost || !socket) return;
+
+    const handleDecline = (data: { roomCode: string; userName: string }) => {
+      toast.warning(`${data.userName} declined your invitation to join room ${data.roomCode}`);
+    };
+
+    socket.on(ROOM_EVENTS.INVITE_DECLINED, handleDecline);
+
+    return () => {
+      socket.off(ROOM_EVENTS.INVITE_DECLINED, handleDecline);
+    };
+  }, [isHost, socket]);
+
   const handleToggleChat = useCallback(() => {
     const next = !showChat;
     setShowChat(next);

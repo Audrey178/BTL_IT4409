@@ -24,7 +24,7 @@
 import { SOCKET_EVENTS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
 import { getRedisClient } from '../config/redis.js';
-import { handleRoomJoin, handleApproveUser, handleRejectUser, handleUserLeft, handleEndMeeting } from './room.handler.js';
+import { handleRoomJoin, handleApproveUser, handleRejectUser, handleUserLeft, handleEndMeeting, handleDeclineInvite } from './room.handler.js';
 // WebRTC signaling removed — now handled by LiveKit Cloud SFU
 import { handleChatSend, handleChatHistory } from './chat.handler.js';
 import { handleMediaToggle, handleScreenShareStart, handleScreenShareStop } from './media.handler.js';
@@ -89,6 +89,14 @@ export const initializeSocket = (io, redisClient) => {
      */
     socket.on(SOCKET_EVENTS.ROOM_ENDED, (data) => {
       handleEndMeeting(io, socket, data);
+    });
+
+    /**
+     * Sự kiện: Người dùng từ chối lời mời
+     * Dữ liệu: { roomCode, hostId, userName }
+     */
+    socket.on(SOCKET_EVENTS.ROOM_DECLINE_INVITE, (data) => {
+      handleDeclineInvite(io, socket, data);
     });
 
     // =========================================================================

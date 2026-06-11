@@ -143,6 +143,28 @@ router.get('/me', authenticate, authController.getProfile.bind(authController));
 router.put('/me', authenticate, authController.updateProfile.bind(authController));
 
 /**
+ * @swagger
+ * /auth/users/search:
+ *   get:
+ *     summary: Search users by email
+ *     tags: [Auth]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: email
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Email query string
+ *     responses:
+ *       200:
+ *         description: List of matching users
+ */
+router.get('/users/search', authenticate, authController.searchUsers.bind(authController));
+
+
+/**
  * POST /auth/google
  * Body: { id_token }
  */

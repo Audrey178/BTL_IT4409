@@ -13,8 +13,9 @@ import { Badge } from '@/components/ui/badge';
 import { useMeetingStore } from '@/stores/meetingStore';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { roomService } from '@/services/roomService';
-import { UserX, Users, Loader2, Crown } from 'lucide-react';
+import { UserX, Users, Loader2, Crown, UserPlus } from 'lucide-react';
 import { useState } from 'react';
+import { InviteUserDialog } from './InviteUserDialog';
 
 /**
  * Slide-in panel showing current participants in the meeting for host.
@@ -27,6 +28,9 @@ export function ParticipantsPanel({ roomCode }: { roomCode: string }) {
   const authUser = useAuthStore((s) => s.user);
   const removeParticipant = useMeetingStore((s) => s.removeParticipant);
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
+  const [showInviteDialog, setShowInviteDialog] = useState(false);
+
+  const isHost = hostId === authUser?._id;
 
   const hostParticipant = hostId
     ? participants.find((p) => p.id === hostId)
@@ -91,6 +95,18 @@ export function ParticipantsPanel({ roomCode }: { roomCode: string }) {
           </SheetTitle>
         </SheetHeader>
 
+        {isHost && (
+          <div className="px-6 py-3.5 border-b border-outline-variant/10">
+            <Button
+              onClick={() => setShowInviteDialog(true)}
+              className="w-full h-11 bg-primary text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-primary/95 transition-all shadow-md shadow-primary/10"
+            >
+              <UserPlus size={16} />
+              Invite Participant
+            </Button>
+          </div>
+        )}
+
         <ScrollArea className="flex-1 p-4">
           {count === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-center px-8">
@@ -145,6 +161,12 @@ export function ParticipantsPanel({ roomCode }: { roomCode: string }) {
             </div>
           )}
         </ScrollArea>
+
+        <InviteUserDialog
+          open={showInviteDialog}
+          onOpenChange={setShowInviteDialog}
+          roomCode={roomCode}
+        />
       </SheetContent>
     </Sheet>
   );

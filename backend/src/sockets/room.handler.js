@@ -473,4 +473,34 @@ export const handleEndMeeting = async (io, socket, data) => {
   }
 };
 
-export default { handleRoomJoin, handleApproveUser, handleRejectUser, handleUserLeft, handleEndMeeting };
+/**
+ * Xử lý sự kiện người dùng từ chối lời mời
+ */
+export const handleDeclineInvite = async (io, socket, data) => {
+  try {
+    const { roomCode, hostId, userName } = data;
+    if (!roomCode || !hostId) return;
+
+    const redis = getRedisClient();
+    const room = await Room.findOne({ room_code: roomCode.toUpperCase() });
+    if (!room || room.status === ROOM_STATUS.ENDED) {
+      logger.info(`Declined invite ignored: Room ${roomCode} has already ended or does not exist`);
+      return;
+    }
+
+    const hostSocketId = await redis.get(`user:${hostId}:socket`);
+    if (hostSocketId) {
+      io.to(hostSocketId).emit(SOCKET_EVENTS.ROOM_INVITE_DECLINED, {
+        roomCode: roomCode.toUpperCase(),
+        userName: userName || 'Someone',
+      });
+      logger.info(`Notification sent to host ${hostId} that user declined invitation`);
+    } else {
+      logger.warn(`Could not find socket for host ${hostId} to send decline notification`);
+    }
+  } catch (error) {
+    logger.error('Error in handleDeclineInvite:', error);
+  }
+};
+
+export default { handleRoomJoin, handleApproveUser, handleRejectUser, handleUserLeft, handleEndMeeting, handleDeclineInvite };

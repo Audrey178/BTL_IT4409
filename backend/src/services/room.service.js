@@ -643,6 +643,55 @@ class RoomService {
     }
   }
 
+  async inviteUser(roomCode, hostId, targetUserId) {
+    try {
+      const normalizedCode = roomCode ? roomCode.toUpperCase() : '';
+      const room = await Room.findOne({ room_code: normalizedCode });
+      if (!room) {
+        const error = new Error(ERROR_MESSAGES.ROOM_NOT_FOUND);
+        error.statusCode = HTTP_STATUS.NOT_FOUND;
+        throw error;
+      }
+
+      if (room.host_id.toString() !== hostId.toString()) {
+        const error = new Error(ERROR_MESSAGES.NOT_HOST);
+        error.statusCode = HTTP_STATUS.FORBIDDEN;
+        throw error;
+      }
+
+      if (room.status === ROOM_STATUS.ENDED) {
+        const error = new Error(ERROR_MESSAGES.ROOM_ENDED);
+        error.statusCode = HTTP_STATUS.BAD_REQUEST;
+        throw error;
+      }
+
+      const existingMember = await RoomMember.findOne({
+        room_id: room._id,
+        user_id: targetUserId,
+        status: { $in: [USER_STATUS.JOINED, USER_STATUS.PENDING] }
+      });
+
+      if (existingMember) {
+        const error = new Error('User is already in this meeting room');
+        error.statusCode = HTTP_STATUS.BAD_REQUEST;
+        throw error;
+      }
+
+      const redis = getRedisClient();
+      const socketId = await redis.get(`user:${targetUserId}:socket`);
+
+      return {
+        success: true,
+        online: !!socketId,
+        socketId,
+        room,
+      };
+    } catch (error) {
+      logger.error('Invite user service error:', error);
+      throw error;
+    }
+  }
+
   mapRoom(room) {
     const raw = typeof room.toJSON === 'function' ? room.toJSON() : room;
     const host = raw.host_id;
