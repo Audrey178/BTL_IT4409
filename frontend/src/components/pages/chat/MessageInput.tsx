@@ -78,7 +78,7 @@ export function MessageInput({
         await onSend({ type: 'file', file: res.file, clientId } as any);
       } catch (err: any) {
         console.error('Upload/send failed', err);
-        setPendingAttachment((current) => current ? ({ ...current, uploading: false, error: 'Upload failed' }) : null);
+        setPendingAttachment((current) => current ? ({ ...current, uploading: false, error: 'Lỗi khi tải lên' }) : null);
       } finally {
         setPendingAttachment(null);
       }
@@ -104,7 +104,7 @@ export function MessageInput({
             <div className="min-w-0">
               <div className="flex items-center gap-2 text-xs uppercase tracking-[0.14em] text-on-surface-variant">
                 {composerState.mode === "reply" ? <Reply className="size-3.5" /> : <SquarePen className="size-3.5" />}
-                {composerState.mode === "reply" ? "Replying to" : "Editing"}
+                {composerState.mode === "reply" ? "Đang trả lời" : "Đang chỉnh sửa"}
                 <span className="truncate text-on-surface">{composerState.message.senderName}</span>
               </div>
               <p className="mt-1 truncate text-sm text-on-surface-variant">
@@ -183,7 +183,7 @@ export function MessageInput({
                 <div className="text-xs text-on-surface-variant">{(pendingAttachment.size / 1024).toFixed(1)} KB</div>
               </div>
               <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setPendingAttachment(null)} className="rounded px-2 py-1 text-sm text-on-surface-variant hover:bg-surface-container-high">Cancel</button>
+                <button type="button" onClick={() => setPendingAttachment(null)} className="rounded px-2 py-1 text-sm text-on-surface-variant hover:bg-surface-container-high">Hủy</button>
               </div>
             </div>
           ) : null}
@@ -202,10 +202,10 @@ export function MessageInput({
             disabled={disabled}
             placeholder={
               disabled
-                ? "Choose a conversation"
+                ? "Chọn một cuộc trò chuyện"
                 : composerState.mode === "edit"
-                  ? "Update your message..."
-                  : "Share a thought with the studio..."
+                  ? "Cập nhật tin nhắn..."
+                  : "Chia sẻ suy nghĩ..."
             }
             className="flex-1 bg-transparent border-none focus:ring-0 py-3 px-2 font-body-base text-on-surface resize-none max-h-32 placeholder:text-on-surface-variant/50 min-h-0"
           />

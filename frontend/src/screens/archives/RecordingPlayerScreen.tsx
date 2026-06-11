@@ -47,11 +47,11 @@ export function RecordingPlayerScreen() {
         if (!cancelled && res.recording) {
           setRecording(res.recording);
         } else if (!cancelled) {
-          setError("Recording not found");
+          setError("Không tìm thấy bản ghi");
         }
       } catch (err: unknown) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load recording");
+          setError(err instanceof Error ? err.message : "Lỗi khi tải bản ghi");
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -78,7 +78,7 @@ export function RecordingPlayerScreen() {
         }
       } catch (err: unknown) {
         if (!cancelled) {
-          setChatError("Chat history unavailable");
+          setChatError("Lịch sử chat không khả dụng");
         }
       } finally {
         if (!cancelled) setChatLoading(false);
@@ -108,14 +108,14 @@ export function RecordingPlayerScreen() {
           <div className="w-20 h-20 rounded-3xl bg-red-50 flex items-center justify-center">
             <AlertCircle size={40} className="text-error/40" />
           </div>
-          <p className="font-bold text-on-surface text-lg">{error || "Recording not found"}</p>
+          <p className="font-bold text-on-surface text-lg">{error || "Không tìm thấy bản ghi"}</p>
           <Button
             onClick={() => navigate("/archives")}
             variant="outline"
             className="rounded-full px-6 font-bold"
           >
             <ArrowLeft size={16} className="mr-2" />
-            Back to Archives
+            Quay lại Lưu trữ
           </Button>
         </main>
       </div>
@@ -139,7 +139,7 @@ export function RecordingPlayerScreen() {
           </Button>
           <div className="flex-1 min-w-0">
             <h1 className="text-xl font-bold text-on-surface truncate">
-              {recording.title || "Untitled Recording"}
+              {recording.title || "Bản ghi không tên"}
             </h1>
             <div className="flex items-center gap-4 text-xs text-on-surface-variant/60 mt-0.5">
               {recording.room?.room_code && (
@@ -203,10 +203,10 @@ export function RecordingPlayerScreen() {
           >
             <div className="px-5 py-4 border-b border-outline-variant/10 flex items-center gap-2">
               <MessageSquare size={18} className="text-primary" />
-              <h2 className="font-bold text-on-surface text-sm">Chat History</h2>
+              <h2 className="font-bold text-on-surface text-sm">Lịch sử chat</h2>
               {messages.length > 0 && (
                 <span className="text-xs text-on-surface-variant/50 ml-auto">
-                  {messages.length} message{messages.length !== 1 ? "s" : ""}
+                  {messages.length} tin nhắn
                 </span>
               )}
             </div>
@@ -224,7 +224,7 @@ export function RecordingPlayerScreen() {
               <div className="flex-1 flex flex-col items-center justify-center gap-2 px-6">
                 <MessageSquare size={32} className="text-on-surface-variant/20" />
                 <p className="text-sm text-on-surface-variant/50 text-center">
-                  No chat messages for this meeting.
+                  Không có tin nhắn nào cho cuộc họp này.
                 </p>
               </div>
             ) : (

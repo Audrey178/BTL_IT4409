@@ -45,33 +45,33 @@ const SideBar = ({ onNewMeeting }: SideBarProps) => {
           <Flame className="fill-current" size={24} />
         </div>
         <div>
-          <h2 className="font-bold text-lg text-primary leading-tight">The Hearth</h2>
-          <p className="text-xs text-on-surface-variant/70 font-medium">Professional Studio</p>
+          <h2 className="font-bold text-lg text-primary leading-tight">WebCall</h2>
+          <p className="text-xs text-on-surface-variant/70 font-medium">Họp trực tuyến</p>
         </div>
       </div>
 
       <nav className="flex-1 px-4 space-y-1">
         <NavItem
           icon={<LayoutDashboard size={20} />}
-          label="Meetings"
+          label="Dashboard"
           active={isActive("/")}
           onClick={() => handleNav("/")}
         />
         <NavItem
           icon={<CalendarIcon size={20} />}
-          label="Schedule"
+          label="Lịch trình"
           active={isActive("/schedule")}
           onClick={() => handleNav("/schedule")}
         />
         <NavItem
           icon={<MessageSquare size={20} />}
-          label="Messages"
+          label="Tin nhắn"
           onClick={() => handleNav("/messages")}
           active={isActive("/messages")}
         />
         <NavItem
           icon={<Archive size={20} />}
-          label="Archives"
+          label="Lưu trữ"
           active={isActive("/archives")}
           onClick={() => handleNav("/archives")}
         />
@@ -83,27 +83,27 @@ const SideBar = ({ onNewMeeting }: SideBarProps) => {
           className="w-full h-12 bg-primary text-white rounded-full font-bold shadow-lg shadow-primary/20 flex items-center justify-center gap-2"
         >
           <Plus size={20} />
-          New Meeting
+          Tạo phòng họp
         </Button>
       </div>
 
       <div className="p-6 space-y-3 border-t border-outline-variant/10">
         <button className="flex items-center gap-3 text-on-surface-variant hover:text-primary transition-colors w-full py-1">
           <HelpCircle size={18} />
-          <span className="text-sm font-medium">Support</span>
+          <span className="text-sm font-medium">Hỗ trợ</span>
         </button>
         <button
           onClick={() => { navigate("/profile"); setMobileOpen(false); }}
           className="flex items-center gap-3 text-on-surface-variant hover:text-primary transition-colors w-full py-1"
         >
           <Settings size={18} />
-          <span className="text-sm font-medium">Settings</span>
+          <span className="text-sm font-medium">Cá nhân</span>
         </button>
         <button
           onClick={logout}
           className="flex items-center gap-3 text-error hover:opacity-80 transition-colors w-full pt-2"
         >
-          <span className="text-sm font-bold">Logout</span>
+          <span className="text-sm font-bold">Đăng xuất</span>
         </button>
       </div>
     </aside>
@@ -135,9 +135,8 @@ const SideBar = ({ onNewMeeting }: SideBarProps) => {
 
       {/* ── Mobile: sliding Drawer ────────────────────────────── */}
       <div
-        className={`lg:hidden fixed top-0 left-0 h-full w-72 z-[70] transform transition-transform duration-300 ease-in-out ${
-          mobileOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        className={`lg:hidden fixed top-0 left-0 h-full w-72 z-[70] transform transition-transform duration-300 ease-in-out ${mobileOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
       >
         <div className="relative h-full">
           {/* Close button */}

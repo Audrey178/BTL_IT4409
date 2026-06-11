@@ -208,7 +208,7 @@ export function ChatPanel({
       {/* Header */}
       <div className="p-6 bg-surface-container-high flex justify-between items-center border-b border-outline-variant/10">
         <div className="flex items-center gap-2">
-          <h3 className="font-bold text-on-surface">Meeting Chat</h3>
+          <h3 className="font-bold text-on-surface">Chat Meeting</h3>
           {messages.length > 0 && (
             <span className="text-[10px] font-bold text-on-surface-variant/50 bg-surface-container px-2 py-0.5 rounded-full">
               {messages.length}
@@ -226,8 +226,8 @@ export function ChatPanel({
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-32 text-center">
               <MessageSquare size={24} className="text-on-surface-variant/30 mb-2" />
-              <p className="text-xs text-on-surface-variant/40">No messages yet</p>
-              <p className="text-[10px] text-on-surface-variant/30 mt-1">Send a message to start the conversation</p>
+              <p className="text-xs text-on-surface-variant/40">Chưa có tin nhắn nào</p>
+              <p className="text-[10px] text-on-surface-variant/30 mt-1">Gửi tin nhắn để bắt đầu cuộc trò chuyện</p>
             </div>
           ) : (
             messages.map((msg) => {
@@ -340,7 +340,7 @@ export function ChatPanel({
         {replyingTo && (
           <div className="bg-surface-container p-2.5 rounded-2xl border border-outline-variant/10 flex items-start justify-between gap-2 text-xs">
             <div className="flex-1 min-w-0 border-l-2 border-primary pl-2">
-              <span className="font-bold text-primary block truncate">Replying to {replyingTo.senderName}</span>
+              <span className="font-bold text-primary block truncate">Đang trả lời {replyingTo.senderName}</span>
               <span className="text-on-surface-variant/70 block truncate text-[11px]">
                 {replyingTo.type === 'file' ? '[File]' : replyingTo.content}
               </span>
@@ -355,7 +355,7 @@ export function ChatPanel({
         {editingMessage && (
           <div className="bg-primary/5 p-2.5 rounded-2xl border border-primary/20 flex items-start justify-between gap-2 text-xs">
             <div className="flex-1 min-w-0 border-l-2 border-primary pl-2">
-              <span className="font-bold text-primary block">Editing message</span>
+              <span className="font-bold text-primary block">Đang chỉnh sửa tin nhắn</span>
               <span className="text-on-surface-variant/70 block truncate text-[11px] mt-0.5">
                 {editingMessage.content}
               </span>
@@ -455,15 +455,15 @@ export function ChatPanel({
                       {pendingAttachment.error ? (
                         <span className="text-error font-medium">{pendingAttachment.error}</span>
                       ) : pendingAttachment.uploading ? (
-                        <span>Uploading…</span>
+                        <span>Đang tải lên...</span>
                       ) : (
-                        <span>Ready to send</span>
+                        <span>Sẵn sàng gửi</span>
                       )}
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center justify-end gap-2">
-                  <button type="button" className="px-3 py-1.5 rounded-lg bg-surface-container-highest text-sm" onClick={clearPendingAttachment}>Cancel</button>
+                  <button type="button" className="px-3 py-1.5 rounded-lg bg-surface-container-highest text-sm" onClick={clearPendingAttachment}>Hủy</button>
                   <button
                     type="button"
                     className={cn(
@@ -476,7 +476,7 @@ export function ChatPanel({
                     disabled={pendingAttachment.uploading || Boolean(pendingAttachment.error) || !pendingAttachment.file}
                   >
                     <Send size={14} />
-                    Send file
+                    Gửi tệp
                   </button>
                 </div>
               </div>
@@ -492,7 +492,7 @@ export function ChatPanel({
                 "border-none rounded-2xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 focus:outline-none",
                 "placeholder:text-on-surface-variant/40"
               )}
-              placeholder={editingMessage ? "Edit your message..." : "Send a message..."}
+              placeholder={editingMessage ? "Chỉnh sửa tin nhắn..." : "Gửi tin nhắn..."}
               aria-label="Chat message input"
             />
           </div>
@@ -586,7 +586,7 @@ function ChatBubble({
         </span>
         {isSelf && (
           <span className="text-[10px] font-bold uppercase tracking-widest text-primary ml-1.5">
-            You
+            Bạn
           </span>
         )}
       </div>
@@ -597,7 +597,7 @@ function ChatBubble({
           "px-2.5 py-1.5 rounded-2xl text-[11px] border border-outline-variant/10 w-full mb-0.5 truncate bg-surface-container-highest/60 opacity-80",
           isSelf ? "rounded-br-none text-right" : "rounded-bl-none text-left"
         )}>
-          <span className="font-semibold text-primary block">Replying to {replyTo.senderName}</span>
+          <span className="font-semibold text-primary block">Đang trả lời {replyTo.senderName}</span>
           <span className="truncate block mt-0.5">
             {replyTo.type === 'file' ? '[File]' : replyTo.content}
           </span>
@@ -616,7 +616,7 @@ function ChatBubble({
         )}
       >
         {isDeleted ? (
-          <span>This message was deleted</span>
+          <span>Tin nhắn này đã bị xóa</span>
         ) : (
           (() => {
             if (type === 'emoji') {
@@ -642,7 +642,7 @@ function ChatBubble({
                       {fileLabel}
                     </a>
                   ) : (
-                    <div className="font-medium break-all">{fileLabel || 'Attachment'}</div>
+                    <div className="font-medium break-all">{fileLabel || 'Tệp đính kèm'}</div>
                   )}
                 </div>
               );
@@ -673,7 +673,7 @@ function ChatBubble({
             "text-[9px] block mt-1 select-none",
             isSelf ? "text-white/60 text-right" : "text-on-surface-variant/40 text-left"
           )}>
-            (edited)
+            (đã chỉnh sửa)
           </span>
         )}
       </div>

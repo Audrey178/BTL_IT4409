@@ -19,20 +19,10 @@ export const TopNav = () => {
                     <ChevronLeft size={24} />
                 </button>
                 <span className="text-2xl font-bold tracking-tighter text-orange-900">
-                    The Digital Hearth
+                    WebCall
                 </span>
             </div>
-            <div className="hidden md:flex items-center gap-8 text-sm font-semibold text-on-surface-variant">
-                <button className="hover:text-primary transition-colors">
-                    Meetings
-                </button>
-                <button className="hover:text-primary transition-colors">
-                    Recordings
-                </button>
-                <button className="hover:text-primary transition-colors">
-                    Settings
-                </button>
-            </div>
+
             <div className="flex items-center gap-4">
                 <Button
                     variant="ghost"

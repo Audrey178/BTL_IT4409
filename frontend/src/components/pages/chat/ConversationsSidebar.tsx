@@ -64,7 +64,7 @@ export function ConversationsSidebar({
     <section className="w-full h-full bg-surface-container-low border-r border-outline-variant/30 flex flex-col">
       <div className="p-6 border-b border-outline-variant/20">
         <h2 className="font-headline-md text-headline-md text-primary mb-6">
-          Messages
+          Tin nhắn
         </h2>
         <div className="relative group">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant size-4" />
@@ -72,7 +72,7 @@ export function ConversationsSidebar({
             type="text"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Find by email..."
+            placeholder="Tìm kiếm qua email..."
             className="w-full pl-10 pr-10 py-3 bg-surface-container-highest rounded-2xl border-none focus:ring-2 focus:ring-primary/20 transition-all font-body-base text-sm h-auto"
           />
           {isSearchingUsers ? (
@@ -83,7 +83,7 @@ export function ConversationsSidebar({
         {query.trim() ? (
           <div className="mt-4 space-y-2">
             {userSearchResults.length === 0 && !isSearchingUsers ? (
-              <p className="text-xs text-on-surface-variant">No matching users.</p>
+              <p className="text-xs text-on-surface-variant">Không có người dùng phù hợp.</p>
             ) : null}
             {userSearchResults.map((user) => (
               <button
@@ -155,13 +155,13 @@ export function ConversationsSidebar({
                       </span>
                     </div>
                     <p className="text-xs text-on-surface-variant font-medium truncate">
-                      {conversation.latestMessage?.content || conversation.description || "No messages yet"}
+                      {conversation.latestMessage?.content || conversation.description || "Chưa có tin nhắn nào"}
                     </p>
                     <div className="mt-2 flex items-center justify-between gap-2">
                       <span className="text-[10px] uppercase tracking-[0.16em] text-on-surface-variant/60 truncate">
                         {conversation.type === "group"
-                          ? `${conversation.participantCount} participants`
-                          : primaryParticipant?.email || `${conversation.participantCount} participants`}
+                          ? `${conversation.participantCount} người tham gia`
+                          : primaryParticipant?.email || `${conversation.participantCount} người tham gia`}
                       </span>
                       {conversation.unreadCount > 0 ? (
                         <span className="min-w-5 h-5 px-1.5 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center">

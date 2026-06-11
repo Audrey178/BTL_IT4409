@@ -59,9 +59,9 @@ export function ConversationInfoDialog({
       <DialogContent className="sm:max-w-lg rounded-3xl border-outline-variant/20 bg-surface-container-lowest p-0">
         <div className="p-6">
           <DialogHeader>
-            <DialogTitle className="text-xl font-semibold text-on-surface">Conversation details</DialogTitle>
+            <DialogTitle className="text-xl font-semibold text-on-surface">Chi tiết cuộc trò chuyện</DialogTitle>
             <DialogDescription>
-              {canManage ? "Manage group name and members." : "View group participants."}
+              {canManage ? "Quản lý tên nhóm và thành viên." : "Xem người tham gia nhóm."}
             </DialogDescription>
           </DialogHeader>
 
@@ -69,7 +69,7 @@ export function ConversationInfoDialog({
             {conversation?.type === "group" ? (
               <div className="space-y-2">
                 <label className="text-xs font-medium uppercase tracking-[0.14em] text-on-surface-variant">
-                  Group name
+                  Tên nhóm
                 </label>
                 <div className="flex gap-2">
                   <Input
@@ -86,14 +86,14 @@ export function ConversationInfoDialog({
                           setPendingKey("title");
                           await onRenameConversation(title.trim());
                         } catch (submitError) {
-                          setError(submitError instanceof Error ? submitError.message : "Failed to rename group");
+                          setError(submitError instanceof Error ? submitError.message : "Lỗi khi đổi tên nhóm");
                         } finally {
                           setPendingKey(null);
                         }
                       }}
                       disabled={pendingKey === "title" || title.trim().length < 3}
                     >
-                      Save
+                      Lưu
                     </Button>
                   ) : null}
                 </div>
@@ -119,7 +119,7 @@ export function ConversationInfoDialog({
                         {participant.role === "owner" ? (
                           <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
                             <Crown className="size-3" />
-                            Owner
+                            Chủ sở hữu
                           </span>
                         ) : null}
                       </div>
@@ -137,7 +137,7 @@ export function ConversationInfoDialog({
                             [participant.id]: event.target.value,
                           }))
                         }
-                        placeholder="Nickname"
+                        placeholder="Biệt danh"
                         className="h-10 rounded-xl bg-surface-container-highest px-3"
                       />
                       <Button
@@ -148,20 +148,20 @@ export function ConversationInfoDialog({
                             setPendingKey(`nick:${participant.id}`);
                             await onRenameMember(participant.id, (nicknames[participant.id] || "").trim() || null);
                           } catch (submitError) {
-                            setError(submitError instanceof Error ? submitError.message : "Failed to update nickname");
+                            setError(submitError instanceof Error ? submitError.message : "Lỗi khi cập nhật biệt danh");
                           } finally {
                             setPendingKey(null);
                           }
                         }}
                         disabled={pendingKey === `nick:${participant.id}`}
                       >
-                        Save
+                        Lưu
                       </Button>
                       <Button
                         variant="destructive"
                         size="icon"
                         onClick={async () => {
-                          const confirmed = window.confirm(`Remove ${participant.fullName} from this group?`);
+                          const confirmed = window.confirm(`Xóa ${participant.fullName} khỏi nhóm này?`);
                           if (!confirmed) {
                             return;
                           }
@@ -170,7 +170,7 @@ export function ConversationInfoDialog({
                             setPendingKey(`remove:${participant.id}`);
                             await onRemoveMember(participant.id);
                           } catch (submitError) {
-                            setError(submitError instanceof Error ? submitError.message : "Failed to remove member");
+                            setError(submitError instanceof Error ? submitError.message : "Lỗi khi xóa thành viên");
                           } finally {
                             setPendingKey(null);
                           }
@@ -187,15 +187,15 @@ export function ConversationInfoDialog({
 
             {canManage ? (
               <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-4">
-                <p className="text-sm font-semibold text-on-surface">Delete group</p>
+                <p className="text-sm font-semibold text-on-surface">Xóa nhóm</p>
                 <p className="mt-1 text-xs text-on-surface-variant">
-                  This removes the group conversation for all members.
+                  Thao tác này sẽ xóa cuộc trò chuyện nhóm cho tất cả thành viên.
                 </p>
                 <Button
                   variant="destructive"
                   className="mt-3"
                   onClick={async () => {
-                    const confirmed = window.confirm(`Delete "${conversation?.title}"?`);
+                    const confirmed = window.confirm(`Xóa nhóm "${conversation?.title}"?`);
                     if (!confirmed) {
                       return;
                     }
@@ -205,7 +205,7 @@ export function ConversationInfoDialog({
                       await onDeleteConversation();
                       onOpenChange(false);
                     } catch (submitError) {
-                      setError(submitError instanceof Error ? submitError.message : "Failed to delete group");
+                      setError(submitError instanceof Error ? submitError.message : "Lỗi khi xóa nhóm");
                     } finally {
                       setPendingKey(null);
                     }
@@ -213,7 +213,7 @@ export function ConversationInfoDialog({
                   disabled={pendingKey === "delete"}
                 >
                   <Trash2 className="size-4" />
-                  Delete group
+                  Xóa nhóm
                 </Button>
               </div>
             ) : null}
@@ -223,7 +223,7 @@ export function ConversationInfoDialog({
         </div>
 
         <DialogFooter className="rounded-b-3xl">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Đóng</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

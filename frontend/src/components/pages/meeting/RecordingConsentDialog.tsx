@@ -27,12 +27,11 @@ export function RecordingConsentDialog({
           </div>
 
           <DialogTitle className="text-xl font-bold text-orange-950 tracking-tight">
-            This meeting is being recorded
+            Meeting này đang được ghi hình
           </DialogTitle>
 
           <DialogDescription className="text-on-surface-variant/80 text-sm leading-relaxed mt-3 max-w-[280px]">
-            By staying in this meeting, you consent to being recorded. The host
-            has started recording this session.
+            Bằng việc tiếp tục ở lại Meeting này, bạn đồng ý với việc bị ghi hình. Host đã bắt đầu ghi hình phiên này.
           </DialogDescription>
         </DialogHeader>
 
@@ -41,7 +40,7 @@ export function RecordingConsentDialog({
             onClick={() => onOpenChange(false)}
             className="rounded-full px-10 h-11 font-bold bg-gradient-to-r from-primary to-primary-container text-white shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
           >
-            Got it
+            Đã hiểu
           </Button>
         </div>
       </DialogContent>

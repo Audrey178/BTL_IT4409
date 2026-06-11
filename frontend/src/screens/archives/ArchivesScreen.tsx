@@ -80,20 +80,20 @@ export function ArchivesScreen() {
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8 lg:mb-10">
           <div className="space-y-2">
             <span className="text-primary font-semibold tracking-widest uppercase text-xs">
-              Library
+              Thư viện
             </span>
             <h1 className="text-4xl md:text-5xl font-extrabold tracking-tighter text-on-surface">
-              Archives
+              Lưu trữ
             </h1>
             <p className="text-on-surface-variant max-w-md">
-              Browse and manage your meeting recordings.
+              Xem và quản lý các bản ghi meeting của bạn.
             </p>
           </div>
           {pagination.total > 0 && (
             <div className="flex items-center gap-2 bg-surface-container rounded-full px-4 py-2">
               <Video size={16} className="text-on-surface-variant" />
               <span className="text-sm font-bold text-on-surface">
-                {pagination.total} recording{pagination.total !== 1 ? "s" : ""}
+                {pagination.total} bản ghi
               </span>
             </div>
           )}
@@ -110,7 +110,7 @@ export function ArchivesScreen() {
             {/* Room code search */}
             <div className="flex-1 min-w-[200px]">
               <label className="text-xs font-bold text-on-surface-variant/60 uppercase tracking-wider mb-1.5 block">
-                Search by Room Code
+                Tìm kiếm theo mã phòng
               </label>
               <div className="relative">
                 <Search
@@ -131,7 +131,7 @@ export function ArchivesScreen() {
             {/* Date from */}
             <div className="min-w-[160px]">
               <label className="text-xs font-bold text-on-surface-variant/60 uppercase tracking-wider mb-1.5 block">
-                From
+                Từ ngày
               </label>
               <div className="relative">
                 <CalendarDays
@@ -150,7 +150,7 @@ export function ArchivesScreen() {
             {/* Date to */}
             <div className="min-w-[160px]">
               <label className="text-xs font-bold text-on-surface-variant/60 uppercase tracking-wider mb-1.5 block">
-                To
+                Đến ngày
               </label>
               <div className="relative">
                 <CalendarDays
@@ -173,7 +173,7 @@ export function ArchivesScreen() {
                 className="h-11 px-6 bg-primary text-white rounded-full font-bold hover:scale-[1.02] active:scale-95 transition-all"
               >
                 <Search size={16} className="mr-2" />
-                Search
+                Tìm kiếm
               </Button>
               {hasActiveFilters && (
                 <Button
@@ -182,7 +182,7 @@ export function ArchivesScreen() {
                   className="h-11 px-4 rounded-full font-bold border-outline-variant/20"
                 >
                   <X size={16} className="mr-1" />
-                  Clear
+                  Xóa lọc
                 </Button>
               )}
             </div>
@@ -225,7 +225,7 @@ export function ArchivesScreen() {
                   className="rounded-full px-4"
                 >
                   <ChevronLeft size={16} className="mr-1" />
-                  Previous
+                  Trước
                 </Button>
                 <div className="flex items-center gap-1">
                   {Array.from({ length: pagination.pages }, (_, i) => i + 1)
@@ -262,7 +262,7 @@ export function ArchivesScreen() {
                   onClick={() => handlePageChange(pagination.page + 1)}
                   className="rounded-full px-4"
                 >
-                  Next
+                  Sau
                   <ChevronRight size={16} className="ml-1" />
                 </Button>
               </div>

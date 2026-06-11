@@ -34,10 +34,10 @@ export function StopRecordingDialog({
       <DialogContent className="sm:max-w-sm rounded-3xl border-outline-variant/20 bg-white/95 backdrop-blur-xl shadow-2xl">
         <DialogHeader className="text-left">
           <DialogTitle className="text-xl font-bold text-orange-950 tracking-tight">
-            Stop recording?
+            Dừng ghi hình?
           </DialogTitle>
           <DialogDescription className="text-on-surface-variant/80 text-sm leading-relaxed mt-2">
-            The recording will be saved and available in your recordings list.
+            Bản ghi sẽ được lưu và có sẵn trong danh sách bản ghi của bạn.
           </DialogDescription>
         </DialogHeader>
 
@@ -48,7 +48,7 @@ export function StopRecordingDialog({
             <span className="relative w-2 h-2 bg-red-500 rounded-full" />
           </div>
           <span className="text-sm font-medium text-red-700">
-            Recording duration:
+            Thời gian ghi hình:
           </span>
           <span className="text-sm font-mono font-bold text-red-800 tabular-nums">
             {formattedDuration}
@@ -62,7 +62,7 @@ export function StopRecordingDialog({
             disabled={isProcessing}
             className="rounded-full px-6 font-bold text-on-surface-variant"
           >
-            Cancel
+            Hủy
           </Button>
           <Button
             onClick={handleConfirm}
@@ -72,12 +72,12 @@ export function StopRecordingDialog({
             {isProcessing ? (
               <>
                 <Loader2 size={16} className="animate-spin mr-2" />
-                Stopping…
+                Đang dừng...
               </>
             ) : (
               <>
                 <Square size={14} className="mr-2 fill-current" />
-                Stop Recording
+                Dừng ghi hình
               </>
             )}
           </Button>

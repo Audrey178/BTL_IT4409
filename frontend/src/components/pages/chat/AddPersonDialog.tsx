@@ -85,11 +85,11 @@ export function AddPersonDialog({
       <DialogContent className="sm:max-w-md rounded-3xl border-outline-variant/20 bg-surface-container-lowest p-0">
         <div className="p-6">
           <DialogHeader>
-            <DialogTitle className="text-xl font-semibold text-on-surface">Add person</DialogTitle>
+            <DialogTitle className="text-xl font-semibold text-on-surface">Thêm người</DialogTitle>
             <DialogDescription>
               {requiresTitle
-                ? "Choose one or more people and create a named group."
-                : "Add one or more new members to this group."}
+                ? "Chọn một hoặc nhiều người và tạo một nhóm có tên."
+                : "Thêm một hoặc nhiều thành viên mới vào nhóm này."}
             </DialogDescription>
           </DialogHeader>
 
@@ -97,12 +97,12 @@ export function AddPersonDialog({
             {requiresTitle ? (
               <div className="space-y-2">
                 <label className="text-xs font-medium uppercase tracking-[0.14em] text-on-surface-variant">
-                  Group name
+                  Tên nhóm
                 </label>
                 <Input
                   value={groupTitle}
                   onChange={(event) => setGroupTitle(event.target.value)}
-                  placeholder="Enter group name"
+                  placeholder="Nhập tên nhóm"
                   className="h-11 rounded-2xl bg-surface-container-highest px-4"
                 />
               </div>
@@ -110,7 +110,7 @@ export function AddPersonDialog({
 
             <div className="space-y-2">
               <label className="text-xs font-medium uppercase tracking-[0.14em] text-on-surface-variant">
-                Find by email
+                Tìm kiếm qua email
               </label>
               <div className="relative">
                 <Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-on-surface-variant" />
@@ -130,7 +130,7 @@ export function AddPersonDialog({
               {selectedUsers.length > 0 ? (
                 <div className="rounded-2xl bg-surface-container-high px-4 py-3">
                   <p className="mb-3 text-xs font-medium uppercase tracking-[0.14em] text-on-surface-variant">
-                    Selected
+                    Đã chọn
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {selectedUsers.map((user) => (
@@ -152,12 +152,12 @@ export function AddPersonDialog({
               ) : null}
               {!query.trim() ? (
                 <p className="rounded-2xl bg-surface-container-high px-4 py-3 text-sm text-on-surface-variant">
-                  Search for a user to add.
+                  Tìm kiếm người dùng để thêm.
                 </p>
               ) : null}
               {query.trim() && !isSearching && results.length === 0 ? (
                 <p className="rounded-2xl bg-surface-container-high px-4 py-3 text-sm text-on-surface-variant">
-                  No eligible users found.
+                  Không tìm thấy người dùng phù hợp.
                 </p>
               ) : null}
               {results.map((user) => (
@@ -194,11 +194,11 @@ export function AddPersonDialog({
               try {
                 setError(null);
                 if (requiresTitle && groupTitle.trim().length < 3) {
-                  setError("Group name must be at least 3 characters.");
+                  setError("Tên nhóm phải có ít nhất 3 ký tự.");
                   return;
                 }
                 if (selectedUsers.length === 0) {
-                  setError("Select at least one person.");
+                  setError("Chọn ít nhất một người.");
                   return;
                 }
                 setIsSubmitting(true);
@@ -208,7 +208,7 @@ export function AddPersonDialog({
                 });
                 onOpenChange(false);
               } catch (submitError) {
-                setError(submitError instanceof Error ? submitError.message : "Failed to add people");
+                setError(submitError instanceof Error ? submitError.message : "Lỗi khi thêm người");
               } finally {
                 setIsSubmitting(false);
               }
@@ -216,9 +216,9 @@ export function AddPersonDialog({
             disabled={isSubmitting || selectedUsers.length === 0}
           >
             {isSubmitting ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}
-            Add {selectedUsers.length > 0 ? selectedUsers.length : ""} {selectedUsers.length === 1 ? "person" : "people"}
+            Thêm {selectedUsers.length > 0 ? selectedUsers.length : ""} người
           </Button>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Đóng</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
