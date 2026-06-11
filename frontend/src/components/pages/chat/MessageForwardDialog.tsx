@@ -41,16 +41,16 @@ export function MessageForwardDialog({
       <DialogContent className="sm:max-w-lg rounded-3xl border-outline-variant/20 bg-surface-container-lowest p-0">
         <div className="p-6">
           <DialogHeader>
-            <DialogTitle className="text-xl font-semibold text-on-surface">Forward message</DialogTitle>
+            <DialogTitle className="text-xl font-semibold text-on-surface">Chuyển tiếp tin nhắn</DialogTitle>
             <DialogDescription className="truncate">
-              {message?.content || "Choose where to send this message."}
+              {message?.content || "Chọn nơi gửi tin nhắn này."}
             </DialogDescription>
           </DialogHeader>
 
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search conversations"
+            placeholder="Tìm kiếm cuộc trò chuyện"
             className="mt-4 h-11 rounded-2xl bg-surface-container-highest px-4"
           />
 
@@ -72,18 +72,18 @@ export function MessageForwardDialog({
                 className="w-full rounded-2xl bg-surface-container-high px-4 py-3 text-left hover:bg-surface-container-highest disabled:opacity-60"
               >
                 <p className="truncate text-sm font-semibold text-on-surface">{conversation.title}</p>
-                <p className="mt-1 truncate text-xs text-on-surface-variant">{conversation.description || `${conversation.participantCount} participants`}</p>
+                <p className="mt-1 truncate text-xs text-on-surface-variant">{conversation.description || `${conversation.participantCount} người tham gia`}</p>
               </button>
             ))}
           </div>
 
           {filtered.length === 0 ? (
-            <p className="mt-4 text-sm text-on-surface-variant">No matching conversations.</p>
+            <p className="mt-4 text-sm text-on-surface-variant">Không có cuộc trò chuyện phù hợp.</p>
           ) : null}
 
           <div className="mt-5 flex justify-end">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Close
+              Đóng
             </Button>
           </div>
         </div>

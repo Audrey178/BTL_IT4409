@@ -51,7 +51,7 @@ export function MeetingScreen() {
   } = useLiveKit(roomCode || null);
   useRoomEvents(roomCode || null, lkDisconnect);
   const { sendMessage, editMessage, deleteMessage, addReaction, removeReaction } = useChatEvents(roomCode || null);
-  
+
   useVideoFilter();
 
   const {
@@ -122,7 +122,7 @@ export function MeetingScreen() {
     // 4. Reset meeting store
     reset();
     // 5. Navigate home
-    toast.info('You have left the meeting');
+    toast.info('Bạn đã rời khỏi Meeting');
     navigate('/', { replace: true });
   }, [socket, roomCode, myUserId, lkDisconnect, cleanupMedia, reset, navigate]);
 
@@ -141,10 +141,10 @@ export function MeetingScreen() {
       // 5. Reset meeting store
       reset();
       // 6. Navigate home
-      toast.success('Meeting ended for all participants');
+      toast.success('Meeting đã kết thúc cho tất cả mọi người');
       navigate('/', { replace: true });
     } catch (error) {
-      toast.error('Failed to end meeting. Please try again.');
+      toast.error('Lỗi khi kết thúc Meeting. Vui lòng thử lại.');
       setIsEndingMeeting(false);
     }
   }, [isEndingMeeting, roomCode, socket, lkDisconnect, cleanupMedia, reset, navigate]);
@@ -153,14 +153,14 @@ export function MeetingScreen() {
     async (newHostId: string, participantName: string) => {
       if (!roomCode || !isHost || transferringHostId) return;
 
-      const confirmed = window.confirm(`Transfer host role to ${participantName}?`);
+      const confirmed = window.confirm(`Chuyển vai trò Host cho ${participantName}?`);
       if (!confirmed) return;
 
       setTransferringHostId(newHostId);
       try {
         await roomService.transferHost(roomCode, newHostId);
       } catch (error) {
-        toast.error('Failed to transfer host role');
+        toast.error('Lỗi khi chuyển vai trò Host');
       } finally {
         setTransferringHostId(null);
       }
@@ -178,8 +178,8 @@ export function MeetingScreen() {
     : null;
 
   const presenterName = isMeSharing
-    ? `${authUser?.full_name || "You"} (You, presenting)`
-    : sharingParticipant?.fullName || "Someone";
+    ? `${authUser?.full_name || "Bạn"} (Bạn, đang trình bày)`
+    : sharingParticipant?.fullName || "Ai đó";
 
   const meetingStatus = useMeetingStore((s) => s.status);
 
@@ -240,7 +240,7 @@ export function MeetingScreen() {
   // Screen share handlers
   const handleToggleScreenShare = useCallback(async () => {
     if (!isScreenSharing && screenSharingUserId) {
-      toast.error("Someone else is already sharing their screen");
+      toast.error("Có người khác đang chia sẻ màn hình");
       return;
     }
 
@@ -299,11 +299,11 @@ export function MeetingScreen() {
       {/* Header */}
       <header className="bg-surface-container-low/50 backdrop-blur-xl px-3 md:px-8 py-3 md:py-4 flex justify-between items-center border-b border-outline-variant/10 z-50">
         <div className="flex items-center gap-2 md:gap-4 min-w-0">
-          <h1 className="text-base md:text-2xl font-bold tracking-tighter text-orange-900 truncate">The Digital Hearth</h1>
+          <h1 className="text-base md:text-2xl font-bold tracking-tighter text-orange-900 truncate">WebCall</h1>
           <div className="px-2 md:px-3 py-1 bg-primary/10 rounded-full flex items-center gap-1.5 shrink-0">
             <span className="w-1.5 h-1.5 md:w-2 md:h-2 bg-primary rounded-full animate-pulse" />
             <span className="text-[9px] md:text-[10px] font-bold text-primary uppercase tracking-widest">
-              <span className="hidden sm:inline">Live: </span>{roomCode}
+              <span className="hidden sm:inline">Trực tiếp: </span>{roomCode}
             </span>
           </div>
           {/* Recording indicator — blinking red dot in header */}
@@ -311,13 +311,13 @@ export function MeetingScreen() {
         </div>
         <div className="flex items-center gap-2 md:gap-6 shrink-0">
           <div className="hidden sm:flex items-center gap-2 bg-surface-container rounded-full px-3 py-1.5">
-            <span className="text-sm font-bold text-on-surface">{participants.length + 1} in room</span>
+            <span className="text-sm font-bold text-on-surface">{participants.length + 1} người</span>
           </div>
           <div className="flex items-center gap-2 bg-white/50 px-2 md:px-4 py-1.5 md:py-2 rounded-full border border-outline-variant/20">
             <Avatar className="w-7 h-7 md:w-8 md:h-8">
               <AvatarFallback>{authUser?.full_name?.[0]?.toUpperCase() || "U"}</AvatarFallback>
             </Avatar>
-            <span className="font-bold text-orange-900 text-sm hidden md:inline">{authUser?.full_name || "You"}</span>
+            <span className="font-bold text-orange-900 text-sm hidden md:inline">{authUser?.full_name || "Bạn"}</span>
             {isHost && (
               <Badge className="bg-primary/10 text-primary hover:bg-primary/10 text-[10px] px-2">Host</Badge>
             )}
@@ -337,7 +337,7 @@ export function MeetingScreen() {
             <div className="flex items-center gap-3">
               <MonitorUp size={18} className="text-primary" />
               <span className="text-sm font-bold text-primary">{presenterName}</span>
-              <span className="text-xs text-primary/60">· Presentation audio</span>
+              <span className="text-xs text-primary/60">· Âm thanh trình bày</span>
             </div>
             <Button
               onClick={handleToggleScreenShare}
@@ -345,7 +345,7 @@ export function MeetingScreen() {
               size="sm"
               className="rounded-full px-6 font-bold text-xs"
             >
-              Stop presenting
+              Dừng trình bày
             </Button>
           </motion.div>
         )}
@@ -368,14 +368,14 @@ export function MeetingScreen() {
               )}
               <div className="absolute bottom-6 left-6 flex items-center gap-3 px-4 py-2 bg-black/50 backdrop-blur-md rounded-full text-white text-sm border border-white/10">
                 <MonitorUp size={14} className="text-primary" />
-                <span className="font-bold">Presenting: {presenterName}</span>
+                <span className="font-bold">Đang trình bày: {presenterName}</span>
               </div>
             </div>
 
             {/* Right Filmstrip */}
             <div className="w-48 flex flex-col gap-3 overflow-y-auto scrollbar-hide">
               <VideoTile
-                name={authUser?.full_name || "You"}
+                name={authUser?.full_name || "Bạn"}
                 stream={localStream}
                 isMuted={isAudioMuted}
                 isVideoOff={isVideoMuted}
@@ -405,7 +405,7 @@ export function MeetingScreen() {
             className={`flex-1 grid gap-2 md:gap-4 transition-all duration-500 ${showChat ? "md:mr-0" : ""} ${getGridClass(totalVisibleTiles)}`}
           >
             <VideoTile
-              name={authUser?.full_name || "You"}
+              name={authUser?.full_name || "Bạn"}
               stream={localStream}
               isMuted={isAudioMuted}
               isVideoOff={isVideoMuted}
@@ -446,8 +446,8 @@ export function MeetingScreen() {
       </div>
 
       {/* Controls Bar */}
-      <div className="fixed bottom-0 left-0 w-full md:relative bg-white/90 md:bg-surface-container-low/30 backdrop-blur-xl border-t border-outline-variant/10 md:border-none flex items-center justify-center px-3 py-3 md:px-8 md:py-4 z-50">
-        <div className="flex items-center justify-center gap-2 md:gap-3 max-w-full">
+      <div className="fixed bottom-0 left-0 w-full md:relative bg-white/90 md:bg-surface-container-low/30 backdrop-blur-xl border-t border-outline-variant/10 md:border-none flex items-center px-3 py-3 md:px-8 md:py-4 z-50">
+        <div className="flex items-center justify-start md:justify-center gap-2 md:gap-3 w-full overflow-x-auto scrollbar-hide px-2">
           {/* Mic */}
           <ControlButton
             icon={isAudioMuted ? <MicOff size={20} /> : <Mic size={20} />}
@@ -466,8 +466,8 @@ export function MeetingScreen() {
             onClick={handleToggleScreenShare}
             active={isScreenSharing}
             className={isScreenSharing
-              ? "bg-error text-white shadow-lg shadow-error/20 border-none"
-              : "bg-gradient-to-r from-primary to-primary-container text-white shadow-lg shadow-primary/20 border-none"
+              ? "bg-error text-white shadow-lg shadow-error/20 border-none hover:bg-error/90"
+              : ""
             }
           />
           {/* Chat */}

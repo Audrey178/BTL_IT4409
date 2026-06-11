@@ -23,7 +23,7 @@ export function AuthLayout({ children, title, description }: AuthLayoutProps) {
               <Flame className="text-white fill-current" size={24} />
             </div>
             <span className="text-2xl font-bold tracking-tighter text-primary">
-              The Digital Hearth
+              WebCall
             </span>
           </div>
 
@@ -101,12 +101,11 @@ export function AuthLayout({ children, title, description }: AuthLayoutProps) {
                     <Flame size={20} className="fill-current" />
                   </div>
                   <span className="font-bold tracking-tight">
-                    Studio Quality
+                    Chất lượng Studio
                   </span>
                 </div>
                 <p className="text-sm font-medium leading-relaxed text-white/90">
-                  Crystal clear audio and cinematic video quality for every
-                  conversation.
+                  Âm thanh trong trẻo và video sắc nét cho mọi cuộc trò chuyện.
                 </p>
               </motion.div>
             </div>
@@ -128,15 +127,14 @@ export function AuthLayout({ children, title, description }: AuthLayoutProps) {
               ))}
             </div>
             <p className="text-on-surface font-headline font-bold text-xl leading-snug italic">
-              "The Digital Hearth changed how our remote team connects. It feels
-              less like a tool and more like a space."
+              "WebCall đã thay đổi cách làm việc từ xa của chúng tôi. Nó giống như một không gian làm việc thực sự."
             </p>
             <div className="mt-4 flex items-center gap-3">
               <div className="w-8 h-8 rounded-full bg-primary-fixed flex items-center justify-center text-[10px] font-bold text-on-primary-fixed">
                 AM
               </div>
               <span className="text-sm font-bold text-on-surface-variant">
-                Alex Morgan, Creative Director
+                Alex Morgan, Giám đốc Sáng tạo
               </span>
             </div>
           </motion.div>

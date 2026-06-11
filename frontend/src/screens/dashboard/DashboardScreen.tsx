@@ -33,6 +33,31 @@ export function DashboardScreen() {
   useMeetingReminder(meetings);
   useFcmMeetingReminders();
 
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+
+  const handlePrevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
+  const handleNextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDayOfMonth = new Date(year, month, 1).getDay();
+
+  const today = new Date();
+  const isCurrentMonth = today.getMonth() === month && today.getFullYear() === year;
+
+  const hasMeeting = (day: number) => {
+    return meetings.some((m) => {
+      if (!m.started_at) return false;
+      const mDate = new Date(m.started_at);
+      return (
+        mDate.getDate() === day &&
+        mDate.getMonth() === month &&
+        mDate.getFullYear() === year
+      );
+    });
+  };
+
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
@@ -44,14 +69,13 @@ export function DashboardScreen() {
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8 lg:mb-12">
           <div className="space-y-2">
             <span className="text-primary font-semibold tracking-widest uppercase text-xs">
-              Overview
+              Dashboard
             </span>
             <h1 className="text-4xl md:text-5xl font-extrabold tracking-tighter text-on-surface">
-              Meeting Schedule
+              Tổng quan
             </h1>
             <p className="text-on-surface-variant max-w-md text-lg">
-              Curate your day, connect with your hearth. Your scheduled studio
-              sessions are ready.
+              Quản lý, lên lịch và tham gia các buổi họp.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -63,7 +87,7 @@ export function DashboardScreen() {
                 className="group-hover:translate-x-0.5 transition-transform"
                 size={20}
               />
-              Join Meeting
+              Tham gia phòng họp
             </Button>
             <Button
               onClick={() => setShowScheduleDialog(true)}
@@ -73,7 +97,7 @@ export function DashboardScreen() {
                 className="group-hover:rotate-90 transition-transform"
                 size={20}
               />
-              Schedule New Meeting
+              Lên lịch họp
             </Button>
           </div>
         </header>
@@ -83,20 +107,20 @@ export function DashboardScreen() {
           <div className="col-span-12 lg:col-span-4 space-y-8">
             <div className="bg-surface-container-lowest p-8 rounded-3xl shadow-sm border border-outline-variant/10">
               <div className="flex justify-between items-center mb-8">
-                <h3 className="text-xl font-bold text-on-surface">
-                  October 2023
+                <h3 className="text-xl font-bold text-on-surface capitalize">
+                  {currentDate.toLocaleDateString("vi-VN", { month: "long", year: "numeric" })}
                 </h3>
                 <div className="flex gap-2">
-                  <button className="p-2 hover:bg-surface-container rounded-full transition-colors">
+                  <button onClick={handlePrevMonth} className="p-2 hover:bg-surface-container rounded-full transition-colors">
                     <ChevronLeft size={20} />
                   </button>
-                  <button className="p-2 hover:bg-surface-container rounded-full transition-colors">
+                  <button onClick={handleNextMonth} className="p-2 hover:bg-surface-container rounded-full transition-colors">
                     <ChevronRight size={20} />
                   </button>
                 </div>
               </div>
               <div className="grid grid-cols-7 gap-2 text-center mb-4">
-                {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+                {["CN", "T2", "T3", "T4", "T5", "T6", "T7"].map((d, i) => (
                   <span
                     key={`${d}-${i}`}
                     className="text-xs font-bold text-on-surface-variant/50"
@@ -106,22 +130,31 @@ export function DashboardScreen() {
                 ))}
               </div>
               <div className="grid grid-cols-7 gap-2 text-center">
-                {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                  <button
-                    key={day}
-                    className={`p-2 rounded-xl text-sm font-medium transition-colors ${day === 2
-                      ? "bg-primary text-white font-bold"
-                      : "hover:bg-primary-fixed"
-                      } ${[4, 9].includes(day) ? "text-primary font-bold" : ""}`}
-                  >
-                    {day}
-                    {[2, 4, 9].includes(day) && (
-                      <div
-                        className={`w-1 h-1 mx-auto mt-0.5 rounded-full ${day === 2 ? "bg-white" : "bg-primary"}`}
-                      />
-                    )}
-                  </button>
+                {Array.from({ length: firstDayOfMonth }).map((_, i) => (
+                  <div key={`empty-${i}`} />
                 ))}
+                {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
+                  const isToday = isCurrentMonth && day === today.getDate();
+                  const dayHasMeeting = hasMeeting(day);
+
+                  return (
+                    <button
+                      key={day}
+                      className={`p-2 rounded-xl text-sm font-medium transition-colors ${isToday
+                        ? "bg-primary text-white font-bold shadow-md shadow-primary/20"
+                        : "hover:bg-primary-fixed"
+                        } ${dayHasMeeting && !isToday ? "text-primary font-bold" : ""}`}
+                    >
+                      {day}
+                      {dayHasMeeting && (
+                        <div
+                          className={`w-1 h-1 mx-auto mt-0.5 rounded-full ${isToday ? "bg-white" : "bg-primary"
+                            }`}
+                        />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -132,28 +165,17 @@ export function DashboardScreen() {
           <div className="col-span-12 lg:col-span-8 space-y-8">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-bold text-on-surface">
-                Upcoming Meetings
+                Cuộc họp sắp tới
               </h2>
-              <div className="flex gap-2">
-                <Badge className="bg-secondary-container text-on-secondary-container hover:bg-secondary-container px-4 py-1.5 rounded-full text-xs font-bold">
-                  Today
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className="text-on-surface-variant/60 border-outline-variant/20 px-4 py-1.5 rounded-full text-xs font-bold"
-                >
-                  This Week
-                </Badge>
-              </div>
             </div>
 
             <div className="space-y-4">
               {loading ? (
-                <div className="text-center py-8 text-on-surface-variant">Loading meetings...</div>
+                <div className="text-center py-8 text-on-surface-variant">Đang tải cuộc họp...</div>
               ) : meetings.length === 0 ? (
                 <div className="text-center py-8 text-on-surface-variant bg-surface-container-low rounded-3xl border border-dashed border-outline-variant/30">
                   <CalendarIcon size={32} className="mx-auto mb-3 opacity-50" />
-                  <p>No upcoming meetings scheduled</p>
+                  <p>Chưa có cuộc họp nào</p>
                 </div>
               ) : (
                 meetings.slice(0, 4).map((meeting) => (

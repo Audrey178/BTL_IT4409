@@ -18,7 +18,7 @@ const getStatusLabel = (
   presenceByUserId: Record<string, PresenceEntry>
 ) => {
   if (!conversation) {
-    return "Select a conversation";
+    return "Chọn một cuộc trò chuyện";
   }
 
   const onlineParticipants = conversation.participants.filter((participant) => {
@@ -29,10 +29,10 @@ const getStatusLabel = (
   });
 
   if (onlineParticipants.length > 0) {
-    return `${onlineParticipants.length} participant${onlineParticipants.length > 1 ? "s" : ""} online`;
+    return `${onlineParticipants.length} người đang hoạt động`;
   }
 
-  return `${conversation.participantCount} participant${conversation.participantCount > 1 ? "s" : ""}`;
+  return `${conversation.participantCount} người tham gia`;
 };
 
 export function ChatHeader({
@@ -74,7 +74,7 @@ export function ChatHeader({
         </div>
         <div className="min-w-0">
           <h3 className="font-headline-md text-xl text-on-surface truncate">
-            {conversation?.title || "Messages"}
+            {conversation?.title || "Tin nhắn"}
           </h3>
           <p className="text-xs text-on-surface-variant flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-green-500" />

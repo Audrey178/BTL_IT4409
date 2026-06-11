@@ -60,13 +60,13 @@ export function ScheduleScreen() {
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8 lg:mb-10">
           <div className="space-y-2">
             <span className="text-primary font-semibold tracking-widest uppercase text-xs">
-              Calendar
+              Lịch
             </span>
             <h1 className="text-4xl md:text-5xl font-extrabold tracking-tighter text-on-surface">
-              Schedule
+              Lịch trình
             </h1>
             <p className="text-on-surface-variant max-w-md">
-              Your upcoming meetings at a glance.
+              Các cuộc họp sắp tới của bạn.
             </p>
           </div>
           <Button
@@ -74,7 +74,7 @@ export function ScheduleScreen() {
             className="h-14 px-8 bg-gradient-to-r from-primary to-primary-container text-white rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3 group"
           >
             <Plus className="group-hover:rotate-90 transition-transform" size={20} />
-            Schedule Meeting
+            Lên lịch Meeting
           </Button>
         </header>
 
@@ -87,7 +87,7 @@ export function ScheduleScreen() {
         >
           {loading ? (
             <div className="flex items-center justify-center h-96 text-on-surface-variant">
-              Loading schedule…
+              Đang tải lịch trình…
             </div>
           ) : events.length === 0 ? (
             <ScheduleEmptyState onSchedule={() => setShowScheduleDialog(true)} />

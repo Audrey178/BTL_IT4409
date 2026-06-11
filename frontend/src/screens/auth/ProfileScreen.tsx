@@ -9,7 +9,7 @@ import { ArrowLeft, Flame, Sparkles } from "lucide-react";
 import { useEffect } from "react";
 
 const profileSchema = z.object({
-  fullName: z.string().min(2, "Name must be at least 2 characters"),
+  fullName: z.string().min(2, "Tên phải có ít nhất 2 ký tự"),
   email: z.string().email(),
 });
 
@@ -57,7 +57,7 @@ export function ProfileScreen() {
           className="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors mb-8"
         >
           <ArrowLeft size={20} />
-          <span className="font-semibold text-sm">Back to Dashboard</span>
+          <span className="font-semibold text-sm">Quay lại Dashboard</span>
         </button>
 
         <div className="bg-surface-container-low p-8 rounded-3xl border border-outline-variant/10 shadow-lg relative overflow-hidden">
@@ -76,19 +76,19 @@ export function ProfileScreen() {
                 )}
               </div>
               <div>
-                <h1 className="text-2xl font-extrabold text-on-surface">Your Profile</h1>
-                <p className="text-sm text-on-surface-variant/70 font-medium">Manage your personal settings</p>
+                <h1 className="text-2xl font-extrabold text-on-surface">Hồ sơ của bạn</h1>
+                <p className="text-sm text-on-surface-variant/70 font-medium">Quản lý thông tin cá nhân</p>
               </div>
             </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-on-surface-variant px-1">
-                  Full Name
+                  Họ tên
                 </label>
                 <Input
                   className="h-14 rounded-xl border-none bg-surface-container-highest text-on-surface placeholder:text-outline focus-visible:ring-2 focus-visible:ring-primary/20 transition-all font-medium"
-                  placeholder="Your full name"
+                  placeholder="Họ tên của bạn"
                   {...register("fullName")}
                 />
                 {errors.fullName && (
@@ -98,7 +98,7 @@ export function ProfileScreen() {
 
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-on-surface-variant px-1">
-                  Email <span className="text-[10px] uppercase bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded-full ml-2">Read Only</span>
+                  Email <span className="text-[10px] uppercase bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded-full ml-2">Chỉ Đọc</span>
                 </label>
                 <Input
                   disabled
@@ -109,7 +109,7 @@ export function ProfileScreen() {
 
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-on-surface-variant px-1">
-                  Role
+                  Vai trò
                 </label>
                 <div className="h-14 rounded-xl border-none bg-surface-container-lowest text-on-surface-variant opacity-80 flex items-center px-4 font-medium capitalize">
                   {user?.role || "User"}
@@ -120,7 +120,7 @@ export function ProfileScreen() {
                 disabled={loading}
                 className="w-full h-14 mt-4 bg-gradient-to-r from-primary to-primary-container text-white font-bold text-lg rounded-full shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
               >
-                {loading ? "Saving..." : "Save Changes"}
+                {loading ? "Đang lưu..." : "Lưu Thay Đổi"}
               </Button>
             </form>
           </div>

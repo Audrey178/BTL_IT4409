@@ -104,7 +104,7 @@ export function MessageThread({
         );
       }
 
-      return <span className="italic">Attachment</span>;
+      return <span className="italic">Tệp đính kèm</span>;
     }
 
     if (message.type === "emoji") {
@@ -144,14 +144,14 @@ export function MessageThread({
               onClick={onLoadMore}
               className="text-xs uppercase tracking-[0.18em] text-on-surface-variant hover:text-primary"
             >
-              Load older messages
+              Tải tin nhắn cũ hơn
             </button>
           </div>
         ) : null}
 
         {!conversationId ? (
           <div className="h-full min-h-80 flex items-center justify-center text-sm text-on-surface-variant">
-            Select a conversation to view messages.
+            Chọn một cuộc trò chuyện để xem tin nhắn.
           </div>
         ) : null}
 
@@ -327,7 +327,7 @@ export function MessageThread({
                   ) : null}
                   {message.forwardedFrom ? (
                     <p className={cn("mb-2 text-[11px] uppercase tracking-[0.14em]", isOutgoing ? "text-white/70" : "text-on-surface-variant")}>
-                      Forwarded
+                      Đã chuyển tiếp
                     </p>
                   ) : null}
                   {renderMessageBody(message)}
@@ -337,7 +337,7 @@ export function MessageThread({
                       onClick={() => onShowEditHistory(message)}
                       className={cn("mt-2 text-[11px]", isOutgoing ? "text-white/70" : "text-on-surface-variant")}
                     >
-                      Edited
+                      Đã chỉnh sửa
                     </button>
                   ) : null}
                 </div>
@@ -367,7 +367,7 @@ export function MessageThread({
               <span className="w-1.5 h-1.5 bg-on-surface-variant rounded-full animate-bounce" />
             </div>
             <span className="text-[10px] font-label-caps text-on-surface-variant">
-              {typing.userName} is typing...
+              {typing.userName} đang gõ...
             </span>
           </div>
         ) : null}

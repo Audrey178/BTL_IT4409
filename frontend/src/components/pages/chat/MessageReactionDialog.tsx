@@ -19,9 +19,9 @@ export function MessageReactionDialog({
       <DialogContent className="sm:max-w-md rounded-3xl border-outline-variant/20 bg-surface-container-lowest p-0">
         <div className="p-6">
           <DialogHeader>
-            <DialogTitle className="text-xl font-semibold text-on-surface">Reactions</DialogTitle>
+            <DialogTitle className="text-xl font-semibold text-on-surface">Cảm xúc</DialogTitle>
             <DialogDescription>
-              {emoji ? `People who reacted with ${emoji}.` : "People who reacted to this message."}
+              {emoji ? `Những người đã thả cảm xúc với ${emoji}.` : "Những người đã thả cảm xúc vào tin nhắn này."}
             </DialogDescription>
           </DialogHeader>
 
@@ -36,7 +36,7 @@ export function MessageReactionDialog({
               </div>
             ))}
             {reactions.length === 0 ? (
-              <p className="text-sm text-on-surface-variant">No reactions yet.</p>
+              <p className="text-sm text-on-surface-variant">Chưa có cảm xúc nào.</p>
             ) : null}
           </div>
         </div>
