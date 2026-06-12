@@ -336,6 +336,63 @@ class AuthService {
       throw error;
     }
   }
+
+  async forgotPassword(email) {
+    try {
+      const user = await User.findOne({ email: email.toLowerCase() });
+      if (!user) {
+        logger.info(`Forgot password requested for non-existent email: ${email}`);
+        return true;
+      }
+
+      const token = crypto.randomBytes(32).toString('hex');
+      user.reset_password_token = token;
+      user.reset_password_expires = new Date(Date.now() + 1 * 60 * 60 * 1000); // 1 hour
+      await user.save();
+
+      try {
+        await emailService.sendResetPasswordEmail(user.email, token, user.full_name);
+      } catch (err) {
+        logger.warn('Failed to send reset password email', err);
+      }
+
+      return true;
+    } catch (error) {
+      logger.error('Forgot password error:', error);
+      throw error;
+    }
+  }
+
+  async resetPassword(token, newPassword) {
+    try {
+      const user = await User.findOne({
+        reset_password_token: token,
+      }).select('+reset_password_token');
+
+      if (!user) {
+        const error = new Error('Invalid or expired reset token');
+        error.statusCode = HTTP_STATUS.BAD_REQUEST;
+        throw error;
+      }
+
+      if (!user.reset_password_expires || user.reset_password_expires < new Date()) {
+        const error = new Error('Reset token expired');
+        error.statusCode = HTTP_STATUS.BAD_REQUEST;
+        throw error;
+      }
+
+      user.password_hash = newPassword;
+      user.reset_password_token = null;
+      user.reset_password_expires = null;
+      await user.save();
+
+      logger.info(`User password reset successfully: ${user.email}`);
+      return true;
+    } catch (error) {
+      logger.error('Reset password error:', error);
+      throw error;
+    }
+  }
 }
 
 export default new AuthService();

@@ -10,6 +10,8 @@ import { SignupScreen } from "./screens/auth/SignupScreen";
 import { LoginScreen } from "./screens/auth/LoginScreen";
 import { ProfileScreen } from "./screens/auth/ProfileScreen";
 import { VerifyEmailScreen } from "./screens/auth/VerifyEmailScreen";
+import { ForgotPasswordScreen } from "./screens/auth/ForgotPasswordScreen";
+import { ResetPasswordScreen } from "./screens/auth/ResetPasswordScreen";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { Toaster } from "sonner";
 import { useAuthStore } from "./stores/useAuthStore";
@@ -29,9 +31,11 @@ export default function App() {
       <Toaster richColors />
       <BrowserRouter>
         <Routes>
-          <Route path="signup" element={<AuthRoute><SignupScreen /></AuthRoute>} />
+           <Route path="signup" element={<AuthRoute><SignupScreen /></AuthRoute>} />
           <Route path="signin" element={<AuthRoute><LoginScreen /></AuthRoute>} />
+          <Route path="forgot-password" element={<AuthRoute><ForgotPasswordScreen /></AuthRoute>} />
           <Route path="auth/verify-email" element={<VerifyEmailScreen />} />
+          <Route path="auth/reset-password" element={<ResetPasswordScreen />} />
 
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<DashboardScreen />} />

@@ -38,7 +38,7 @@ export function SignupScreen() {
     const { fullname, email, password } = data;
     const { success, error } = await signUp(fullname, email, password);
     if (success) {
-      navigate("/signin");
+      navigate(`/signin?registered=true&email=${encodeURIComponent(email)}`);
     } else {
       if (error?.errors && Array.isArray(error.errors)) {
         error.errors.forEach((err: any) => {

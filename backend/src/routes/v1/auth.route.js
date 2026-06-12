@@ -154,4 +154,10 @@ router.post('/google', verifyGoogleToken, authController.googleAuth.bind(authCon
 router.get('/verify-email', authController.verifyEmail.bind(authController));
 router.post('/resend-verification', authController.resendVerification.bind(authController));
 
+/**
+ * Password recovery
+ */
+router.post('/forgot-password', validate(authValidation.forgotPassword), authController.forgotPassword.bind(authController));
+router.post('/reset-password', validate(authValidation.resetPassword), authController.resetPassword.bind(authController));
+
 export default router;

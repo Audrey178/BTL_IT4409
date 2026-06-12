@@ -53,4 +53,32 @@ export async function sendVerificationEmail(to, token, fullName) {
   }
 }
 
-export default { sendVerificationEmail };
+export async function sendResetPasswordEmail(to, token, fullName) {
+  try {
+    const appUrl = process.env.APP_URL || `http://localhost:${process.env.PORT || 3000}`;
+    const link = `${appUrl}/auth/reset-password?token=${encodeURIComponent(token)}`;
+
+    const mailOptions = {
+      from: process.env.EMAIL_FROM || `no-reply@${process.env.SMTP_USER?.split('@')?.[1] || 'example.com'}`,
+      to,
+      subject: 'Reset your password',
+      html: `
+        <p>Hi ${fullName || ''},</p>
+        <p>You requested a password reset. Please reset your password by clicking the link below:</p>
+        <p><a href="${link}">Reset my password</a></p>
+        <p>If the link doesn't work, copy and paste this URL into your browser:</p>
+        <p>${link}</p>
+        <p>This link will expire in 1 hour.</p>
+      `,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    logger.info({ to, link, messageId: info.messageId }, 'Reset password email sent');
+    return info;
+  } catch (error) {
+    logger.error('Failed to send reset password email', error);
+    throw error;
+  }
+}
+
+export default { sendVerificationEmail, sendResetPasswordEmail };
