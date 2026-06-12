@@ -108,11 +108,6 @@ export function CreateRoomDialog({ open, onOpenChange }: CreateRoomDialogProps) 
             <DialogTitle className="text-xl md:text-2xl font-extrabold tracking-tight text-white">
               {createdRoomCode ? 'Meeting đã sẵn sàng!' : 'Tạo phòng họp'}
             </DialogTitle>
-            <DialogDescription className="text-white/70 text-sm mt-1">
-              {createdRoomCode
-                ? 'Chia sẻ mã bên dưới để mời người khác tham gia ngay'
-                : 'Bắt đầu phòng họp ngay lập tức'}
-            </DialogDescription>
           </DialogHeader>
         </div>
 
@@ -179,33 +174,6 @@ export function CreateRoomDialog({ open, onOpenChange }: CreateRoomDialogProps) 
                   />
                 </div>
 
-                <div className="flex items-center justify-between p-4 bg-surface-container rounded-2xl">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                      <Users size={18} className="text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-on-surface">
-                        Số người tối đa
-                      </p>
-                      <p className="text-xs text-on-surface-variant/60">
-                        Giới hạn số lượng người tham dự
-                      </p>
-                    </div>
-                  </div>
-                  <Input
-                    type="number"
-                    value={maxParticipants}
-                    onChange={(e) =>
-                      setMaxParticipants(
-                        Math.max(2, Math.min(500, Number(e.target.value)))
-                      )
-                    }
-                    className="w-20 h-10 text-center bg-surface-container-highest border-none rounded-xl font-bold"
-                    min={2}
-                    max={500}
-                  />
-                </div>
               </div>
 
               {/* Create Button */}

@@ -68,11 +68,11 @@ export function ProfileScreen() {
 
           <div className="relative z-10">
             <div className="flex items-center gap-4 mb-8">
-              <div className="w-16 h-16 bg-gradient-to-br from-primary to-primary-container rounded-2xl flex items-center justify-center text-white shadow-xl shadow-primary/20">
+              <div className="w-16 h-16 bg-primary-container rounded-2xl flex items-center justify-center">
                 {user?.avatar ? (
                   <img src={user.avatar} alt="Avatar" className="w-full h-full rounded-2xl object-cover" />
                 ) : (
-                  <Flame size={32} />
+                  <img src="/logo/logo.png" alt="WebCall Logo" className="w-full h-full rounded-2xl object-cover" />
                 )}
               </div>
               <div>
