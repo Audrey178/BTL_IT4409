@@ -42,7 +42,7 @@ const SideBar = ({ onNewMeeting }: SideBarProps) => {
     <aside className="h-full w-64 flex flex-col bg-surface-container-low border-r border-outline-variant/10">
       <div className="p-6 flex items-center gap-3">
         <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white shrink-0">
-          <Flame className="fill-current" size={24} />
+          <img src="/logo/logo.png" alt="WebCall Logo" className="w-10 h-10 rounded-lg object-cover" />
         </div>
         <div>
           <h2 className="font-bold text-lg text-primary leading-tight">WebCall</h2>

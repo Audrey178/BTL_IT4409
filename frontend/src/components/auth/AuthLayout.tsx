@@ -20,7 +20,7 @@ export function AuthLayout({ children, title, description }: AuthLayoutProps) {
         <div className="max-w-md w-full mx-auto">
           <div className="mb-12 flex items-center gap-2">
             <div className="w-10 h-10 bg-primary-container rounded-lg flex items-center justify-center">
-              <Flame className="text-white fill-current" size={24} />
+              <img src="/logo/logo.png" alt="WebCall Logo" className="w-10 h-10 rounded-lg object-cover" />
             </div>
             <span className="text-2xl font-bold tracking-tighter text-primary">
               WebCall
@@ -42,101 +42,23 @@ export function AuthLayout({ children, title, description }: AuthLayoutProps) {
 
       {/* Right Side: Visual */}
       <section className="hidden lg:flex flex-1 relative bg-surface-container-low overflow-hidden items-center justify-center p-12">
-        <div className="absolute top-0 right-0 w-[80%] h-[80%] bg-primary-fixed/30 rounded-bl-[200px] z-0" />
-        <div className="relative z-10 w-full max-w-2xl">
-          <div className="grid grid-cols-12 gap-6 items-end">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="col-span-7 bg-surface-container-lowest rounded-[2rem] p-4 shadow-2xl shadow-outline/10 group hover:scale-[1.02] transition-transform duration-500"
-            >
-              <div className="aspect-4/5 rounded-2xl overflow-hidden relative">
-                <img
-                  src="https://picsum.photos/seed/hearth1/800/1000"
-                  alt="Professional woman"
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-                <div className="absolute bottom-4 left-4 bg-surface-container-lowest/80 backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                  <span className="text-xs font-bold text-on-surface">
-                    Sarah Mitchell
-                  </span>
-                </div>
-              </div>
-            </motion.div>
-
-            <div className="col-span-5 space-y-6">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-                className="bg-surface-container-lowest rounded-[2rem] p-3 shadow-xl shadow-outline/5 hover:scale-[1.02] transition-transform duration-500"
-              >
-                <div className="aspect-square rounded-2xl overflow-hidden relative">
-                  <img
-                    src="https://picsum.photos/seed/hearth2/600/600"
-                    alt="Man in library"
-                    className="w-full h-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div className="absolute bottom-3 left-3 bg-surface-container-lowest/80 backdrop-blur-md px-3 py-1.5 rounded-full">
-                    <span className="text-[10px] font-bold text-on-surface">
-                      David Chen
-                    </span>
-                  </div>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9, rotate: -3 }}
-                animate={{ opacity: 1, scale: 1, rotate: -3 }}
-                transition={{ delay: 0.6 }}
-                whileHover={{ rotate: 0 }}
-                className="bg-linear-to-br from-primary-container to-primary rounded-[2rem] p-6 text-white shadow-2xl shadow-primary/30 transition-all duration-500"
-              >
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-md">
-                    <Flame size={20} className="fill-current" />
-                  </div>
-                  <span className="font-bold tracking-tight">
-                    Chất lượng Studio
-                  </span>
-                </div>
-                <p className="text-sm font-medium leading-relaxed text-white/90">
-                  Âm thanh trong trẻo và video sắc nét cho mọi cuộc trò chuyện.
-                </p>
-              </motion.div>
-            </div>
-          </div>
-
+        <div className="absolute inset-0 z-0">
+          <img
+            src="https://images.unsplash.com/photo-1616587894289-86480e533129?q=80&w=1470&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+            alt="WebCall connection"
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+        </div>
+        <div className="relative z-10 w-full max-w-2xl mt-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.8 }}
-            className="mt-12 bg-white/40 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white/50 shadow-lg max-w-lg mx-auto"
+            transition={{ delay: 0.2 }}
+            className="text-white"
           >
-            <div className="flex gap-1 mb-4">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <Flame
-                  key={i}
-                  size={16}
-                  className="text-primary fill-current"
-                />
-              ))}
-            </div>
-            <p className="text-on-surface font-headline font-bold text-xl leading-snug italic">
-              "WebCall đã thay đổi cách làm việc từ xa của chúng tôi. Nó giống như một không gian làm việc thực sự."
-            </p>
-            <div className="mt-4 flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-primary-fixed flex items-center justify-center text-[10px] font-bold text-on-primary-fixed">
-                AM
-              </div>
-              <span className="text-sm font-bold text-on-surface-variant">
-                Alex Morgan, Giám đốc Sáng tạo
-              </span>
-            </div>
+
+
           </motion.div>
         </div>
       </section>

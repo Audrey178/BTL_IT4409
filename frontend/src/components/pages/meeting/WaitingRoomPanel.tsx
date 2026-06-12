@@ -42,9 +42,9 @@ export function WaitingRoomPanel({ roomCode, waitingList, removeWaitingUser }: {
       await roomService.approveUser(roomCode, userId);
 
       removeWaitingUser(userId);
-      toast.success('Đã chấp nhận người dùng');
+      toast.success('User approved');
     } catch {
-      toast.error('Lỗi khi chấp nhận người dùng');
+      toast.error('Failed to approve user');
     } finally {
       setProcessingIds((prev) => {
         const next = new Set(prev);
@@ -63,9 +63,9 @@ export function WaitingRoomPanel({ roomCode, waitingList, removeWaitingUser }: {
       socket.emit(ROOM_EVENTS.REJECT_USER, { roomCode, memberId });
 
       removeWaitingUser(userId);
-      toast.info('Đã từ chối người dùng');
+      toast.info('User rejected');
     } catch {
-      toast.error('Lỗi khi từ chối người dùng');
+      toast.error('Failed to reject user');
     } finally {
       setProcessingIds((prev) => {
         const next = new Set(prev);
@@ -102,11 +102,11 @@ export function WaitingRoomPanel({ roomCode, waitingList, removeWaitingUser }: {
             </div>
             <div>
               <span className="text-lg font-bold text-on-surface">
-                Phòng chờ
+                Waiting Room
               </span>
               {waitingCount > 0 && (
                 <Badge className="ml-2 bg-error/10 text-error hover:bg-error/10 px-2 py-0.5 text-[10px] font-bold">
-                  {waitingCount} đang chờ
+                  {waitingCount} pending
                 </Badge>
               )}
             </div>
@@ -120,10 +120,10 @@ export function WaitingRoomPanel({ roomCode, waitingList, removeWaitingUser }: {
                 <Users size={32} className="text-on-surface-variant/30" />
               </div>
               <h4 className="font-bold text-on-surface mb-1">
-                Không có ai đang chờ
+                No one waiting
               </h4>
               <p className="text-xs text-on-surface-variant/50">
-                Những người yêu cầu tham gia sẽ hiển thị ở đây
+                People requesting to join will appear here
               </p>
             </div>
           ) : (
@@ -197,7 +197,7 @@ export function WaitingRoomPanel({ roomCode, waitingList, removeWaitingUser }: {
               className="flex-1 h-10 rounded-xl bg-primary text-white font-bold text-xs"
             >
               <UserCheck size={14} className="mr-1.5" />
-              Chấp nhận tất cả ({waitingCount})
+              Admit All ({waitingCount})
             </Button>
             <Button
               variant="outline"
@@ -209,7 +209,7 @@ export function WaitingRoomPanel({ roomCode, waitingList, removeWaitingUser }: {
               className="flex-1 h-10 rounded-xl border-error/20 text-error font-bold text-xs hover:bg-error/5"
             >
               <UserX size={14} className="mr-1.5" />
-              Từ chối tất cả
+              Deny All
             </Button>
           </div>
         )}

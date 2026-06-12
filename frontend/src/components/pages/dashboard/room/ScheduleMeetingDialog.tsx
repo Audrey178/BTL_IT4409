@@ -201,26 +201,6 @@ export function ScheduleMeetingDialog({ open, onOpenChange, onScheduled }: Sched
                   </div>
                   <Switch checked={requireApproval} onCheckedChange={setRequireApproval} />
                 </div>
-
-                <div className="flex items-center justify-between p-4 bg-surface-container rounded-2xl">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                      <Users size={18} className="text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-on-surface">Số người tối đa</p>
-                      <p className="text-xs text-on-surface-variant/60">Giới hạn người tham dự</p>
-                    </div>
-                  </div>
-                  <Input
-                    type="number"
-                    value={maxParticipants}
-                    onChange={(e) => setMaxParticipants(Math.max(2, Math.min(500, Number(e.target.value))))}
-                    className="w-20 h-10 text-center bg-surface-container-highest border-none rounded-xl font-bold focus-visible:ring-2 focus-visible:ring-primary"
-                    min={2}
-                    max={500}
-                  />
-                </div>
               </div>
 
               <Button
