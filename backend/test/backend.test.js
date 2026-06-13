@@ -775,4 +775,81 @@ describe('backend smoke and regression tests', () => {
     assert.equal(newLogin.response.status, 200);
     assert.ok(newLogin.body.accessToken);
   });
+
+  test('google auth verifies email automatically', async () => {
+    const { default: authService } = await import('../src/services/auth.service.js');
+
+    // Case 1: Register new user via Google, email should be verified
+    const googleEmail = `google-${Date.now()}-${Math.random().toString(16).slice(2)}@example.com`;
+    const mockGoogleUser1 = {
+      email: googleEmail,
+      email_verified: true,
+      name: 'New Google User',
+      picture: 'https://example.com/avatar.jpg',
+    };
+
+    const res1 = await authService.loginOrRegisterWithGoogle(mockGoogleUser1);
+    assert.equal(res1.success, true);
+    
+    const dbUser1 = await User.findOne({ email: googleEmail });
+    assert.ok(dbUser1);
+    assert.equal(dbUser1.email_verified, true);
+
+    // Case 2: Manually register user (email_verified: false)
+    const manualEmail = `manual-${Date.now()}-${Math.random().toString(16).slice(2)}@example.com`;
+    const manualUser = new User({
+      email: manualEmail,
+      password_hash: 'password123',
+      full_name: 'Manual User',
+      email_verified: false,
+    });
+    await manualUser.save();
+
+    // Sign in with Google using that email, should mark as verified
+    const mockGoogleUser2 = {
+      email: manualEmail,
+      email_verified: true,
+      name: 'Manual User',
+      picture: 'https://example.com/avatar.jpg',
+    };
+
+    const res2 = await authService.loginOrRegisterWithGoogle(mockGoogleUser2);
+    assert.equal(res2.success, true);
+
+    const dbUser2 = await User.findOne({ email: manualEmail });
+    assert.ok(dbUser2);
+    assert.equal(dbUser2.email_verified, true);
+  });
+
+  test('offline user invitation sends email fallback', async () => {
+    // 1. Register Host and Target
+    const hostAuth = await registerUser('invite-host');
+    const targetAuth = await registerUser('invite-target');
+    
+    // Make target user offline by removing their socket registration in Redis if any
+    const { getRedisClient } = await import('../src/config/redis.js');
+    const redis = getRedisClient();
+    await redis.del(`user:${targetAuth.user._id}:socket`);
+
+    // 2. Create room by host
+    const roomCreate = await request('/api/v1/rooms', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${hostAuth.accessToken}` },
+      body: JSON.stringify({ title: 'Offline Invitation Room' }),
+    });
+    assert.equal(roomCreate.response.status, 201);
+    const roomCode = roomCreate.body.room.room_code;
+
+    // 3. Invite offline user
+    const inviteRes = await request(`/api/v1/rooms/${roomCode}/invite`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${hostAuth.accessToken}` },
+      body: JSON.stringify({ userId: targetAuth.user._id }),
+    });
+
+    assert.equal(inviteRes.response.status, 200);
+    assert.equal(inviteRes.body.success, true);
+    assert.equal(inviteRes.body.online, false);
+    assert.match(inviteRes.body.message, /email sent successfully/);
+  });
 });

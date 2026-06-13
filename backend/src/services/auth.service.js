@@ -261,9 +261,14 @@ class AuthService {
           password_hash: randomPassword,
           full_name: googleUser.name || googleUser.email.split('@')[0],
           avatar: googleUser.picture || null,
+          email_verified: true,
         });
         await user.save();
         logger.info(`Created user via Google: ${user.email}`);
+      } else if (!user.email_verified) {
+        user.email_verified = true;
+        await user.save();
+        logger.info(`Marked existing user email as verified via Google login: ${user.email}`);
       }
 
       const { accessToken, refreshToken } = generateTokens(user._id, user.email);

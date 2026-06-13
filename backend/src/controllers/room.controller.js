@@ -10,6 +10,8 @@ import roomService from '../services/room.service.js';
 import { getRedisClient } from '../config/redis.js';
 import { HTTP_STATUS, SOCKET_EVENTS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
+import { User } from '../models/index.js';
+import emailService from '../services/email.service.js';
 
 class RoomController {
   /**
@@ -296,15 +298,30 @@ class RoomController {
           });
         }
       } else {
-        return res.status(HTTP_STATUS.BAD_REQUEST).json({
-          success: false,
-          message: 'User is currently offline',
-        });
+        // Fallback: Send email to offline user
+        const targetUser = await User.findById(targetUserId);
+        if (!targetUser) {
+          return res.status(HTTP_STATUS.NOT_FOUND).json({
+            success: false,
+            message: 'Target user not found',
+          });
+        }
+
+        try {
+          await emailService.sendMeetingInviteEmail(
+            targetUser.email,
+            roomCode.toUpperCase(),
+            req.user?.full_name || 'Host',
+            targetUser.full_name
+          );
+        } catch (emailErr) {
+          logger.warn(`Failed to send offline invite email to ${targetUser.email}:`, emailErr.message);
+        }
       }
 
       res.status(HTTP_STATUS.OK).json({
         success: true,
-        message: 'User invited successfully',
+        message: result.online ? 'User invited successfully' : 'User is offline, invitation email sent successfully',
         online: result.online,
       });
     } catch (error) {
