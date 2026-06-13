@@ -65,6 +65,15 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    reset_password_token: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    reset_password_expires: {
+      type: Date,
+      default: null,
+    },
     face_embeddings: [
       {
         descriptor: [Number], // Array of face vector features

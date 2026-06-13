@@ -77,6 +77,16 @@ export const authService = {
     return res.data;
   },
 
+  forgotPassword: async (email: string) => {
+    const res = await api.post("/auth/forgot-password", { email });
+    return res.data;
+  },
+
+  resetPassword: async (token: string, password: string) => {
+    const res = await api.post("/auth/reset-password", { token, password });
+    return res.data;
+  },
+
   searchUsers: async (email: string): Promise<{ success: boolean; users: Array<{ _id: string; full_name: string; email: string; avatar: string | null }> }> => {
     const res = await api.get(`/auth/users/search?email=${encodeURIComponent(email)}`);
     return res.data;

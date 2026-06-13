@@ -14,11 +14,11 @@ const signUpSchema = z
     fullname: z.string().min(1, "Vui lòng nhập Họ tên!"),
     email: z.string().email("Email không hợp lệ!"),
     password: z.string().min(8, "Mật khẩu phải có ít nhất 8 ký tự."),
-    confirmPassword: z.string().min(8, "Vui lòng xác nhận mật khẩu"),
+    confirmPassword: z.string().min(8, "Vui lòng xác nhận mật khẩu."),
   })
   .refine((data) => data.password === data.confirmPassword, {
     path: ["confirmPassword"],
-    message: "Mật khẩu xác nhận không khớp",
+    message: "Mật khẩu xác nhận không trùng khớp!",
   });
 
 type SignUpFormValue = z.infer<typeof signUpSchema>;
@@ -38,7 +38,7 @@ export function SignupScreen() {
     const { fullname, email, password } = data;
     const { success, error } = await signUp(fullname, email, password);
     if (success) {
-      navigate("/signin");
+      navigate(`/signin?registered=true&email=${encodeURIComponent(email)}`);
     } else {
       if (error?.errors && Array.isArray(error.errors)) {
         error.errors.forEach((err: any) => {
@@ -136,7 +136,7 @@ export function SignupScreen() {
             htmlFor="confirmPassword"
             className="block text-sm font-semibold text-on-surface-variant px-1"
           >
-            Confirm Password
+            Xác nhận mật khẩu
           </label>
           <Input
             id="confirmPassword"

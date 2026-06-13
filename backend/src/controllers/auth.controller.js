@@ -182,6 +182,48 @@ class AuthController {
   }
 
   /**
+   * POST /api/v1/auth/forgot-password
+   */
+  async forgotPassword(req, res) {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ success: false, message: 'Email required' });
+      }
+
+      await authService.forgotPassword(email);
+      res.status(200).json({ success: true, message: 'If the email exists, a password reset link has been sent.' });
+    } catch (error) {
+      logger.error('Forgot password controller error:', error);
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        message: error.message || 'Forgot password failed',
+      });
+    }
+  }
+
+  /**
+   * POST /api/v1/auth/reset-password
+   */
+  async resetPassword(req, res) {
+    try {
+      const { token, password } = req.body;
+      if (!token || !password) {
+        return res.status(400).json({ success: false, message: 'Token and password are required' });
+      }
+
+      await authService.resetPassword(token, password);
+      res.status(200).json({ success: true, message: 'Password reset successfully' });
+    } catch (error) {
+      logger.error('Reset password controller error:', error);
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        message: error.message || 'Password reset failed',
+      });
+    }
+  }
+
+  /**
    * GET /api/v1/auth/users/search?email=...
    */
   async searchUsers(req, res) {
@@ -203,4 +245,3 @@ class AuthController {
 }
 
 export default new AuthController();
-
