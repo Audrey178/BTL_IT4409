@@ -26,7 +26,10 @@ const SideBar = ({ onNewMeeting }: SideBarProps) => {
   const { logout } = useAuthStore();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) => {
+    if (path === "/") return location.pathname === "/";
+    return location.pathname.startsWith(path);
+  };
 
   const handleNav = (path: string) => {
     navigate(path);

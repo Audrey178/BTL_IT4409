@@ -52,4 +52,13 @@ export const roomService = {
     const res = await api.put(`/rooms/${roomCode}/end`);
     return res.data;
   },
+  deleteRoom: async (roomCode: string) => {
+    const res = await api.delete(`/rooms/${roomCode}`);
+    return res.data;
+  },
+
+  inviteUser: async (roomCode: string, userId: string): Promise<{ success: boolean; message: string; online: boolean }> => {
+    const res = await api.post(`/rooms/${roomCode}/invite`, { userId });
+    return res.data;
+  },
 };

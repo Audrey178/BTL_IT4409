@@ -21,6 +21,7 @@ let connectMongoDB;
 let disconnectMongoDB;
 let connectRedis;
 let disconnectRedis;
+let User;
 
 const request = async (path, options = {}) => {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -49,9 +50,30 @@ const registerUser = async (prefix = 'user') => {
 
   assert.equal(response.status, 201);
   assert.equal(body.success, true);
-  assert.ok(body.accessToken);
-  assert.ok(body.refreshToken);
-  return body;
+
+  // Retrieve verify token from database and call verification endpoint
+  const user = await User.findOne({ email }).select('+verify_token');
+  assert.ok(user);
+
+  const verifyRes = await request(`/api/v1/auth/verify-email?token=${user.verify_token}`);
+  assert.equal(verifyRes.response.status, 200);
+  assert.equal(verifyRes.body.success, true);
+
+  // Sign in to obtain access and refresh tokens
+  const loginRes = await request('/api/v1/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({
+      email,
+      password: 'password123',
+    }),
+  });
+
+  assert.equal(loginRes.response.status, 200);
+  assert.equal(loginRes.body.success, true);
+  assert.ok(loginRes.body.accessToken);
+  assert.ok(loginRes.body.refreshToken);
+
+  return loginRes.body;
 };
 
 describe('backend smoke and regression tests', () => {
@@ -59,11 +81,13 @@ describe('backend smoke and regression tests', () => {
     const dbModule = await import('../src/config/mongodb.js');
     const redisModule = await import('../src/config/redis.js');
     const appModule = await import('../src/app.js');
+    const userModelModule = await import('../src/models/User.js');
 
     connectMongoDB = dbModule.connectMongoDB;
     disconnectMongoDB = dbModule.disconnectMongoDB;
     connectRedis = redisModule.connectRedis;
     disconnectRedis = redisModule.disconnectRedis;
+    User = userModelModule.default;
 
     await connectMongoDB();
     await connectRedis();
@@ -129,7 +153,7 @@ describe('backend smoke and regression tests', () => {
     assert.equal(body.success, false);
   });
 
-  test('attendance check-in is idempotent while active', async () => {
+  test('attendance check-in is idempotent while active', { skip: 'Attendance module deleted in main' }, async () => {
     const auth = await registerUser('attendance');
 
     const roomCreate = await request('/api/v1/rooms', {
@@ -233,7 +257,7 @@ describe('backend smoke and regression tests', () => {
     assert.equal(history.body.messages[0].content, 'Call ended • 00:42');
   });
 
-  test('conversation call token is issued only to call participants', async () => {
+  test('conversation call token is issued only to call participants', { skip: 'CallSession deleted in main' }, async () => {
     const caller = await registerUser('call-token-caller');
     const receiver = await registerUser('call-token-receiver');
     const outsider = await registerUser('call-token-outsider');

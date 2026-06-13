@@ -1,4 +1,6 @@
 import { User } from '../models/index.js';
+import crypto from 'crypto';
+import emailService from './email.service.js';
 import { decodeToken, generateTokens, verifyRefreshToken } from '../utils/jwt.js';
 import { HTTP_STATUS, ERROR_MESSAGES } from '../utils/constants.js';
 import logger from '../utils/logger.js';
@@ -44,18 +46,27 @@ class AuthService {
         email: email.toLowerCase(),
         password_hash: password,
         full_name: full_name.trim(),
+        email_verified: false,
       });
 
-      await user.save();
-      logger.info(`User registered: ${user.email}`);
+      // generate verification token
+      const token = crypto.randomBytes(32).toString('hex');
+      user.verify_token = token;
+      user.verify_token_expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-      const { accessToken, refreshToken } = generateTokens(user._id, user.email);
+      await user.save();
+      logger.info(`User registered (pending verification): ${user.email}`);
+
+      // send verification email (async)
+      try {
+        await emailService.sendVerificationEmail(user.email, token, user.full_name);
+      } catch (err) {
+        logger.warn('Failed to send verification email', err);
+      }
 
       return {
         success: true,
-        user: user.toJSON(),
-        accessToken,
-        refreshToken,
+        message: 'Registered successfully. Please check your email to verify your account.',
       };
     } catch (error) {
       logger.error('Register error:', error);
@@ -79,6 +90,12 @@ class AuthService {
         const error = new Error(ERROR_MESSAGES.INVALID_CREDENTIALS);
         error.statusCode = HTTP_STATUS.UNAUTHORIZED;
         throw error;
+      }
+
+      if (!user.email_verified) {
+        const err = new Error('Email not verified');
+        err.statusCode = HTTP_STATUS.UNAUTHORIZED;
+        throw err;
       }
 
       logger.info(`User logged in: ${user.email}`);
@@ -226,6 +243,117 @@ class AuthService {
       throw error;
     }
   }
+
+  async loginOrRegisterWithGoogle(googleUser) {
+    try {
+      if (!googleUser?.email || !googleUser.email_verified) {
+        const error = new Error('Google account email not verified');
+        error.statusCode = HTTP_STATUS.UNAUTHORIZED;
+        throw error;
+      }
+
+      let user = await User.findOne({ email: googleUser.email.toLowerCase() });
+      if (!user) {
+        // create new user with a random password
+        const randomPassword = Math.random().toString(36).slice(2, 12);
+        user = new User({
+          email: googleUser.email.toLowerCase(),
+          password_hash: randomPassword,
+          full_name: googleUser.name || googleUser.email.split('@')[0],
+          avatar: googleUser.picture || null,
+        });
+        await user.save();
+        logger.info(`Created user via Google: ${user.email}`);
+      }
+
+      const { accessToken, refreshToken } = generateTokens(user._id, user.email);
+
+      return {
+        success: true,
+        user: user.toJSON(),
+        accessToken,
+        refreshToken,
+      };
+    } catch (error) {
+      logger.error('Google login/register error:', error);
+      throw error;
+    }
+  }
+
+  async verifyEmail(token) {
+    try {
+      const user = await User.findOne({ verify_token: token });
+      if (!user) {
+        const error = new Error('Invalid or expired token');
+        error.statusCode = HTTP_STATUS.BAD_REQUEST;
+        throw error;
+      }
+
+      if (!user.verify_token_expires || user.verify_token_expires < new Date()) {
+        const error = new Error('Token expired');
+        error.statusCode = HTTP_STATUS.BAD_REQUEST;
+        throw error;
+      }
+
+      user.email_verified = true;
+      user.verify_token = null;
+      user.verify_token_expires = null;
+      await user.save();
+
+      logger.info(`User email verified: ${user.email}`);
+      return user.toJSON();
+    } catch (error) {
+      logger.error('Verify email error:', error);
+      throw error;
+    }
+  }
+
+  async resendVerification(email) {
+    try {
+      const user = await User.findOne({ email: email.toLowerCase() });
+      if (!user) {
+        const error = new Error(ERROR_MESSAGES.USER_NOT_FOUND);
+        error.statusCode = HTTP_STATUS.NOT_FOUND;
+        throw error;
+      }
+
+      if (user.email_verified) return true;
+
+      const token = crypto.randomBytes(32).toString('hex');
+      user.verify_token = token;
+      user.verify_token_expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await user.save();
+
+      try {
+        await emailService.sendVerificationEmail(user.email, token, user.full_name);
+      } catch (err) {
+        logger.warn('Failed to resend verification email', err);
+      }
+
+      return true;
+    } catch (error) {
+      logger.error('Resend verification error:', error);
+      throw error;
+    }
+  }
+
+  async searchUsers(emailQuery, excludeUserId) {
+    try {
+      if (!emailQuery) return [];
+      const users = await User.find({
+        email: { $regex: emailQuery, $options: 'i' },
+        _id: { $ne: excludeUserId },
+      })
+        .limit(10)
+        .select('_id full_name email avatar')
+        .lean();
+      return users;
+    } catch (error) {
+      logger.error('Search users service error:', error);
+      throw error;
+    }
+  }
 }
 
 export default new AuthService();
+

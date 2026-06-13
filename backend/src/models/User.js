@@ -52,6 +52,19 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    email_verified: {
+      type: Boolean,
+      default: false,
+    },
+    verify_token: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    verify_token_expires: {
+      type: Date,
+      default: null,
+    },
     face_embeddings: [
       {
         descriptor: [Number], // Array of face vector features

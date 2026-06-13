@@ -9,6 +9,7 @@ import { RecordingPlayerScreen } from "./screens/archives/RecordingPlayerScreen"
 import { SignupScreen } from "./screens/auth/SignupScreen";
 import { LoginScreen } from "./screens/auth/LoginScreen";
 import { ProfileScreen } from "./screens/auth/ProfileScreen";
+import { VerifyEmailScreen } from "./screens/auth/VerifyEmailScreen";
 import { MessagesScreen } from "./screens/messages/MessagesScreen";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { Toaster } from "sonner";
@@ -55,6 +56,7 @@ export default function App() {
         <Routes>
           <Route path="signup" element={<AuthRoute><SignupScreen /></AuthRoute>} />
           <Route path="signin" element={<AuthRoute><LoginScreen /></AuthRoute>} />
+          <Route path="auth/verify-email" element={<VerifyEmailScreen />} />
 
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<DashboardScreen />} />

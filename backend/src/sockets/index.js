@@ -24,7 +24,7 @@
 import { SOCKET_EVENTS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
 import { getRedisClient } from '../config/redis.js';
-import { handleRoomJoin, handleApproveUser, handleRejectUser, handleUserLeft, handleEndMeeting } from './room.handler.js';
+import { handleRoomJoin, handleApproveUser, handleRejectUser, handleUserLeft, handleEndMeeting, handleDeclineInvite } from './room.handler.js';
 import {
   handleChatSubscribe,
   handleChatUnsubscribe,
@@ -62,6 +62,12 @@ export const initializeSocket = (io, redisClient) => {
     socket.data.userId = userId;
     logger.info(`✅ Kết nối mới: Socket ${socket.id} | Người dùng: ${userId}`);
     markUserOnline(io, socket);
+
+    // Đánh dấu người dùng online trong Redis khi kết nối
+    if (socket.userId) {
+      redisClient.set(`user:${socket.userId}:socket`, socket.id)
+        .catch((err) => logger.error(`Lỗi khi lưu socket ID cho user ${socket.userId}:`, err));
+    }
 
     // =========================================================================
     // QUẢN LÝ PHÒNG HỌP
@@ -106,6 +112,14 @@ export const initializeSocket = (io, redisClient) => {
      */
     socket.on(SOCKET_EVENTS.ROOM_ENDED, (data) => {
       handleEndMeeting(io, socket, data);
+    });
+
+    /**
+     * Sự kiện: Người dùng từ chối lời mời
+     * Dữ liệu: { roomCode, hostId, userName }
+     */
+    socket.on(SOCKET_EVENTS.ROOM_DECLINE_INVITE, (data) => {
+      handleDeclineInvite(io, socket, data);
     });
 
     // =========================================================================
@@ -237,6 +251,14 @@ export const initializeSocket = (io, redisClient) => {
         await markUserOffline(io, socket);
         const redis = getRedisClient();
 
+        // Đánh dấu offline bằng cách xóa mapping user -> socket
+        if (socket.userId) {
+          const currentSocketId = await redis.get(`user:${socket.userId}:socket`);
+          if (currentSocketId === socket.id) {
+            await redis.del(`user:${socket.userId}:socket`);
+          }
+        }
+
         // Xóa mapping socket -> user
         const socketData = await redis.get(`socket:${socket.id}`);
         if (socketData) {
@@ -253,7 +275,6 @@ export const initializeSocket = (io, redisClient) => {
           try {
             await Promise.all([
               redis.del(`socket:${socket.id}`),
-              redis.del(`user:${disconnectedUserId}:socket`),
               redis.sRem(`room:${roomCode}:members`, disconnectedUserId),
             ]);
             logger.info(`Người dùng ${disconnectedUserId} đã rời khỏi phòng ${roomCode}`);

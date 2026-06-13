@@ -231,6 +231,26 @@ router.put('/:roomCode/end', roomController.endRoom.bind(roomController));
 
 /**
  * @swagger
+ * /rooms/{roomCode}:
+ *   delete:
+ *     summary: Permanently delete a room (host only)
+ *     tags: [Rooms]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: roomCode
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Room deleted successfully
+ */
+router.delete('/:roomCode', roomController.deleteRoom.bind(roomController));
+
+/**
+ * @swagger
  * /rooms/{roomCode}/participants:
  *   get:
  *     summary: Get room participants
@@ -248,5 +268,36 @@ router.put('/:roomCode/end', roomController.endRoom.bind(roomController));
  *         description: Participants list
  */
 router.get('/:roomCode/participants', roomController.getRoomParticipants.bind(roomController));
+
+/**
+ * @swagger
+ * /rooms/{roomCode}/invite:
+ *   post:
+ *     summary: Invite a user to the room by ID (host only)
+ *     tags: [Rooms]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: roomCode
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - userId
+ *             properties:
+ *               userId:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Invitation sent successfully
+ */
+router.post('/:roomCode/invite', roomController.inviteUser.bind(roomController));
 
 export default router;
