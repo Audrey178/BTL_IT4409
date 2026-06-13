@@ -32,6 +32,28 @@ const roomMemberSchema = new mongoose.Schema(
       type: Number, // in seconds
       default: 0,
     },
+    last_delivered_message_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Message',
+      default: null,
+    },
+    last_delivered_at: {
+      type: Date,
+      default: null,
+    },
+    last_read_message_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Message',
+      default: null,
+    },
+    last_read_at: {
+      type: Date,
+      default: null,
+    },
+    muted_until: {
+      type: Date,
+      default: null,
+    },
     created_at: {
       type: Date,
       default: Date.now,

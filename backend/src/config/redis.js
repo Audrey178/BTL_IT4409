@@ -65,6 +65,9 @@ const createMemoryRedisClient = () => {
     async sMembers(key) {
       return Array.from(sets.get(key) || []);
     },
+    async sCard(key) {
+      return (sets.get(key) || new Set()).size;
+    },
   };
 };
 
@@ -83,7 +86,10 @@ export const connectRedis = async () => {
 
     redisClient = createClient({
       url: redisUrl,
+      password: process.env.REDIS_PASSWORD,
       socket: {
+        tls: process.env.NODE_ENV === 'production',
+
         reconnectStrategy: (retries) => {
           if (retries > 10) {
             logger.error({ retries }, 'Redis reconnection failed after 10 attempts');

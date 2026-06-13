@@ -31,12 +31,12 @@ export function EndMeetingDialog({
       <DialogContent className="sm:max-w-md rounded-3xl border-outline-variant/20 bg-white/95 backdrop-blur-xl shadow-2xl">
         <DialogHeader className="text-left">
           <DialogTitle className="text-xl font-bold text-orange-950 tracking-tight">
-            {isHost ? "Leave or end meeting?" : "Leave meeting?"}
+            {isHost ? "Rời khỏi hoặc kết thúc Meeting?" : "Rời khỏi Meeting?"}
           </DialogTitle>
           <DialogDescription className="text-on-surface-variant/80 text-sm leading-relaxed mt-2">
             {isHost
-              ? "You can leave the meeting or end it for all participants."
-              : "Are you sure you want to leave the meeting?"}
+              ? "Bạn có thể rời khỏi Meeting hoặc kết thúc nó cho tất cả mọi người."
+              : "Bạn có chắc chắn muốn rời khỏi Meeting không?"}
           </DialogDescription>
         </DialogHeader>
 
@@ -51,11 +51,11 @@ export function EndMeetingDialog({
               <LogOut size={20} className="text-orange-700" />
             </div>
             <div className="text-left">
-              <p className="font-bold text-orange-950 text-sm">Leave meeting</p>
+              <p className="font-bold text-orange-950 text-sm">Rời khỏi Meeting</p>
               <p className="text-xs text-on-surface-variant/60 mt-0.5">
                 {isHost
-                  ? "You'll leave, but others can stay"
-                  : "You'll be removed from the meeting"}
+                  ? "Bạn sẽ rời đi, nhưng những người khác vẫn có thể ở lại"
+                  : "Bạn sẽ rời khỏi Meeting"}
               </p>
             </div>
           </button>
@@ -75,9 +75,9 @@ export function EndMeetingDialog({
                 )}
               </div>
               <div className="text-left">
-                <p className="font-bold text-red-700 text-sm">End meeting for all</p>
+                <p className="font-bold text-red-700 text-sm">Kết thúc Meeting cho tất cả</p>
                 <p className="text-xs text-red-500/80 mt-0.5">
-                  Everyone will be removed from the meeting
+                  Tất cả mọi người sẽ bị xóa khỏi Meeting
                 </p>
               </div>
             </button>
@@ -91,7 +91,7 @@ export function EndMeetingDialog({
             disabled={isLoading}
             className="rounded-full px-6 font-bold text-on-surface-variant"
           >
-            Cancel
+            Hủy
           </Button>
         </DialogFooter>
       </DialogContent>

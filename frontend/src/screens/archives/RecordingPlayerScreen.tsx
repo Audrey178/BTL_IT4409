@@ -3,7 +3,6 @@ import { useParams, useNavigate } from "react-router";
 import { motion } from "motion/react";
 import {
   ArrowLeft,
-  Video,
   Clock,
   CalendarDays,
   User,
@@ -13,35 +12,13 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import SideBar from "@/components/layout/SideBar";
+import { ChatBubble } from "@/components/pages/archives/ChatBubble";
+import { formatDuration, formatDate } from "@/utils/dateFormat";
 import { recordingService, type Recording } from "@/services/recordingService";
 import { chatService, type ChatMessage } from "@/services/chatService";
 
-function formatDuration(seconds: number | null | undefined): string {
-  if (!seconds) return "--:--";
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  if (h > 0) return `${h}h ${m}m ${s}s`;
-  return `${m}m ${s}s`;
-}
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("vi-VN", {
-    weekday: "long",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
-function formatTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleTimeString("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 export function RecordingPlayerScreen() {
   const { id } = useParams<{ id: string }>();
@@ -70,11 +47,11 @@ export function RecordingPlayerScreen() {
         if (!cancelled && res.recording) {
           setRecording(res.recording);
         } else if (!cancelled) {
-          setError("Recording not found");
+          setError("Không tìm thấy bản ghi");
         }
       } catch (err: unknown) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load recording");
+          setError(err instanceof Error ? err.message : "Lỗi khi tải bản ghi");
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -101,7 +78,7 @@ export function RecordingPlayerScreen() {
         }
       } catch (err: unknown) {
         if (!cancelled) {
-          setChatError("Chat history unavailable");
+          setChatError("Lịch sử chat không khả dụng");
         }
       } finally {
         if (!cancelled) setChatLoading(false);
@@ -131,14 +108,14 @@ export function RecordingPlayerScreen() {
           <div className="w-20 h-20 rounded-3xl bg-red-50 flex items-center justify-center">
             <AlertCircle size={40} className="text-error/40" />
           </div>
-          <p className="font-bold text-on-surface text-lg">{error || "Recording not found"}</p>
+          <p className="font-bold text-on-surface text-lg">{error || "Không tìm thấy bản ghi"}</p>
           <Button
             onClick={() => navigate("/archives")}
             variant="outline"
             className="rounded-full px-6 font-bold"
           >
             <ArrowLeft size={16} className="mr-2" />
-            Back to Archives
+            Quay lại Lưu trữ
           </Button>
         </main>
       </div>
@@ -162,7 +139,7 @@ export function RecordingPlayerScreen() {
           </Button>
           <div className="flex-1 min-w-0">
             <h1 className="text-xl font-bold text-on-surface truncate">
-              {recording.title || "Untitled Recording"}
+              {recording.title || "Bản ghi không tên"}
             </h1>
             <div className="flex items-center gap-4 text-xs text-on-surface-variant/60 mt-0.5">
               {recording.room?.room_code && (
@@ -226,10 +203,10 @@ export function RecordingPlayerScreen() {
           >
             <div className="px-5 py-4 border-b border-outline-variant/10 flex items-center gap-2">
               <MessageSquare size={18} className="text-primary" />
-              <h2 className="font-bold text-on-surface text-sm">Chat History</h2>
+              <h2 className="font-bold text-on-surface text-sm">Lịch sử chat</h2>
               {messages.length > 0 && (
                 <span className="text-xs text-on-surface-variant/50 ml-auto">
-                  {messages.length} message{messages.length !== 1 ? "s" : ""}
+                  {messages.length} tin nhắn
                 </span>
               )}
             </div>
@@ -247,7 +224,7 @@ export function RecordingPlayerScreen() {
               <div className="flex-1 flex flex-col items-center justify-center gap-2 px-6">
                 <MessageSquare size={32} className="text-on-surface-variant/20" />
                 <p className="text-sm text-on-surface-variant/50 text-center">
-                  No chat messages for this meeting.
+                  Không có tin nhắn nào cho cuộc họp này.
                 </p>
               </div>
             ) : (
@@ -266,39 +243,4 @@ export function RecordingPlayerScreen() {
   );
 }
 
-/* ---- Sub-components ---- */
 
-function ChatBubble({ message }: { message: ChatMessage }) {
-  if (message.type === "system") {
-    return (
-      <div className="flex justify-center">
-        <span className="text-[11px] text-on-surface-variant/50 bg-surface-container px-3 py-1 rounded-full italic">
-          {message.content}
-        </span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex gap-2.5 group">
-      <Avatar className="w-7 h-7 shrink-0 mt-0.5">
-        <AvatarFallback className="bg-surface-container-high text-on-surface-variant text-[11px] font-bold">
-          {message.sender_name?.[0]?.toUpperCase() || "?"}
-        </AvatarFallback>
-      </Avatar>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-2">
-          <span className="text-xs font-bold text-on-surface truncate">
-            {message.sender_name}
-          </span>
-          <span className="text-[10px] text-on-surface-variant/40 shrink-0">
-            {formatTime(message.timestamp)}
-          </span>
-        </div>
-        <p className="text-sm text-on-surface-variant leading-relaxed break-words mt-0.5">
-          {message.content}
-        </p>
-      </div>
-    </div>
-  );
-}
