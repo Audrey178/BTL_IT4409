@@ -278,6 +278,43 @@ class RoomController {
       });
     }
   }
+
+  async inviteUser(req, res) {
+    try {
+      const { roomCode } = req.params;
+      const { userId: targetUserId } = req.body;
+
+      const result = await roomService.inviteUser(roomCode, req.userId, targetUserId);
+
+      if (result.online && result.socketId) {
+        const io = req.app.locals.io;
+        if (io) {
+          io.to(result.socketId).emit(SOCKET_EVENTS.ROOM_INVITE, {
+            roomCode: roomCode.toUpperCase(),
+            hostId: req.userId,
+            hostName: req.user?.full_name || 'Host',
+          });
+        }
+      } else {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({
+          success: false,
+          message: 'User is currently offline',
+        });
+      }
+
+      res.status(HTTP_STATUS.OK).json({
+        success: true,
+        message: 'User invited successfully',
+        online: result.online,
+      });
+    } catch (error) {
+      logger.error('Invite user controller error:', error);
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        message: error.message || 'Failed to invite user',
+      });
+    }
+  }
 }
 
 export default new RoomController();

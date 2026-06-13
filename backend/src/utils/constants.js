@@ -46,6 +46,9 @@ export const SOCKET_EVENTS = {
   ROOM_USER_KICKED: 'room:user_kicked',
   ROOM_HOST_TRANSFERRED: 'room:host_transferred',
   ROOM_ENDED: 'room:ended',
+  ROOM_INVITE: 'room:invite',
+  ROOM_DECLINE_INVITE: 'room:decline_invite',
+  ROOM_INVITE_DECLINED: 'room:invite_declined',
 
 
   // Chat events

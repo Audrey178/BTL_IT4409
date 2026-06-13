@@ -222,6 +222,26 @@ class AuthController {
       });
     }
   }
+
+  /**
+   * GET /api/v1/auth/users/search?email=...
+   */
+  async searchUsers(req, res) {
+    try {
+      const { email } = req.query;
+      const users = await authService.searchUsers(email, req.userId);
+      res.status(HTTP_STATUS.OK).json({
+        success: true,
+        users,
+      });
+    } catch (error) {
+      logger.error('Search users controller error:', error);
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        message: error.message || 'Failed to search users',
+      });
+    }
+  }
 }
 
 export default new AuthController();

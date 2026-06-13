@@ -14,6 +14,9 @@ export const ROOM_EVENTS = {
   FORCE_DISCONNECT: "room:force_disconnect",
   ENDED: "room:ended",
   ERROR: "error",
+  INVITE: "room:invite",
+  DECLINE_INVITE: "room:decline_invite",
+  INVITE_DECLINED: "room:invite_declined",
 } as const;
 
 // WebRTC events removed — signaling now handled by LiveKit Cloud SFU
