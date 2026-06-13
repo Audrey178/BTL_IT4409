@@ -387,7 +387,6 @@ export const handleUserLeft = async (socket, data) => {
 
     // Cleanup Redis socket mappings (tránh disconnect handler double-fire)
     await redis.del(`socket:${socket.id}`);
-    await redis.del(`user:${userId}:socket`);
 
     // Rời khỏi room namespace
     socket.leave(roomCode);

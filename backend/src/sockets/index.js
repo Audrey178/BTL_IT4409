@@ -42,9 +42,15 @@ export const initializeSocket = (io, redisClient) => {
 
   io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
     // Lưu userId vào socket.data để các handler truy cập
-    const userId = socket.handshake.query.userId || socket.id;
+    const userId = socket.userId || socket.handshake.query.userId || socket.id;
     socket.data.userId = userId;
     logger.info(`✅ Kết nối mới: Socket ${socket.id} | Người dùng: ${userId}`);
+
+    // Đánh dấu người dùng online trong Redis khi kết nối
+    if (socket.userId) {
+      redisClient.set(`user:${socket.userId}:socket`, socket.id)
+        .catch((err) => logger.error(`Lỗi khi lưu socket ID cho user ${socket.userId}:`, err));
+    }
 
     // =========================================================================
     // QUẢN LÝ PHÒNG HỌP
@@ -163,6 +169,14 @@ export const initializeSocket = (io, redisClient) => {
       try {
         const redis = getRedisClient();
 
+        // Đánh dấu offline bằng cách xóa mapping user -> socket
+        if (socket.userId) {
+          const currentSocketId = await redis.get(`user:${socket.userId}:socket`);
+          if (currentSocketId === socket.id) {
+            await redis.del(`user:${socket.userId}:socket`);
+          }
+        }
+
         // Xóa mapping socket -> user
         const socketData = await redis.get(`socket:${socket.id}`);
         if (socketData) {
@@ -179,7 +193,6 @@ export const initializeSocket = (io, redisClient) => {
           try {
             await Promise.all([
               redis.del(`socket:${socket.id}`),
-              redis.del(`user:${disconnectedUserId}:socket`),
               redis.sRem(`room:${roomCode}:members`, disconnectedUserId),
             ]);
             logger.info(`Người dùng ${disconnectedUserId} đã rời khỏi phòng ${roomCode}`);
