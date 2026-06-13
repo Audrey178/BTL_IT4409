@@ -6,7 +6,7 @@ const swaggerOptions = {
     info: {
       title: 'Meeting Project Backend API',
       version: '1.0.0',
-      description: 'Real-time video meeting system with WebRTC, AI attendance, and chat',
+      description: 'Real-time video meeting system with WebRTC and chat',
       contact: {
         name: 'Meeting Team',
         email: 'team@meetingproject.local',
@@ -71,18 +71,6 @@ const swaggerOptions = {
             timestamp: { type: 'string', format: 'date-time' },
           },
         },
-        AttendanceLog: {
-          type: 'object',
-          properties: {
-            _id: { type: 'string' },
-            room_id: { type: 'string' },
-            user_id: { type: 'string' },
-            confidence_score: { type: 'number' },
-            check_in_time: { type: 'string', format: 'date-time' },
-            check_out_time: { type: 'string', format: 'date-time' },
-            method: { type: 'string', enum: ['face_recognition', 'manual'] },
-          },
-        },
       },
     },
     security: [],
@@ -94,10 +82,6 @@ const swaggerOptions = {
       {
         name: 'Rooms',
         description: 'Meeting room management',
-      },
-      {
-        name: 'Attendance',
-        description: 'AI attendance and check-in',
       },
       {
         name: 'History',

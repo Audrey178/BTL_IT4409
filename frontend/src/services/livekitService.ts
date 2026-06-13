@@ -4,6 +4,7 @@ interface LiveKitTokenResponse {
   success: boolean;
   token: string;
   url: string;
+  roomName?: string;
 }
 
 export const livekitService = {
@@ -13,6 +14,11 @@ export const livekitService = {
    */
   getToken: async (roomCode: string): Promise<LiveKitTokenResponse> => {
     const res = await api.post('/livekit/token', { roomCode });
+    return res.data;
+  },
+
+  getCallToken: async (callId: string): Promise<LiveKitTokenResponse> => {
+    const res = await api.post('/livekit/call-token', { callId });
     return res.data;
   },
 };

@@ -173,10 +173,83 @@ export const messageValidation = {
       .valid('text', 'system', 'file')
       .default('text')
       .optional(),
+    clientId: Joi.string().max(128).trim().optional(),
+    replyToMessageId: Joi.string().trim().optional(),
+  }),
+
+  markRead: Joi.object({
+    messageIds: Joi.array()
+      .items(Joi.string().trim())
+      .max(200)
+      .optional(),
   }),
 
   getMessages: Joi.object({
     page: Joi.number().min(1).default(1).optional(),
+    limit: Joi.number().min(1).max(100).default(50).optional(),
+  }),
+
+  searchUsers: Joi.object({
+    email: Joi.string().min(1).trim().required(),
+  }),
+
+  createDirectConversation: Joi.object({
+    email: Joi.string().email().trim().optional(),
+    userId: Joi.string().trim().optional(),
+  }).or('email', 'userId'),
+
+  addConversationMember: Joi.object({
+    email: Joi.string().email().trim().optional(),
+    userId: Joi.string().trim().optional(),
+    userIds: Joi.array().items(Joi.string().trim()).min(1).max(20).optional(),
+    title: Joi.string().min(3).max(100).trim().optional(),
+  }).or('email', 'userId', 'userIds'),
+
+  updateConversation: Joi.object({
+    title: Joi.string().min(3).max(100).trim().required(),
+  }),
+
+  updateConversationMember: Joi.object({
+    nickname: Joi.string().max(100).trim().allow('', null).required(),
+  }),
+
+  updateMessage: Joi.object({
+    content: Joi.string().min(1).max(5000).trim().required(),
+    expectedVersion: Joi.number().integer().min(1).required(),
+    clientMutationId: Joi.string().max(128).trim().optional(),
+  }),
+
+  deleteMessage: Joi.object({
+    mode: Joi.string().valid('for_me', 'for_everyone').required(),
+    expectedVersion: Joi.number().integer().min(1).optional(),
+    clientMutationId: Joi.string().max(128).trim().optional(),
+  }),
+
+  forwardMessage: Joi.object({
+    targetType: Joi.string().valid('conversation', 'room').required(),
+    targetId: Joi.string().trim().required(),
+    clientId: Joi.string().max(128).trim().required(),
+    clientMutationId: Joi.string().max(128).trim().optional(),
+  }),
+
+  updateReceipt: Joi.object({
+    scopeType: Joi.string().valid('conversation', 'room').required(),
+    scopeId: Joi.string().trim().required(),
+    messageIds: Joi.array().items(Joi.string().trim()).max(200).optional(),
+    status: Joi.string().valid('delivered', 'read').required(),
+    clientMutationId: Joi.string().max(128).trim().optional(),
+  }),
+
+  mutateReaction: Joi.object({
+    clientMutationId: Joi.string().max(128).trim().optional(),
+  }),
+
+  listReactions: Joi.object({
+    emoji: Joi.string().valid('like', 'love', 'haha', 'wow', 'sad', 'angry').optional(),
+    limit: Joi.number().min(1).max(100).default(50).optional(),
+  }),
+
+  listEdits: Joi.object({
     limit: Joi.number().min(1).max(100).default(50).optional(),
   }),
 };

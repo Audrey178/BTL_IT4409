@@ -1,19 +1,22 @@
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import type { EventClickArg, EventContentArg } from "@fullcalendar/core";
 import { motion } from "motion/react";
-import { Calendar, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import SideBar from "@/components/layout/SideBar";
+import { CreateRoomDialog } from "@/components/pages/dashboard/room/CreateRoomDialog";
 import { ScheduleMeetingDialog } from "@/components/pages/dashboard/room/ScheduleMeetingDialog";
 import { MeetingDetailDialog } from "@/components/pages/schedule/MeetingDetailDialog";
 import { CalendarEventContent } from "@/components/pages/schedule/CalendarEventContent";
-import { useUpcomingMeetings } from "@/hooks/useUpcomingMeetings";
+import { ScheduleEmptyState } from "@/components/pages/schedule/ScheduleEmptyState";
+import { useUpcomingMeetings } from "@/hooks/dashboard/useUpcomingMeetings";
 import type { ScheduledMeeting } from "@/types";
 
 export function ScheduleScreen() {
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<ScheduledMeeting | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -50,20 +53,20 @@ export function ScheduleScreen() {
 
   return (
     <div className="flex min-h-screen">
-      <SideBar onNewMeeting={() => setShowScheduleDialog(true)} />
+      <SideBar onNewMeeting={() => setShowCreateDialog(true)} />
 
-      <main className="ml-64 flex-1 p-8 lg:p-12 bg-surface">
+      <main className="lg:ml-64 flex-1 pt-16 lg:pt-0 px-4 md:px-8 lg:px-12 py-6 lg:py-12 bg-surface min-h-screen">
         {/* Header */}
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+        <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8 lg:mb-10">
           <div className="space-y-2">
             <span className="text-primary font-semibold tracking-widest uppercase text-xs">
-              Calendar
+              Lịch
             </span>
-            <h1 className="text-5xl font-extrabold tracking-tighter text-on-surface">
-              Schedule
+            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tighter text-on-surface">
+              Lịch trình
             </h1>
-            <p className="text-on-surface-variant max-w-md text-lg">
-              Your upcoming meetings at a glance.
+            <p className="text-on-surface-variant max-w-md">
+              Các cuộc họp sắp tới của bạn.
             </p>
           </div>
           <Button
@@ -71,7 +74,7 @@ export function ScheduleScreen() {
             className="h-14 px-8 bg-gradient-to-r from-primary to-primary-container text-white rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3 group"
           >
             <Plus className="group-hover:rotate-90 transition-transform" size={20} />
-            Schedule Meeting
+            Lên lịch Meeting
           </Button>
         </header>
 
@@ -84,10 +87,10 @@ export function ScheduleScreen() {
         >
           {loading ? (
             <div className="flex items-center justify-center h-96 text-on-surface-variant">
-              Loading schedule…
+              Đang tải lịch trình…
             </div>
           ) : events.length === 0 ? (
-            <EmptyState onSchedule={() => setShowScheduleDialog(true)} />
+            <ScheduleEmptyState onSchedule={() => setShowScheduleDialog(true)} />
           ) : (
             <FullCalendar
               plugins={[dayGridPlugin, interactionPlugin]}
@@ -108,6 +111,10 @@ export function ScheduleScreen() {
       </main>
 
       {/* Dialogs */}
+      <CreateRoomDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+      />
       <ScheduleMeetingDialog
         open={showScheduleDialog}
         onOpenChange={setShowScheduleDialog}
@@ -118,29 +125,6 @@ export function ScheduleScreen() {
         onOpenChange={setDetailOpen}
         meeting={selectedMeeting}
       />
-    </div>
-  );
-}
-
-function EmptyState({ onSchedule }: { onSchedule: () => void }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
-      <div className="w-16 h-16 rounded-2xl bg-surface-container flex items-center justify-center">
-        <Calendar size={32} className="text-on-surface-variant/40" />
-      </div>
-      <div className="space-y-1">
-        <p className="font-bold text-on-surface">No meetings this month</p>
-        <p className="text-sm text-on-surface-variant/60">
-          Schedule a session to see it appear here.
-        </p>
-      </div>
-      <Button
-        onClick={onSchedule}
-        className="mt-2 h-11 px-6 bg-primary text-white rounded-full font-bold hover:scale-[1.02] active:scale-95 transition-all"
-      >
-        <Plus size={18} className="mr-2" />
-        Schedule Meeting
-      </Button>
     </div>
   );
 }

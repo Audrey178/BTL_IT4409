@@ -47,8 +47,8 @@ export const authService = {
     };
   },
 
-  logout: async () => {
-    const res = await api.post("/auth/logout");
+  logout: async (refreshToken?: string | null) => {
+    const res = await api.post("/auth/logout", refreshToken ? { refresh_token: refreshToken } : {});
     return res.data;
   },
 

@@ -32,7 +32,7 @@ const MeetingCard = ({ meeting, onJoin, onDelete, currentUserId, isDeleting = fa
 
   let dateDisplay = "TBD";
   let monthDisplay = "";
-  let timeDisplay = "Instant";
+  let timeDisplay = "Tức thì";
   let isActive = meeting.status === 'active' || meeting.status === 'waiting';
 
   if (meeting.started_at) {
@@ -55,17 +55,15 @@ const MeetingCard = ({ meeting, onJoin, onDelete, currentUserId, isDeleting = fa
   return (
     <motion.div
       whileHover={{ y: -2 }}
-      className={`bg-surface-container-lowest p-6 rounded-3xl shadow-sm border border-transparent flex flex-col md:flex-row md:items-center justify-between gap-6 transition-all ${
-        isActive ? 'hover:border-primary/50' : 'hover:border-outline-variant/20'
-      }`}
+      className={`bg-surface-container-lowest p-6 rounded-3xl shadow-sm border border-transparent flex flex-col md:flex-row md:items-center justify-between gap-6 transition-all ${isActive ? 'hover:border-primary/50' : 'hover:border-outline-variant/20'
+        }`}
     >
       <div className="flex items-start gap-6">
         <div
-          className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center shrink-0 ${
-            isActive
+          className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center shrink-0 ${isActive
               ? "bg-primary text-white shadow-lg shadow-primary/20"
               : "bg-surface-container text-on-surface-variant"
-          }`}
+            }`}
         >
           {monthDisplay ? (
             <>
@@ -78,7 +76,7 @@ const MeetingCard = ({ meeting, onJoin, onDelete, currentUserId, isDeleting = fa
             <Video size={24} />
           )}
         </div>
-        
+
         <div className="space-y-1">
           <h3 className="text-xl font-bold text-on-surface flex items-center gap-2">
             {meeting.title}
@@ -88,21 +86,21 @@ const MeetingCard = ({ meeting, onJoin, onDelete, currentUserId, isDeleting = fa
           </h3>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-medium">
             <span className={`flex items-center gap-1.5 ${isActive ? 'text-primary' : 'text-on-surface-variant/70'}`}>
-              <Clock size={16} /> 
+              <Clock size={16} />
               {timeDisplay}
               {timeDiffMinutes !== null && timeDiffMinutes > 0 && timeDiffMinutes <= 60 && (
                 <span className="ml-2 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-md font-bold">
-                  Starts in {Math.ceil(timeDiffMinutes)}m
+                  Bắt đầu sau {Math.ceil(timeDiffMinutes)}m
                 </span>
               )}
             </span>
           </div>
           <div className="flex items-center gap-2 mt-4 text-xs font-bold text-on-surface-variant/50 uppercase tracking-wider">
-            Room Code: <span className="font-mono text-on-surface-variant tracking-normal bg-surface-container px-2 py-1 rounded-md">{meeting.room_code}</span>
+            Mã phòng: <span className="font-mono text-on-surface-variant tracking-normal bg-surface-container px-2 py-1 rounded-md">{meeting.room_code}</span>
           </div>
         </div>
       </div>
-      
+
       <div className="flex items-center gap-3">
         {canDelete && (
           <Button
@@ -121,15 +119,13 @@ const MeetingCard = ({ meeting, onJoin, onDelete, currentUserId, isDeleting = fa
         <Button
           onClick={() => onJoin(meeting.room_code)}
           disabled={isTooEarly}
-          className={`px-10 h-12 rounded-full font-bold transition-all active:scale-95 ${
-            isTooEarly ? "opacity-50" : ""
-          } ${
-            isActive
+          className={`px-10 h-12 rounded-full font-bold transition-all active:scale-95 ${isTooEarly ? "opacity-50" : ""
+            } ${isActive
               ? "bg-primary text-white hover:shadow-lg shadow-primary/20"
               : "variant-outline border bg-surface-container text-on-surface border-outline-variant/20 hover:bg-surface-container-high"
-          }`}
+            }`}
         >
-          {isTooEarly ? 'Starts Soon' : 'Join'}
+          {isTooEarly ? 'Sắp bắt đầu' : 'Tham gia'}
         </Button>
       </div>
     </motion.div>

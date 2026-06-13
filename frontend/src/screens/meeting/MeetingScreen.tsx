@@ -1,27 +1,25 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useSocket } from "@/hooks/useSocket";
-import { useLiveKit } from "@/hooks/useLiveKit";
-import { useRoomEvents } from "@/hooks/useRoomEvents";
-import { useChatEvents } from "@/hooks/useChatEvents";
-import { useRecording } from "@/hooks/useRecording";
+import { useLiveKit } from "@/hooks/meetings/useLiveKit";
+import { useRoomEvents } from "@/hooks/meetings/useRoomEvents";
+import { useChatEvents } from "@/hooks/chat/useChatEvents";
+import { useRecording } from "@/hooks/meetings/useRecording";
 import { useMediaStore } from "@/stores/mediaStore";
 import { useMeetingStore } from "@/stores/meetingStore";
 import { useAuthStore } from "@/stores/useAuthStore";
-import { useVideoFilter } from "@/hooks/useVideoFilter";
+import { useVideoFilter } from "@/hooks/filter/useVideoFilter";
 import { useFilterStore } from "@/stores/filterStore";
 import { ROOM_EVENTS, MEDIA_EVENTS } from "@/socket/events";
+import { VIDEO_FILTERS } from "@/constants/videoFilters";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import {
   Mic, MicOff, Video, VideoOff, ScreenShare, ScreenShareOff,
-  PhoneOff, MessageSquare, Users, X, XCircle,
-  Sparkles, CheckCircle2, Badge, MonitorUp, Circle, Crown,
+  PhoneOff, MessageSquare, Users, Sparkles, MonitorUp, Circle, Badge,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Switch } from "@/components/ui/switch";
 import { WaitingRoomPanel } from "@/components/pages/meeting/WaitingRoomPanel";
 import { ChatPanel } from "@/components/pages/meeting/ChatPanel";
 import { EndMeetingDialog } from "@/components/pages/meeting/EndMeetingDialog";
@@ -29,60 +27,12 @@ import ParticipantsPanel from '@/components/pages/meeting/ParticipantsPanel';
 import { RecordingBanner } from "@/components/pages/meeting/RecordingBanner";
 import { RecordingConsentDialog } from "@/components/pages/meeting/RecordingConsentDialog";
 import { StopRecordingDialog } from "@/components/pages/meeting/StopRecordingDialog";
-import { roomService } from "@/services/roomService";
 import FilterPanel from "@/components/pages/meeting/FilterPanel";
-
-type VideoFilterKey = "original" | "warm" | "mono" | "cool" | "golden";
-
-type FaceBox = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
-
-const VIDEO_FILTERS: Record<
-  VideoFilterKey,
-  { label: string; css: string; accent: string }
-> = {
-  original: {
-    label: "Original",
-    css: "none",
-    accent: "bg-surface-container-highest",
-  },
-  warm: {
-    label: "Warm",
-    css: "sepia(0.25) saturate(1.35) contrast(1.04) brightness(1.02)",
-    accent: "bg-orange-200",
-  },
-  mono: {
-    label: "Mono",
-    css: "grayscale(1) contrast(1.05)",
-    accent: "bg-stone-300",
-  },
-  cool: {
-    label: "Cool",
-    css: "saturate(1.15) hue-rotate(20deg) contrast(1.05)",
-    accent: "bg-blue-100",
-  },
-  golden: {
-    label: "Golden",
-    css: "sepia(0.18) saturate(1.55) brightness(1.08) contrast(1.03)",
-    accent: "bg-rose-100",
-  },
-};
-
-type FaceDetectorInstance = {
-  detect: (
-    source: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
-  ) => Promise<Array<{ boundingBox: DOMRectReadOnly }>>;
-};
-
-type FaceDetectorConstructor = new (options?: {
-  fastMode?: boolean;
-  maxDetectedFaces?: number;
-}) => FaceDetectorInstance;
-
+import { ScreenShareVideo } from "@/components/pages/meeting/ScreenShareVideo";
+import { SelfPreviewVideo } from "@/components/pages/meeting/SelfPreviewVideo";
+import { VideoTile } from "@/components/pages/meeting/VideoTile";
+import { ControlButton } from "@/components/pages/meeting/ControlButton";
+import { roomService } from "@/services/roomService";
 
 export function MeetingScreen() {
   const { id } = useParams<{ id: string }>();
@@ -100,8 +50,8 @@ export function MeetingScreen() {
     disconnect: lkDisconnect,
   } = useLiveKit(roomCode || null);
   useRoomEvents(roomCode || null, lkDisconnect);
-  const { sendMessage } = useChatEvents(roomCode || null);
-  
+  const { sendMessage, editMessage, deleteMessage, addReaction, removeReaction } = useChatEvents(roomCode || null);
+
   useVideoFilter();
 
   const {
@@ -172,7 +122,7 @@ export function MeetingScreen() {
     // 4. Reset meeting store
     reset();
     // 5. Navigate home
-    toast.info('You have left the meeting');
+    toast.info('Bạn đã rời khỏi Meeting');
     navigate('/', { replace: true });
   }, [socket, roomCode, myUserId, lkDisconnect, cleanupMedia, reset, navigate]);
 
@@ -191,10 +141,10 @@ export function MeetingScreen() {
       // 5. Reset meeting store
       reset();
       // 6. Navigate home
-      toast.success('Meeting ended for all participants');
+      toast.success('Meeting đã kết thúc cho tất cả mọi người');
       navigate('/', { replace: true });
     } catch (error) {
-      toast.error('Failed to end meeting. Please try again.');
+      toast.error('Lỗi khi kết thúc Meeting. Vui lòng thử lại.');
       setIsEndingMeeting(false);
     }
   }, [isEndingMeeting, roomCode, socket, lkDisconnect, cleanupMedia, reset, navigate]);
@@ -203,14 +153,14 @@ export function MeetingScreen() {
     async (newHostId: string, participantName: string) => {
       if (!roomCode || !isHost || transferringHostId) return;
 
-      const confirmed = window.confirm(`Transfer host role to ${participantName}?`);
+      const confirmed = window.confirm(`Chuyển vai trò Host cho ${participantName}?`);
       if (!confirmed) return;
 
       setTransferringHostId(newHostId);
       try {
         await roomService.transferHost(roomCode, newHostId);
       } catch (error) {
-        toast.error('Failed to transfer host role');
+        toast.error('Lỗi khi chuyển vai trò Host');
       } finally {
         setTransferringHostId(null);
       }
@@ -228,8 +178,8 @@ export function MeetingScreen() {
     : null;
 
   const presenterName = isMeSharing
-    ? `${authUser?.full_name || "You"} (You, presenting)`
-    : sharingParticipant?.fullName || "Someone";
+    ? `${authUser?.full_name || "Bạn"} (Bạn, đang trình bày)`
+    : sharingParticipant?.fullName || "Ai đó";
 
   const meetingStatus = useMeetingStore((s) => s.status);
 
@@ -290,7 +240,7 @@ export function MeetingScreen() {
   // Screen share handlers
   const handleToggleScreenShare = useCallback(async () => {
     if (!isScreenSharing && screenSharingUserId) {
-      toast.error("Someone else is already sharing their screen");
+      toast.error("Có người khác đang chia sẻ màn hình");
       return;
     }
 
@@ -336,32 +286,38 @@ export function MeetingScreen() {
     : sharingParticipant?.screenStream || null;
 
   const totalVisibleTiles = participants.length + 1;
-  const meetingGridStyle = totalVisibleTiles >= 4
-    ? { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gridTemplateRows: 'repeat(2, minmax(0, 1fr))' }
-    : { gridTemplateColumns: `repeat(${totalVisibleTiles}, minmax(0, 1fr))` };
+  const getGridClass = (count: number) => {
+    if (count === 1) return "grid-cols-1 grid-rows-1";
+    if (count === 2) return "grid-cols-1 grid-rows-2 md:grid-cols-2 md:grid-rows-1";
+    if (count >= 3 && count <= 4) return "grid-cols-2 grid-rows-2";
+    if (count >= 5 && count <= 6) return "grid-cols-2 grid-rows-3 md:grid-cols-3 md:grid-rows-2";
+    return "grid-cols-3 md:grid-cols-4";
+  };
 
   return (
     <div className="h-screen flex flex-col bg-surface overflow-hidden">
       {/* Header */}
-      <header className="bg-surface-container-low/50 backdrop-blur-xl px-8 py-4 flex justify-between items-center border-b border-outline-variant/10 z-50">
-        <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold tracking-tighter text-orange-900">The Digital Hearth</h1>
-          <div className="px-3 py-1 bg-primary/10 rounded-full flex items-center gap-2">
-            <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-            <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Live: {roomCode}</span>
+      <header className="bg-surface-container-low/50 backdrop-blur-xl px-3 md:px-8 py-3 md:py-4 flex justify-between items-center border-b border-outline-variant/10 z-50">
+        <div className="flex items-center gap-2 md:gap-4 min-w-0">
+          <h1 className="text-base md:text-2xl font-bold tracking-tighter text-orange-900 truncate">WebCall</h1>
+          <div className="px-2 md:px-3 py-1 bg-primary/10 rounded-full flex items-center gap-1.5 shrink-0">
+            <span className="w-1.5 h-1.5 md:w-2 md:h-2 bg-primary rounded-full animate-pulse" />
+            <span className="text-[9px] md:text-[10px] font-bold text-primary uppercase tracking-widest">
+              <span className="hidden sm:inline">Trực tiếp: </span>{roomCode}
+            </span>
           </div>
           {/* Recording indicator — blinking red dot in header */}
           <RecordingBanner isRecording={isRecording} formattedDuration={formattedDuration} />
         </div>
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2 bg-surface-container rounded-full px-4 py-2">
-            <span className="text-sm font-bold text-on-surface">{participants.length + 1} in room</span>
+        <div className="flex items-center gap-2 md:gap-6 shrink-0">
+          <div className="hidden sm:flex items-center gap-2 bg-surface-container rounded-full px-3 py-1.5">
+            <span className="text-sm font-bold text-on-surface">{participants.length + 1} người</span>
           </div>
-          <div className="flex items-center gap-3 bg-white/50 px-4 py-2 rounded-full border border-outline-variant/20">
-            <Avatar className="w-8 h-8">
+          <div className="flex items-center gap-2 bg-white/50 px-2 md:px-4 py-1.5 md:py-2 rounded-full border border-outline-variant/20">
+            <Avatar className="w-7 h-7 md:w-8 md:h-8">
               <AvatarFallback>{authUser?.full_name?.[0]?.toUpperCase() || "U"}</AvatarFallback>
             </Avatar>
-            <span className="font-bold text-orange-900 text-sm">{authUser?.full_name || "You"}</span>
+            <span className="font-bold text-orange-900 text-sm hidden md:inline">{authUser?.full_name || "Bạn"}</span>
             {isHost && (
               <Badge className="bg-primary/10 text-primary hover:bg-primary/10 text-[10px] px-2">Host</Badge>
             )}
@@ -381,7 +337,7 @@ export function MeetingScreen() {
             <div className="flex items-center gap-3">
               <MonitorUp size={18} className="text-primary" />
               <span className="text-sm font-bold text-primary">{presenterName}</span>
-              <span className="text-xs text-primary/60">· Presentation audio</span>
+              <span className="text-xs text-primary/60">· Âm thanh trình bày</span>
             </div>
             <Button
               onClick={handleToggleScreenShare}
@@ -389,7 +345,7 @@ export function MeetingScreen() {
               size="sm"
               className="rounded-full px-6 font-bold text-xs"
             >
-              Stop presenting
+              Dừng trình bày
             </Button>
           </motion.div>
         )}
@@ -397,7 +353,7 @@ export function MeetingScreen() {
 
 
 
-      <div className="flex-1 flex overflow-hidden p-6 gap-6 relative">
+      <div className="flex-1 flex overflow-hidden p-2 pb-24 md:p-6 gap-2 md:gap-6 relative">
         {/* ============ PRESENTATION MODE ============ */}
         {isAnyoneSharing ? (
           <div className="flex-1 flex gap-4">
@@ -412,14 +368,14 @@ export function MeetingScreen() {
               )}
               <div className="absolute bottom-6 left-6 flex items-center gap-3 px-4 py-2 bg-black/50 backdrop-blur-md rounded-full text-white text-sm border border-white/10">
                 <MonitorUp size={14} className="text-primary" />
-                <span className="font-bold">Presenting: {presenterName}</span>
+                <span className="font-bold">Đang trình bày: {presenterName}</span>
               </div>
             </div>
 
             {/* Right Filmstrip */}
             <div className="w-48 flex flex-col gap-3 overflow-y-auto scrollbar-hide">
               <VideoTile
-                name={authUser?.full_name || "You"}
+                name={authUser?.full_name || "Bạn"}
                 stream={localStream}
                 isMuted={isAudioMuted}
                 isVideoOff={isVideoMuted}
@@ -446,11 +402,10 @@ export function MeetingScreen() {
         ) : (
           /* ============ NORMAL GRID MODE ============ */
           <div
-            className={`flex-1 grid gap-4 transition-all duration-500 ${showChat ? "mr-0" : ""}`}
-            style={meetingGridStyle}
+            className={`flex-1 grid gap-2 md:gap-4 transition-all duration-500 ${showChat ? "md:mr-0" : ""} ${getGridClass(totalVisibleTiles)}`}
           >
             <VideoTile
-              name={authUser?.full_name || "You"}
+              name={authUser?.full_name || "Bạn"}
               stream={localStream}
               isMuted={isAudioMuted}
               isVideoOff={isVideoMuted}
@@ -475,7 +430,15 @@ export function MeetingScreen() {
         {/* Chat Sidebar */}
         <AnimatePresence>
           {showChat && roomCode && (
-            <ChatPanel roomCode={roomCode} onClose={() => setShowChat(false)} sendMessage={sendMessage} />
+            <ChatPanel
+              roomCode={roomCode}
+              onClose={() => setShowChat(false)}
+              sendMessage={sendMessage}
+              editMessage={editMessage}
+              deleteMessage={deleteMessage}
+              addReaction={addReaction}
+              removeReaction={removeReaction}
+            />
           )}
         </AnimatePresence>
         {/* Filters Panel */}
@@ -483,53 +446,61 @@ export function MeetingScreen() {
       </div>
 
       {/* Controls Bar */}
-      <div className="h-24 bg-surface-container-low/30 flex items-center justify-center px-8 relative z-50">
-        <div className="flex items-center gap-4 bg-white/80 backdrop-blur-2xl px-8 py-4 rounded-full shadow-2xl border border-white/40">
+      <div className="fixed bottom-0 left-0 w-full md:relative bg-white/90 md:bg-surface-container-low/30 backdrop-blur-xl border-t border-outline-variant/10 md:border-none flex items-center px-3 py-3 md:px-8 md:py-4 z-50">
+        <div className="flex items-center justify-start md:justify-center gap-2 md:gap-3 w-full overflow-x-auto scrollbar-hide px-2">
+          {/* Mic */}
           <ControlButton
-            icon={isAudioMuted ? <MicOff size={24} /> : <Mic size={24} />}
+            icon={isAudioMuted ? <MicOff size={20} /> : <Mic size={20} />}
             onClick={handleToggleAudio}
             active={isAudioMuted}
           />
+          {/* Camera */}
           <ControlButton
-            icon={isVideoMuted ? <VideoOff size={24} /> : <Video size={24} />}
+            icon={isVideoMuted ? <VideoOff size={20} /> : <Video size={20} />}
             onClick={handleToggleVideo}
             active={isVideoMuted}
           />
-          <div className="w-px h-10 bg-outline-variant/30 mx-2" />
+          {/* Share Screen — shown on all, smaller on mobile */}
           <ControlButton
-            icon={isScreenSharing ? <ScreenShareOff size={24} /> : <ScreenShare size={24} />}
-            label={isScreenSharing ? "Stop Share" : "Share Screen"}
+            icon={isScreenSharing ? <ScreenShareOff size={20} /> : <ScreenShare size={20} />}
             onClick={handleToggleScreenShare}
             active={isScreenSharing}
             className={isScreenSharing
-              ? "px-8 w-auto bg-error text-white shadow-lg shadow-error/20 border-none"
-              : "px-8 w-auto bg-linear-to-r from-primary to-primary-container text-white shadow-lg shadow-primary/20 border-none"
+              ? "bg-error text-white shadow-lg shadow-error/20 border-none hover:bg-error/90"
+              : ""
             }
           />
-          <ControlButton icon={<MessageSquare size={24} />} onClick={handleToggleChat} active={showChat} badge={unreadCount > 0 ? unreadCount : undefined} />
+          {/* Chat */}
+          <ControlButton icon={<MessageSquare size={20} />} onClick={handleToggleChat} active={showChat} badge={unreadCount > 0 ? unreadCount : undefined} />
+          {/* Waiting Room — host only */}
           {isHost && roomCode && <WaitingRoomPanel roomCode={roomCode} waitingList={waitingList} removeWaitingUser={removeWaitingUser} />}
+          {/* Participants — host only */}
           {isHost && roomCode && <ParticipantsPanel roomCode={roomCode} />}
-          <ControlButton icon={<Sparkles size={24} />} onClick={() => setShowFilters(!showFilters)} active={showFilters} />
+          {/* Filters */}
+          <ControlButton icon={<Sparkles size={20} />} onClick={() => setShowFilters(!showFilters)} active={showFilters} />
+          {/* Recording — host only */}
           {isHost && (
             <ControlButton
               icon={
                 isRecording ? (
-                  <div className="flex items-center gap-1.5 px-1">
-                    <span className="w-2.5 h-2.5 bg-red-600 rounded-full animate-pulse" />
-                    <span className="text-xs font-bold text-red-600 tracking-tight">{formattedDuration}</span>
+                  <div className="flex items-center gap-1 px-0.5">
+                    <span className="w-2 h-2 bg-red-600 rounded-full animate-pulse shrink-0" />
+                    <span className="text-[10px] font-bold text-red-600 tracking-tight hidden md:inline">{formattedDuration}</span>
                   </div>
                 ) : (
-                  <Circle size={24} className="fill-stone-600/30 text-stone-600 stroke-[3px]" />
+                  <Circle size={20} className="fill-stone-600/30 text-stone-600 stroke-[3px]" />
                 )
               }
               onClick={isRecording ? () => setShowStopRecordingDialog(true) : startRecording}
               active={isRecording}
-              className={isRecording ? "w-auto px-4 border-red-200 bg-red-50 hover:bg-red-100 shadow-lg shadow-red-500/10 text-red-600 animate-pulse" : ""}
+              className={isRecording ? "border-red-200 bg-red-50 hover:bg-red-100 shadow-lg shadow-red-500/10 text-red-600" : ""}
             />
           )}
-          <div className="w-px h-10 bg-outline-variant/30 mx-2" />
+          {/* Divider */}
+          <div className="w-px h-8 bg-outline-variant/30 mx-1" />
+          {/* End Call */}
           <ControlButton
-            icon={<PhoneOff size={24} />}
+            icon={<PhoneOff size={20} />}
             className="bg-error text-white shadow-lg shadow-error/20 border-none hover:bg-error/90"
             onClick={() => setShowEndDialog(true)}
           />
@@ -537,7 +508,7 @@ export function MeetingScreen() {
 
         {/* Self Preview Floating — hide during presentation mode */}
         {!isAnyoneSharing && (
-          <div className="absolute right-8 bottom-8 w-48 aspect-video rounded-2xl overflow-hidden border-2 border-primary shadow-2xl bg-stone-900">
+          <div className="fixed bottom-24 right-4 md:absolute md:right-8 md:bottom-32 w-28 md:w-48 aspect-video rounded-2xl overflow-hidden border-2 border-primary shadow-2xl bg-stone-900 z-40">
             {/* Local Video Preview */}
             <div className={`absolute inset-0 w-full h-full transition-opacity duration-500 ${localStream && !isVideoMuted ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
               {localStream && <SelfPreviewVideo stream={localStream} filterCss={effectiveCssFilter} />}
@@ -581,139 +552,3 @@ export function MeetingScreen() {
     </div>
   );
 }
-
-/* ====================== Sub-components ====================== */
-
-function ScreenShareVideo({ stream }: { stream: MediaStream }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream;
-      videoRef.current.play().catch(err => console.warn("Screen share play error:", err));
-    }
-  }, [stream]);
-  return <video ref={videoRef} autoPlay playsInline className="w-full h-full object-contain bg-black" />;
-}
-
-function SelfPreviewVideo({ stream, filterCss }: { stream: MediaStream, filterCss?: string }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el) return;
-    if (el.srcObject !== stream) {
-      el.srcObject = stream;
-      el.play().catch(err => console.warn("Self preview play error:", err));
-    }
-    // Apply CSS filter only when no AI filter is active (canvas handles it otherwise)
-    el.style.filter = filterCss && filterCss !== "none" ? filterCss : "";
-  }, [stream, filterCss]);
-  return <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover -scale-x-100" />;
-}
-
-function VideoTile({
-  name, stream, isMuted = false, isVideoOff = false,
-  isHost = false, isLocal = false, compact = false, filterCss,
-  showTransferAction = false, isTransferPending = false, onTransferHost,
-}: {
-  name: string; stream?: MediaStream | null; isMuted?: boolean;
-  isVideoOff?: boolean; isHost?: boolean; isLocal?: boolean; compact?: boolean; filterCss?: string;
-  showTransferAction?: boolean; isTransferPending?: boolean; onTransferHost?: () => void;
-}) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    if (videoRef.current) {
-      // Chỉ gán lại srcObject nếu stream thực sự thay đổi
-      // Việc gán lại srcObject liên tục (ngay cả khi stream giống hệt) 
-      // sẽ khiến browser lập tức abort quá trình play trước đó, gây ra AbortError.
-      if (videoRef.current.srcObject !== (stream ?? null)) {
-        console.log("[LiveKit Debug] [VideoTile] Stream changed, setting new srcObject for", name, "| stream:", !!stream);
-        videoRef.current.srcObject = stream ?? null;
-      }
-      
-      if (filterCss) {
-        videoRef.current.style.filter = filterCss;
-      }
-      
-      if (isVideoOff || !stream) {
-        videoRef.current.pause();
-      } else {
-        videoRef.current.play().catch((err) => {
-          if (err.name !== "AbortError") {
-             console.warn("[LiveKit Debug] VideoTile play error:", err);
-          }
-        });
-      }
-    }
-  }, [stream, isVideoOff, filterCss, name, isLocal]);
-
-  return (
-    <div className={`relative overflow-hidden bg-stone-900 shadow-sm group transition-all duration-500 flex flex-col justify-center items-center ${
-      compact ? "rounded-2xl aspect-video" : "rounded-[2.5rem]"
-    } ${isHost && !compact ? "scale-[1.02] border-2 border-primary/20" : ""}`}>
-      
-      {/* Video Container (always in DOM, smooth transition) */}
-      <div className={`absolute inset-0 w-full h-full transition-opacity duration-500 ${stream && !isVideoOff ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
-        <video ref={videoRef} autoPlay playsInline muted={isLocal} className="w-full h-full object-cover -scale-x-100" />
-      </div>
-
-      {/* Avatar Fallback Container (always in DOM, smooth transition) */}
-      <div className={`absolute inset-0 w-full h-full flex items-center justify-center transition-opacity duration-500 ${stream && !isVideoOff ? "opacity-0 pointer-events-none" : "opacity-100 pointer-events-auto"}`}>
-        <Avatar className={compact ? "w-10 h-10" : "w-24 h-24"}>
-          <AvatarFallback className={`bg-surface-container-highest text-on-surface-variant ${compact ? "text-lg" : "text-4xl"}`}>
-            {name?.[0]?.toUpperCase() || "G"}
-          </AvatarFallback>
-        </Avatar>
-      </div>
-      
-      <div className={`absolute bottom-3 left-3 flex items-center gap-2 px-3 py-1.5 bg-black/40 backdrop-blur-md rounded-full text-white border border-white/10 ${
-        compact ? "text-[10px]" : "text-sm bottom-6 left-6 gap-3 px-4 py-2"
-      }`}>
-        {isMuted ? <MicOff size={compact ? 10 : 14} className="text-error" /> : <Mic size={compact ? 10 : 14} />}
-        <span className="font-bold truncate max-w-20">{name}</span>
-        {isHost && !compact && (
-          <span className="text-[10px] text-primary-fixed bg-primary/20 px-1.5 py-0.5 rounded">Host</span>
-        )}
-      </div>
-
-      {showTransferAction && !isLocal && onTransferHost && (
-        <button
-          type="button"
-          onClick={onTransferHost}
-          disabled={isTransferPending}
-          className="absolute top-3 right-3 px-3 py-1.5 rounded-full bg-black/45 text-white border border-white/15 text-[11px] font-semibold flex items-center gap-1.5 hover:bg-black/65 disabled:opacity-60"
-        >
-          <Crown size={12} />
-          {isTransferPending ? 'Transferring...' : 'Make host'}
-        </button>
-      )}
-    </div>
-  );
-}
-
-
-
-function ControlButton({ icon, label, active = false, badge, className, onClick }: {
-  icon: React.ReactNode; label?: string; active?: boolean;
-  badge?: number; className?: string; onClick?: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      title={label}
-      className={`relative h-14 w-14 rounded-full flex items-center justify-center transition-all active:scale-90 border border-outline-variant/20 ${
-        active ? "bg-secondary-container text-primary border-primary/20" : "bg-surface-container-highest text-on-surface-variant hover:bg-orange-100"
-      } ${className}`}
-    >
-      {icon}
-      {label && <span className="ml-2 font-bold text-sm">{label}</span>}
-      {badge !== undefined && (
-        <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
-          {badge}
-        </span>
-      )}
-    </button>
-  );
-}
-
-

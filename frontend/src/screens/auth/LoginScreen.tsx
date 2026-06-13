@@ -12,8 +12,8 @@ import { authService } from "@/services/authService";
 import { toast } from "sonner";
 
 const signInSchema = z.object({
-  email: z.email("Email is not valid!"),
-  password: z.string().min(8, "Password have least 8 characters."),
+  email: z.email("Email không hợp lệ!"),
+  password: z.string().min(8, "Mật khẩu phải có ít nhất 8 ký tự."),
 });
 
 type SignInFormValue = z.infer<typeof signInSchema>;
@@ -79,8 +79,8 @@ export function LoginScreen() {
 
   return (
     <AuthLayout
-      title="Welcome back."
-      description="Sign in to continue your conversations and manage your digital hearth."
+      title="Chào mừng trở lại."
+      description="Đăng nhập để tiếp tục trò chuyện và quản lý các cuộc họp của bạn."
     >
       {registered && (
         <div className="mb-6 p-5 rounded-2xl bg-primary/5 border border-primary/20 flex flex-col gap-3 text-center">
@@ -128,7 +128,7 @@ export function LoginScreen() {
           <Input
             id="email"
             className="h-14 rounded-xl border-none bg-surface-container-highest text-on-surface placeholder:text-outline focus-visible:ring-2 focus-visible:ring-primary/20"
-            placeholder="hello@digitalhearth.com"
+            placeholder="Nhập địa chỉ email"
             type="email"
             {...register("email")}
           />
@@ -144,14 +144,14 @@ export function LoginScreen() {
               htmlFor="password"
               className="block text-sm font-semibold text-on-surface-variant"
             >
-              Password
+              Mật khẩu
             </label>
             <button
               type="button"
               onClick={() => navigate("/forgot-password")}
               className="text-xs font-bold text-primary hover:underline"
             >
-              Forgot password?
+              Quên mật khẩu?
             </button>
           </div>
           <div className="relative">
@@ -183,20 +183,20 @@ export function LoginScreen() {
           type="submit"
           className="w-full h-14 bg-gradient-to-r from-primary to-primary-container text-white font-bold text-lg rounded-full shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
         >
-          {isSubmitting ? "Signing in..." : "Sign In"}
+          {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
         </Button>
       </form>
 
       <div className="mt-8 pt-8 border-t border-outline-variant/20 flex flex-col items-center gap-4">
         <p className="text-sm text-on-surface-variant">
-          Don't have an account?
+          Chưa có tài khoản?
           <button
             onClick={() => {
               navigate("/signup");
             }}
             className="text-primary font-bold hover:underline ml-1"
           >
-            Sign Up
+            Đăng ký
           </button>
         </p>
         <div className="flex gap-4 w-full">

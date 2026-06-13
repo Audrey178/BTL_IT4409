@@ -45,11 +45,10 @@ export function ParticipantsPanel({ roomCode }: { roomCode: string }) {
     setProcessingIds((prev) => new Set(prev).add(userId));
     try {
       await roomService.kickUser(roomCode, userId);
-      // Remove locally as optimistic update; server will broadcast user left/kicked
       removeParticipant(userId);
-      toast.info('User kicked');
+      toast.info('Đã xóa người dùng');
     } catch {
-      toast.error('Failed to kick user');
+      toast.error('Lỗi khi xóa người dùng');
     } finally {
       setProcessingIds((prev) => {
         const next = new Set(prev);
@@ -78,14 +77,14 @@ export function ParticipantsPanel({ roomCode }: { roomCode: string }) {
           </span>
         )}
       </SheetTrigger>
-      <SheetContent className="w-[380px] bg-surface-container-lowest border-outline-variant/10 p-0 flex flex-col">
+      <SheetContent className="w-full sm:w-[380px] bg-surface-container-lowest border-outline-variant/10 p-0 flex flex-col z-[120]">
         <SheetHeader className="p-6 pb-4 border-b border-outline-variant/10">
           <SheetTitle className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
               <Users size={20} className="text-primary" />
             </div>
             <div>
-              <span className="text-lg font-bold text-on-surface">Participants</span>
+              <span className="text-lg font-bold text-on-surface">Người tham gia</span>
               <Badge className="ml-2 bg-primary/10 text-primary px-2 py-0.5 text-[10px] font-bold">{count}</Badge>
             </div>
           </SheetTitle>
@@ -97,8 +96,8 @@ export function ParticipantsPanel({ roomCode }: { roomCode: string }) {
               <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-4">
                 <Users size={32} className="text-on-surface-variant/30" />
               </div>
-              <h4 className="font-bold text-on-surface mb-1">No participants</h4>
-              <p className="text-xs text-on-surface-variant/50">Participants will appear here</p>
+              <h4 className="font-bold text-on-surface mb-1">Không có người tham gia</h4>
+              <p className="text-xs text-on-surface-variant/50">Người tham gia sẽ hiển thị ở đây</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -117,7 +116,7 @@ export function ParticipantsPanel({ roomCode }: { roomCode: string }) {
                       </span>
                     </div>
                     <p className="text-[10px] text-on-surface-variant/50 truncate">
-                      Room host
+                      Host của phòng
                     </p>
                   </div>
                 </div>
@@ -132,7 +131,7 @@ export function ParticipantsPanel({ roomCode }: { roomCode: string }) {
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <p className="font-bold text-sm text-on-surface truncate">{p.fullName}</p>
-                      <p className="text-[10px] text-on-surface-variant/50 truncate">{p.isAudioMuted ? 'Muted' : 'Unmuted'} • {p.isVideoMuted ? 'Video off' : 'Video on'}</p>
+                      <p className="text-[10px] text-on-surface-variant/50 truncate">{p.isAudioMuted ? 'Tắt mic' : 'Bật mic'} • {p.isVideoMuted ? 'Tắt Camera' : 'Bật Camera'}</p>
                     </div>
                     <div className="flex gap-2 shrink-0">
                       <Button size="icon" onClick={() => handleKick(p.id)} disabled={isProcessing || p.id === myId} className="w-9 h-9 rounded-xl bg-error/10 text-error hover:bg-error hover:text-white transition-all" aria-label={`Kick ${p.fullName}`}>

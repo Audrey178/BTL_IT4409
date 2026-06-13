@@ -1,7 +1,6 @@
 import { useState, useCallback } from "react";
 import { motion } from "motion/react";
 import {
-  Archive,
   Search,
   CalendarDays,
   ChevronLeft,
@@ -11,15 +10,20 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import SideBar from "@/components/layout/SideBar";
+import { CreateRoomDialog } from "@/components/pages/dashboard/room/CreateRoomDialog";
 import { RecordingCard } from "@/components/pages/archives/RecordingCard";
 import { DeleteRecordingDialog } from "@/components/pages/archives/DeleteRecordingDialog";
-import { useRecordings } from "@/hooks/useRecordings";
+import { ArchivesLoadingSkeleton } from "@/components/pages/archives/ArchivesLoadingSkeleton";
+import { ArchivesEmptyState } from "@/components/pages/archives/ArchivesEmptyState";
+import { ArchivesErrorState } from "@/components/pages/archives/ArchivesErrorState";
+import { useRecordings } from "@/hooks/recordings/useRecordings";
 import type { Recording } from "@/services/recordingService";
 
 export function ArchivesScreen() {
   const { recordings, loading, error, pagination, fetchRecordings, removeRecording } =
     useRecordings();
 
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [searchCode, setSearchCode] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -69,27 +73,27 @@ export function ArchivesScreen() {
 
   return (
     <div className="flex min-h-screen">
-      <SideBar />
+      <SideBar onNewMeeting={() => setShowCreateDialog(true)} />
 
-      <main className="ml-64 flex-1 p-8 lg:p-12 bg-surface">
+      <main className="lg:ml-64 flex-1 pt-16 lg:pt-0 px-4 md:px-8 lg:px-12 py-6 lg:py-12 bg-surface min-h-screen">
         {/* Header */}
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+        <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8 lg:mb-10">
           <div className="space-y-2">
             <span className="text-primary font-semibold tracking-widest uppercase text-xs">
-              Library
+              Thư viện
             </span>
-            <h1 className="text-5xl font-extrabold tracking-tighter text-on-surface">
-              Archives
+            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tighter text-on-surface">
+              Lưu trữ
             </h1>
-            <p className="text-on-surface-variant max-w-md text-lg">
-              Browse and manage your meeting recordings.
+            <p className="text-on-surface-variant max-w-md">
+              Xem và quản lý các bản ghi meeting của bạn.
             </p>
           </div>
           {pagination.total > 0 && (
             <div className="flex items-center gap-2 bg-surface-container rounded-full px-4 py-2">
               <Video size={16} className="text-on-surface-variant" />
               <span className="text-sm font-bold text-on-surface">
-                {pagination.total} recording{pagination.total !== 1 ? "s" : ""}
+                {pagination.total} bản ghi
               </span>
             </div>
           )}
@@ -106,7 +110,7 @@ export function ArchivesScreen() {
             {/* Room code search */}
             <div className="flex-1 min-w-[200px]">
               <label className="text-xs font-bold text-on-surface-variant/60 uppercase tracking-wider mb-1.5 block">
-                Search by Room Code
+                Tìm kiếm theo mã phòng
               </label>
               <div className="relative">
                 <Search
@@ -127,7 +131,7 @@ export function ArchivesScreen() {
             {/* Date from */}
             <div className="min-w-[160px]">
               <label className="text-xs font-bold text-on-surface-variant/60 uppercase tracking-wider mb-1.5 block">
-                From
+                Từ ngày
               </label>
               <div className="relative">
                 <CalendarDays
@@ -146,7 +150,7 @@ export function ArchivesScreen() {
             {/* Date to */}
             <div className="min-w-[160px]">
               <label className="text-xs font-bold text-on-surface-variant/60 uppercase tracking-wider mb-1.5 block">
-                To
+                Đến ngày
               </label>
               <div className="relative">
                 <CalendarDays
@@ -169,7 +173,7 @@ export function ArchivesScreen() {
                 className="h-11 px-6 bg-primary text-white rounded-full font-bold hover:scale-[1.02] active:scale-95 transition-all"
               >
                 <Search size={16} className="mr-2" />
-                Search
+                Tìm kiếm
               </Button>
               {hasActiveFilters && (
                 <Button
@@ -178,7 +182,7 @@ export function ArchivesScreen() {
                   className="h-11 px-4 rounded-full font-bold border-outline-variant/20"
                 >
                   <X size={16} className="mr-1" />
-                  Clear
+                  Xóa lọc
                 </Button>
               )}
             </div>
@@ -187,11 +191,11 @@ export function ArchivesScreen() {
 
         {/* Content */}
         {loading ? (
-          <LoadingSkeleton />
+          <ArchivesLoadingSkeleton />
         ) : error ? (
-          <ErrorState message={error} onRetry={() => fetchRecordings({ page: 1 })} />
+          <ArchivesErrorState message={error} onRetry={() => fetchRecordings({ page: 1 })} />
         ) : recordings.length === 0 ? (
-          <EmptyState hasFilters={!!hasActiveFilters} onClear={handleClearFilters} />
+          <ArchivesEmptyState hasFilters={!!hasActiveFilters} onClear={handleClearFilters} />
         ) : (
           <>
             {/* Recording Grid */}
@@ -221,7 +225,7 @@ export function ArchivesScreen() {
                   className="rounded-full px-4"
                 >
                   <ChevronLeft size={16} className="mr-1" />
-                  Previous
+                  Trước
                 </Button>
                 <div className="flex items-center gap-1">
                   {Array.from({ length: pagination.pages }, (_, i) => i + 1)
@@ -258,7 +262,7 @@ export function ArchivesScreen() {
                   onClick={() => handlePageChange(pagination.page + 1)}
                   className="rounded-full px-4"
                 >
-                  Next
+                  Sau
                   <ChevronRight size={16} className="ml-1" />
                 </Button>
               </div>
@@ -266,6 +270,12 @@ export function ArchivesScreen() {
           </>
         )}
       </main>
+
+      {/* Dialogs */}
+      <CreateRoomDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+      />
 
       {/* Delete Dialog */}
       <DeleteRecordingDialog
@@ -281,85 +291,4 @@ export function ArchivesScreen() {
   );
 }
 
-/* ---- Sub-components ---- */
 
-function LoadingSkeleton() {
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-      {Array.from({ length: 8 }).map((_, i) => (
-        <div
-          key={i}
-          className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 overflow-hidden"
-          aria-busy="true"
-        >
-          <div className="aspect-video bg-surface-container-high animate-pulse" />
-          <div className="p-4 space-y-3">
-            <div className="h-4 bg-surface-container-high rounded-lg animate-pulse w-3/4" />
-            <div className="h-3 bg-surface-container-high rounded-lg animate-pulse w-1/2" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function EmptyState({
-  hasFilters,
-  onClear,
-}: {
-  hasFilters: boolean;
-  onClear: () => void;
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
-      <div className="w-20 h-20 rounded-3xl bg-surface-container flex items-center justify-center">
-        <Archive size={40} className="text-on-surface-variant/30" />
-      </div>
-      <div className="space-y-1">
-        <p className="font-bold text-on-surface text-lg">
-          {hasFilters ? "No recordings found" : "No recordings yet"}
-        </p>
-        <p className="text-sm text-on-surface-variant/60 max-w-sm">
-          {hasFilters
-            ? "Try adjusting your search or filters."
-            : "Recordings from your meetings will appear here."}
-        </p>
-      </div>
-      {hasFilters && (
-        <Button
-          onClick={onClear}
-          variant="outline"
-          className="mt-2 rounded-full px-6 font-bold"
-        >
-          Clear filters
-        </Button>
-      )}
-    </div>
-  );
-}
-
-function ErrorState({
-  message,
-  onRetry,
-}: {
-  message: string;
-  onRetry: () => void;
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
-      <div className="w-20 h-20 rounded-3xl bg-red-50 flex items-center justify-center">
-        <Video size={40} className="text-error/40" />
-      </div>
-      <div className="space-y-1">
-        <p className="font-bold text-on-surface text-lg">Something went wrong</p>
-        <p className="text-sm text-on-surface-variant/60 max-w-sm">{message}</p>
-      </div>
-      <Button
-        onClick={onRetry}
-        className="mt-2 rounded-full px-6 font-bold bg-primary text-white"
-      >
-        Try again
-      </Button>
-    </div>
-  );
-}
