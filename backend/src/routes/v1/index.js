@@ -6,6 +6,7 @@ import livekitRoutes from './livekit.route.js';
 import recordingRoutes from './recording.route.js';
 import chatRoutes from './chat.route.js';
 import notificationRoutes from './notification.route.js';
+import adminRoutes from './admin.route.js';
 
 const router = express.Router();
 
@@ -17,6 +18,7 @@ router.use('/livekit', livekitRoutes);
 router.use('/recordings', recordingRoutes);
 router.use('/chat', chatRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/admin', adminRoutes);
 
 /**
  * @swagger

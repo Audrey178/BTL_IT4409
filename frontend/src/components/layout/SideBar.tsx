@@ -9,6 +9,7 @@ import {
   Settings,
   Menu,
   X,
+  ShieldCheck,
 } from "lucide-react";
 import React, { useState } from "react";
 import NavItem from "./NavItem";
@@ -23,7 +24,7 @@ interface SideBarProps {
 const SideBar = ({ onNewMeeting }: SideBarProps) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const isActive = (path: string) => {
@@ -91,6 +92,15 @@ const SideBar = ({ onNewMeeting }: SideBarProps) => {
       </div>
 
       <div className="p-6 space-y-3 border-t border-outline-variant/10">
+        {user?.role === "admin" && (
+          <button
+            onClick={() => { navigate("/admin"); setMobileOpen(false); }}
+            className="flex items-center gap-3 text-primary hover:text-primary/80 transition-colors w-full py-1"
+          >
+            <ShieldCheck size={18} />
+            <span className="text-sm font-bold">Admin Dashboard</span>
+          </button>
+        )}
         <button className="flex items-center gap-3 text-on-surface-variant hover:text-primary transition-colors w-full py-1">
           <HelpCircle size={18} />
           <span className="text-sm font-medium">Hỗ trợ</span>
