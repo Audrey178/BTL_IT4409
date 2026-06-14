@@ -24,8 +24,12 @@ import { useMessageStore } from "@/stores/messageStore";
  // notifications removed - popup removed
 
 function AuthRoute({ children }: { children: React.ReactNode }) {
-  const { accessToken } = useAuthStore();
+  const { accessToken, user } = useAuthStore();
   if (accessToken) {
+    // Admin gets redirected to /admin, regular users to /
+    if (user?.role === "admin") {
+      return <Navigate to="/admin" replace />;
+    }
     return <Navigate to="/" replace />;
   }
   return <>{children}</>;

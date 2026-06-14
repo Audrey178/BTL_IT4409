@@ -83,4 +83,15 @@ export const optionalAuth = async (req, res, next) => {
   }
 };
 
-export default { authenticate, optionalAuth };
+// Admin-only route guard (must be used AFTER authenticate)
+export const requireAdmin = (req, res, next) => {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(HTTP_STATUS.FORBIDDEN).json({
+      success: false,
+      message: 'Admin access required',
+    });
+  }
+  next();
+};
+
+export default { authenticate, optionalAuth, requireAdmin };

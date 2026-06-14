@@ -182,4 +182,83 @@ router.post('/resend-verification', authController.resendVerification.bind(authC
 router.post('/forgot-password', validate(authValidation.forgotPassword), authController.forgotPassword.bind(authController));
 router.post('/reset-password', validate(authValidation.resetPassword), authController.resetPassword.bind(authController));
 
+/**
+ * [DEV ONLY] POST /auth/dev/create-admin
+ * Tạo tài khoản admin trực tiếp trong database (chỉ hoạt động khi NODE_ENV=development)
+ * Body: { email, password, full_name, secret }
+ * secret phải match DEV_SEED_SECRET trong .env (mặc định: "dev-seed-2024")
+ */
+if (process.env.NODE_ENV !== 'production' || process.env.ALLOW_SEED_IN_PROD === 'true') {
+  // Helper: create admin bypassing pre-save hook
+  const upsertAdmin = async (email, password, fullName) => {
+    const { User } = await import('../../models/index.js');
+    const bcryptjs = (await import('bcryptjs')).default;
+
+    const salt = await bcryptjs.genSalt(10);
+    const hash = await bcryptjs.hash(password, salt);
+
+    // Use raw MongoDB collection to bypass Mongoose pre-save hooks
+    const collection = User.collection;
+    const adminEmail = email.toLowerCase();
+
+    await collection.deleteMany({ email: adminEmail }); // remove any existing
+
+    await collection.insertOne({
+      email: adminEmail,
+      password_hash: hash,
+      full_name: fullName,
+      email_verified: true,
+      role: 'admin',
+      avatar: null,
+      face_embeddings: [],
+      fcm_tokens: [],
+      verify_token: null,
+      verify_token_expires: null,
+      reset_password_token: null,
+      reset_password_expires: null,
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+
+    return { email: adminEmail };
+  };
+
+  /**
+   * POST /auth/dev/create-admin
+   * Body: { email, password, full_name, secret }
+   */
+  router.post('/dev/create-admin', async (req, res) => {
+    try {
+      const { email = 'admin@webcall.com', password = 'Admin@123456', full_name = 'System Admin', secret } = req.body;
+      const expectedSecret = process.env.DEV_SEED_SECRET || 'dev-seed-2024';
+      if (secret !== expectedSecret) {
+        return res.status(403).json({ success: false, message: 'Invalid seed secret' });
+      }
+      const result = await upsertAdmin(email, password, full_name);
+      res.status(201).json({ success: true, message: 'Admin user created/reset', email: result.email });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  /**
+   * POST /auth/dev/reset-admin  (alias)
+   */
+  router.post('/dev/reset-admin', async (req, res) => {
+    try {
+      const { email = 'admin@webcall.com', password = 'Admin@123456', full_name = 'System Admin', secret } = req.body;
+      const expectedSecret = process.env.DEV_SEED_SECRET || 'dev-seed-2024';
+      if (secret !== expectedSecret) {
+        return res.status(403).json({ success: false, message: 'Invalid seed secret' });
+      }
+      const result = await upsertAdmin(email, password, full_name);
+      res.status(200).json({ success: true, message: 'Admin user reset', email: result.email });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+}
+
+
 export default router;
+

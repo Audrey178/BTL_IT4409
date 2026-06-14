@@ -9,7 +9,9 @@
     "start": "node src/server.js",
     "lint": "eslint src --fix",
     "test": "node --test",
-    "verify": "node scripts/verify.js"
+    "verify": "node scripts/verify.js",
+    "seed:admin": "node scripts/seed-admin.js",
+    "seed:admin:prod": "node scripts/seed-admin-production.js"
   },
   "keywords": [
     "meeting",
