@@ -81,4 +81,33 @@ export async function sendResetPasswordEmail(to, token, fullName) {
   }
 }
 
-export default { sendVerificationEmail, sendResetPasswordEmail };
+export async function sendMeetingInviteEmail(to, roomCode, hostName, fullName) {
+  try {
+    const appUrl = process.env.APP_URL || `http://localhost:${process.env.PORT || 3000}`;
+    const link = `${appUrl}/lobby?code=${roomCode}`;
+
+    const mailOptions = {
+      from: process.env.EMAIL_FROM || `no-reply@${process.env.SMTP_USER?.split('@')?.[1] || 'example.com'}`,
+      to,
+      subject: `You are invited to a meeting by ${hostName}`,
+      html: `
+        <p>Hi ${fullName || ''},</p>
+        <p><strong>${hostName}</strong> has invited you to join a meeting room.</p>
+        <p><strong>Meeting Room Code:</strong> ${roomCode}</p>
+        <p>You can join by clicking the link below:</p>
+        <p><a href="${link}">Join Meeting Room</a></p>
+        <p>If the link doesn't work, copy and paste this URL into your browser:</p>
+        <p>${link}</p>
+      `,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    logger.info({ to, roomCode, messageId: info.messageId }, 'Meeting invitation email sent');
+    return info;
+  } catch (error) {
+    logger.error('Failed to send meeting invitation email', error);
+    throw error;
+  }
+}
+
+export default { sendVerificationEmail, sendResetPasswordEmail, sendMeetingInviteEmail };
