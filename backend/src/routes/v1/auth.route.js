@@ -189,6 +189,74 @@ router.post('/reset-password', validate(authValidation.resetPassword), authContr
  * secret phải match DEV_SEED_SECRET trong .env (mặc định: "dev-seed-2024")
  */
 if (process.env.NODE_ENV !== 'production' || process.env.ALLOW_SEED_IN_PROD === 'true') {
+  /**
+   * POST /auth/dev/test-email
+   * Test SMTP connection and optionally send a test email
+   * Body: { secret, email? }
+   */
+  router.post('/dev/test-email', async (req, res) => {
+    try {
+      const { secret, email } = req.body;
+      const expectedSecret = process.env.DEV_SEED_SECRET || 'dev-seed-2024';
+      if (secret !== expectedSecret) {
+        return res.status(403).json({ success: false, message: 'Invalid seed secret' });
+      }
+
+      const nodemailer = (await import('nodemailer')).default;
+      const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+      const port = Number(process.env.SMTP_PORT || 587);
+      const secure = port === 465;
+
+      const transporter = nodemailer.createTransport({
+        host,
+        port,
+        secure,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
+        tls: { rejectUnauthorized: false },
+      });
+
+      // Step 1: Verify connection
+      await transporter.verify();
+
+      // Step 2: Send test email if address provided
+      let sendResult = null;
+      if (email) {
+        sendResult = await transporter.sendMail({
+          from: `"WebCall Test" <${process.env.EMAIL_FROM || process.env.SMTP_USER}>`,
+          to: email,
+          subject: '✅ WebCall SMTP Test - Thành công!',
+          html: `<p>Email gửi thành công từ server lúc <strong>${new Date().toISOString()}</strong></p>`,
+        });
+      }
+
+      res.json({
+        success: true,
+        smtp: { host, port, secure, user: process.env.SMTP_USER },
+        verified: true,
+        emailSent: sendResult ? { messageId: sendResult.messageId, response: sendResult.response } : null,
+      });
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: err.message,
+        code: err.code,
+        command: err.command,
+        smtp: {
+          host: process.env.SMTP_HOST,
+          port: process.env.SMTP_PORT,
+          user: process.env.SMTP_USER,
+        },
+      });
+    }
+  });
+
+
   // Helper: create admin bypassing pre-save hook
   const upsertAdmin = async (email, password, fullName) => {
     const { User } = await import('../../models/index.js');

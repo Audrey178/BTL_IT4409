@@ -57,12 +57,10 @@ class AuthService {
       await user.save();
       logger.info(`User registered (pending verification): ${user.email}`);
 
-      // send verification email (async)
-      try {
-        await emailService.sendVerificationEmail(user.email, token, user.full_name);
-      } catch (err) {
-        logger.warn('Failed to send verification email', err);
-      }
+      // send verification email (fire-and-forget, don't block response)
+      emailService.sendVerificationEmail(user.email, token, user.full_name)
+        .then(() => logger.info(`Verification email sent to ${user.email}`))
+        .catch((err) => logger.error({ err, email: user.email }, 'Failed to send verification email'));
 
       return {
         success: true,
@@ -329,11 +327,10 @@ class AuthService {
       user.verify_token_expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
       await user.save();
 
-      try {
-        await emailService.sendVerificationEmail(user.email, token, user.full_name);
-      } catch (err) {
-        logger.warn('Failed to resend verification email', err);
-      }
+      // fire-and-forget
+      emailService.sendVerificationEmail(user.email, token, user.full_name)
+        .then(() => logger.info(`Resend verification email sent to ${user.email}`))
+        .catch((err) => logger.error({ err, email: user.email }, 'Failed to resend verification email'));
 
       return true;
     } catch (error) {
@@ -355,11 +352,10 @@ class AuthService {
       user.reset_password_expires = new Date(Date.now() + 1 * 60 * 60 * 1000); // 1 hour
       await user.save();
 
-      try {
-        await emailService.sendResetPasswordEmail(user.email, token, user.full_name);
-      } catch (err) {
-        logger.warn('Failed to send reset password email', err);
-      }
+      // fire-and-forget
+      emailService.sendResetPasswordEmail(user.email, token, user.full_name)
+        .then(() => logger.info(`Reset password email sent to ${user.email}`))
+        .catch((err) => logger.error({ err, email: user.email }, 'Failed to send reset password email'));
 
       return true;
     } catch (error) {
