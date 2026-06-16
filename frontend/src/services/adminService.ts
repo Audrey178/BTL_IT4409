@@ -132,4 +132,26 @@ export const adminService = {
     const res = await api.delete(`/admin/meetings/${roomCode}`);
     return res.data;
   },
+
+  createUser: async (
+    data: Partial<AdminUser> & { password?: string }
+  ): Promise<{ success: boolean; user: AdminUser }> => {
+    const res = await api.post("/admin/users", data);
+    return res.data;
+  },
+
+  updateUser: async (
+    id: string,
+    data: Partial<AdminUser> & { password?: string }
+  ): Promise<{ success: boolean; user: AdminUser }> => {
+    const res = await api.put(`/admin/users/${id}`, data);
+    return res.data;
+  },
+
+  deleteUser: async (
+    id: string
+  ): Promise<{ success: boolean; message: string }> => {
+    const res = await api.delete(`/admin/users/${id}`);
+    return res.data;
+  },
 };

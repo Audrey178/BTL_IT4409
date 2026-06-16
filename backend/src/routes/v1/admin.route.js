@@ -21,8 +21,11 @@ router.use(authenticate, requireAdmin);
 router.get('/stats', adminController.getStats.bind(adminController));
 
 // Users
+router.post('/users', adminController.createUser.bind(adminController));
 router.get('/users', adminController.getAllUsers.bind(adminController));
 router.get('/users/:id', adminController.getUserById.bind(adminController));
+router.put('/users/:id', adminController.updateUser.bind(adminController));
+router.delete('/users/:id', adminController.deleteUser.bind(adminController));
 
 // Meetings - NOTE: /active must come BEFORE /:roomCode to avoid conflict
 router.get('/meetings/active', adminController.getActiveMeetings.bind(adminController));

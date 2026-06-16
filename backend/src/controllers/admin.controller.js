@@ -67,6 +67,64 @@ class AdminController {
   }
 
   /**
+   * POST /api/v1/admin/users
+   */
+  async createUser(req, res) {
+    try {
+      const { full_name, email, password, role, email_verified } = req.body;
+      if (!full_name || !email || !password) {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({
+          success: false,
+          message: 'Họ tên, email và mật khẩu là bắt buộc.',
+        });
+      }
+
+      const result = await adminService.createUser({ full_name, email, password, role, email_verified });
+      res.status(HTTP_STATUS.CREATED).json(result);
+    } catch (error) {
+      logger.error('Admin createUser controller error:', error);
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+
+  /**
+   * PUT /api/v1/admin/users/:id
+   */
+  async updateUser(req, res) {
+    try {
+      const { id } = req.params;
+      const result = await adminService.updateUser(id, req.body);
+      res.status(HTTP_STATUS.OK).json(result);
+    } catch (error) {
+      logger.error('Admin updateUser controller error:', error);
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+
+  /**
+   * DELETE /api/v1/admin/users/:id
+   */
+  async deleteUser(req, res) {
+    try {
+      const { id } = req.params;
+      const result = await adminService.deleteUser(id);
+      res.status(HTTP_STATUS.OK).json(result);
+    } catch (error) {
+      logger.error('Admin deleteUser controller error:', error);
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+
+  /**
    * GET /api/v1/admin/meetings?status=active&page=1&limit=10&search=
    */
   async getAllMeetings(req, res) {
