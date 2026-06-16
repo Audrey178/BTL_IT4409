@@ -63,7 +63,8 @@ export function LoginScreen() {
     const { email, password } = data;
     const { success, error } = await signIn(email, password);
     if (success) {
-      navigate("/"); // or "/dashboard"
+      const signedInUser = useAuthStore.getState().user;
+      navigate(signedInUser?.role === "admin" ? "/admin" : "/");
     } else {
       if (error?.errors && Array.isArray(error.errors)) {
         error.errors.forEach((err: any) => {

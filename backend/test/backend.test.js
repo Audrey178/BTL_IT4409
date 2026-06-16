@@ -153,6 +153,27 @@ describe('backend smoke and regression tests', () => {
     assert.equal(body.success, false);
   });
 
+  test('admin stats endpoint requires admin role', async () => {
+    const regularUser = await registerUser('admin-regular');
+
+    const forbidden = await request('/api/v1/admin/stats', {
+      headers: { authorization: `Bearer ${regularUser.accessToken}` },
+    });
+    assert.equal(forbidden.response.status, 403);
+    assert.equal(forbidden.body.success, false);
+
+    const adminUser = await registerUser('admin-user');
+    await User.updateOne({ _id: adminUser.user._id }, { $set: { role: 'admin' } });
+
+    const allowed = await request('/api/v1/admin/stats', {
+      headers: { authorization: `Bearer ${adminUser.accessToken}` },
+    });
+    assert.equal(allowed.response.status, 200);
+    assert.equal(allowed.body.success, true);
+    assert.equal(typeof allowed.body.stats.totalUsers, 'number');
+    assert.equal(typeof allowed.body.stats.totalActiveMeetings, 'number');
+  });
+
   test('attendance check-in is idempotent while active', { skip: 'Attendance module deleted in main' }, async () => {
     const auth = await registerUser('attendance');
 

@@ -20,6 +20,7 @@ const meetingEventSchema = new mongoose.Schema(
         'user_joined',
         'user_left',
         'user_kicked',
+        'host_transferred',
         'room_ended',
         'user_approved',
         'user_rejected',
