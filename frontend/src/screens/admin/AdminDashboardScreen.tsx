@@ -19,6 +19,8 @@ import { AdminSidebar } from "@/components/layout/AdminSidebar";
 import { StatsGrid } from "@/components/pages/admin/StatsGrid";
 import { MeetingTable } from "@/components/pages/admin/MeetingTable";
 import { UserDetailModal } from "@/components/pages/admin/UserDetailModal";
+import { UserFormModal } from "@/components/pages/admin/UserFormModal";
+import { adminService, AdminUser } from "@/services/adminService";
 
 // ─── Tab: Overview ─────────────────────────────────────────────────────────────
 function OverviewTab() {
@@ -160,6 +162,8 @@ function UsersTab() {
 
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [localSearch, setLocalSearch] = useState(usersSearch);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [userToEdit, setUserToEdit] = useState<AdminUser | null>(null);
 
   useEffect(() => {
     fetchUsers(1, 10, "");
@@ -185,9 +189,9 @@ function UsersTab() {
 
   return (
     <div className="space-y-4">
-      {/* Search */}
-      <div className="flex gap-3">
-        <div className="relative flex-1">
+      {/* Search & Actions */}
+      <div className="flex flex-wrap gap-3">
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant w-4 h-4" />
           <input
             type="text"
@@ -200,9 +204,19 @@ function UsersTab() {
         </div>
         <button
           onClick={handleSearch}
-          className="px-4 py-2.5 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary/90 transition-colors"
+          className="px-4 py-2.5 rounded-xl bg-surface-container-high text-on-surface font-semibold text-sm hover:bg-surface-container-highest transition-colors"
         >
           Tìm kiếm
+        </button>
+        <button
+          onClick={() => {
+            setUserToEdit(null);
+            setIsFormOpen(true);
+          }}
+          className="px-4 py-2.5 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary/90 transition-colors flex items-center gap-2"
+        >
+          <Users className="w-4 h-4" />
+          Thêm người dùng
         </button>
       </div>
 
@@ -279,13 +293,41 @@ function UsersTab() {
                     </td>
                     <td className="px-5 py-4 text-on-surface-variant text-xs">{formatDate(u.created_at)}</td>
                     <td className="px-5 py-4 text-right">
-                      <button
-                        onClick={() => setSelectedUserId(u._id)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-primary bg-primary/10 hover:bg-primary/20 transition-colors"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        Xem
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => setSelectedUserId(u._id)}
+                          className="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors"
+                          title="Xem chi tiết"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setUserToEdit(u);
+                            setIsFormOpen(true);
+                          }}
+                          className="p-1.5 rounded-lg text-primary hover:bg-primary/10 transition-colors"
+                          title="Chỉnh sửa"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (window.confirm(`Bạn có chắc chắn muốn xóa người dùng ${u.full_name}?\nHành động này sẽ xóa tất cả phòng họp do người này làm host.`)) {
+                              try {
+                                await adminService.deleteUser(u._id);
+                                fetchUsers(usersPagination?.page || 1, 10, usersSearch);
+                              } catch (err: any) {
+                                alert(err.response?.data?.message || "Lỗi khi xóa người dùng.");
+                              }
+                            }
+                          }}
+                          className="p-1.5 rounded-lg text-error hover:bg-error/10 transition-colors"
+                          title="Xóa"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                        </button>
+                      </div>
                     </td>
                   </motion.tr>
                 ))
@@ -328,6 +370,16 @@ function UsersTab() {
       <UserDetailModal
         userId={selectedUserId}
         onClose={() => setSelectedUserId(null)}
+      />
+
+      <UserFormModal 
+        isOpen={isFormOpen} 
+        onClose={() => setIsFormOpen(false)} 
+        user={userToEdit}
+        onSuccess={() => {
+          setIsFormOpen(false);
+          fetchUsers(usersPagination?.page || 1, 10, usersSearch);
+        }}
       />
     </div>
   );

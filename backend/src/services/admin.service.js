@@ -48,12 +48,12 @@ class AdminService {
   }
 
   /**
-   * Lấy danh sách users (chỉ role = 'user'), phân trang
+   * Lấy danh sách users, phân trang
    */
   async getAllUsers({ page = 1, limit = 10, search = '' } = {}) {
     try {
       const skip = (page - 1) * limit;
-      const query = { role: 'user' };
+      const query = {};
 
       if (search) {
         query.$or = [
@@ -131,6 +131,154 @@ class AdminService {
       throw error;
     }
   }
+
+  /**
+   * Tạo người dùng mới
+   */
+  async createUser(data) {
+    try {
+      const { full_name, email, password, role, email_verified } = data;
+
+      // Check if email exists
+      const existingUser = await User.findOne({ email });
+      if (existingUser) {
+        const error = new Error('Email already in use');
+        error.statusCode = HTTP_STATUS.BAD_REQUEST;
+        throw error;
+      }
+
+      // Hash password
+      const bcrypt = (await import('bcryptjs')).default;
+      const salt = await bcrypt.genSalt(10);
+      const password_hash = await bcrypt.hash(password, salt);
+
+      const user = await User.create({
+        full_name,
+        email,
+        password_hash,
+        role: role || 'user',
+        email_verified: email_verified !== undefined ? email_verified : false,
+      });
+
+      return {
+        success: true,
+        user: {
+          _id: user._id,
+          full_name: user.full_name,
+          email: user.email,
+          role: user.role,
+          email_verified: user.email_verified,
+        },
+      };
+    } catch (error) {
+      logger.error('Admin createUser error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Cập nhật thông tin người dùng
+   */
+  async updateUser(userId, data) {
+    try {
+      const user = await User.findById(userId);
+      if (!user) {
+        const error = new Error('User not found');
+        error.statusCode = HTTP_STATUS.NOT_FOUND;
+        throw error;
+      }
+
+      const { full_name, email, password, role, email_verified } = data;
+
+      // Check email duplicate if email is changed
+      if (email && email !== user.email) {
+        const existingEmail = await User.findOne({ email });
+        if (existingEmail) {
+          const error = new Error('Email already in use');
+          error.statusCode = HTTP_STATUS.BAD_REQUEST;
+          throw error;
+        }
+        user.email = email;
+      }
+
+      if (full_name !== undefined) user.full_name = full_name;
+      if (role !== undefined) user.role = role;
+      if (email_verified !== undefined) user.email_verified = email_verified;
+
+      // Update password if provided
+      if (password) {
+        const bcrypt = (await import('bcryptjs')).default;
+        const salt = await bcrypt.genSalt(10);
+        user.password_hash = await bcrypt.hash(password, salt);
+      }
+
+      await user.save();
+
+      return {
+        success: true,
+        user: {
+          _id: user._id,
+          full_name: user.full_name,
+          email: user.email,
+          role: user.role,
+          email_verified: user.email_verified,
+        },
+      };
+    } catch (error) {
+      logger.error('Admin updateUser error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Xóa người dùng (kèm xóa các room host bởi user)
+   */
+  async deleteUser(userId) {
+    try {
+      const user = await User.findById(userId);
+      if (!user) {
+        const error = new Error('User not found');
+        error.statusCode = HTTP_STATUS.NOT_FOUND;
+        throw error;
+      }
+
+      // Xóa tất cả các phòng người này làm host
+      const hostedRooms = await Room.find({ host_id: userId });
+      const roomIds = hostedRooms.map(r => r._id);
+      
+      if (roomIds.length > 0) {
+        await RoomMember.deleteMany({ room_id: { $in: roomIds } });
+        await Room.deleteMany({ _id: { $in: roomIds } });
+        // Clean up Redis cho các phòng này (có thể làm async mà không cần await nếu nhiều phòng, nhưng tạm thời cứ await)
+        try {
+          const redis = getRedisClient();
+          for (const room of hostedRooms) {
+            const roomCode = room.room_code;
+            if (roomCode) {
+              await redis.del(`room:${roomCode}:members`);
+              await redis.del(`room:${roomCode}:host`);
+              await redis.del(`room:${roomCode}:host:socket`);
+            }
+          }
+        } catch (redisErr) {
+          logger.warn('Admin deleteUser: Redis cleanup failed:', redisErr.message);
+        }
+      }
+
+      // Xóa lịch sử tham gia các phòng khác của user này
+      await RoomMember.deleteMany({ user_id: userId });
+
+      // Cuối cùng xóa user
+      await User.deleteOne({ _id: userId });
+
+      logger.info(`Admin deleted user: ${userId}`);
+      return { success: true, message: 'User deleted successfully' };
+    } catch (error) {
+      logger.error('Admin deleteUser error:', error);
+      throw error;
+    }
+  }
+
 
   /**
    * Lấy tất cả meetings với filter
