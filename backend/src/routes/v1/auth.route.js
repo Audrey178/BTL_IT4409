@@ -191,7 +191,7 @@ router.post('/reset-password', validate(authValidation.resetPassword), authContr
 if (process.env.NODE_ENV !== 'production' || process.env.ALLOW_SEED_IN_PROD === 'true') {
   /**
    * POST /auth/dev/test-email
-   * Test SMTP connection and optionally send a test email
+   * Test Brevo API connection and optionally send a test email
    * Body: { secret, email? }
    */
   router.post('/dev/test-email', async (req, res) => {
@@ -202,56 +202,56 @@ if (process.env.NODE_ENV !== 'production' || process.env.ALLOW_SEED_IN_PROD === 
         return res.status(403).json({ success: false, message: 'Invalid seed secret' });
       }
 
-      const nodemailer = (await import('nodemailer')).default;
-      const host = process.env.SMTP_HOST || 'smtp.gmail.com';
-      const port = Number(process.env.SMTP_PORT || 587);
-      const secure = port === 465;
+      const apiKey = process.env.BREVO_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({
+          success: false,
+          error: 'BREVO_API_KEY is not set in environment variables',
+          hint: 'Sign up at brevo.com, create an API key, add BREVO_API_KEY to Render env vars',
+        });
+      }
 
-      const transporter = nodemailer.createTransport({
-        host,
-        port,
-        secure,
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
+      // Verify API key works by sending a test email
+      const senderEmail = process.env.EMAIL_USER || process.env.EMAIL_FROM || 'truongminhtrang012@gmail.com';
+      const toAddress = email || senderEmail;
+      
+      const payload = {
+        sender: {
+          name: "WebCall Test",
+          email: senderEmail,
         },
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 15000,
-        tls: { rejectUnauthorized: false },
+        to: [{ email: toAddress }],
+        subject: '✅ WebCall Brevo Test — Thành công!',
+        htmlContent: `<p>Email gửi thành công qua Brevo API từ server lúc <strong>${new Date().toISOString()}</strong></p>`,
+      };
+
+      const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": apiKey,
+        },
+        body: JSON.stringify(payload),
       });
 
-      // Step 1: Verify connection
-      await transporter.verify();
+      const result = await response.json();
 
-      // Step 2: Send test email if address provided
-      let sendResult = null;
-      if (email) {
-        sendResult = await transporter.sendMail({
-          from: `"WebCall Test" <${process.env.EMAIL_FROM || process.env.SMTP_USER}>`,
-          to: email,
-          subject: '✅ WebCall SMTP Test - Thành công!',
-          html: `<p>Email gửi thành công từ server lúc <strong>${new Date().toISOString()}</strong></p>`,
-        });
+      if (!response.ok) {
+        return res.status(500).json({ success: false, error: 'Brevo API Error', details: result });
       }
 
       res.json({
         success: true,
-        smtp: { host, port, secure, user: process.env.SMTP_USER },
-        verified: true,
-        emailSent: sendResult ? { messageId: sendResult.messageId, response: sendResult.response } : null,
+        message: `Test email sent to ${toAddress}`,
+        messageId: result.messageId,
+        provider: 'Brevo HTTP API',
+        apiKeyConfigured: true,
       });
     } catch (err) {
       res.status(500).json({
         success: false,
         error: err.message,
-        code: err.code,
-        command: err.command,
-        smtp: {
-          host: process.env.SMTP_HOST,
-          port: process.env.SMTP_PORT,
-          user: process.env.SMTP_USER,
-        },
+        hint: 'Check BREVO_API_KEY environment variable',
       });
     }
   });
