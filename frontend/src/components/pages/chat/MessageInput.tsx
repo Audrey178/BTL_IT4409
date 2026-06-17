@@ -185,7 +185,6 @@ export function MessageInput({
                       previewUrl,
                       uploading: false,
                       error: null,
-                      caption: '',
                       // store the raw File so we can upload on Send
                       // @ts-ignore
                       rawFile: f,
