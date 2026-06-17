@@ -212,9 +212,9 @@ if (process.env.NODE_ENV !== 'production' || process.env.ALLOW_SEED_IN_PROD === 
       }
 
       // Verify API key works by sending a test email
-      const senderEmail = process.env.EMAIL_USER || process.env.EMAIL_FROM || 'truongminhtrang012@gmail.com';
+      const senderEmail = process.env.EMAIL_USER || process.env.EMAIL_FROM;
       const toAddress = email || senderEmail;
-      
+
       const payload = {
         sender: {
           name: "WebCall Test",

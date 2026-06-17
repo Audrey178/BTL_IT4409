@@ -15,14 +15,14 @@ import logger from '../utils/logger.js';
 function getSenderInfo() {
   return {
     name: process.env.APP_NAME || 'WebCall',
-    email: process.env.EMAIL_USER || process.env.EMAIL_FROM || 'truongminhtrang012@gmail.com'
+    email: process.env.EMAIL_USER || process.env.EMAIL_FROM
   };
 }
 
 // Helper: Gửi email thông qua Brevo HTTP API (native fetch)
 async function sendBrevoEmail(to, subject, htmlContent) {
   const brevoApiKey = process.env.BREVO_API_KEY;
-  
+
   if (!brevoApiKey) {
     logger.warn('BREVO_API_KEY is not set — emails will not be sent');
     return null;
@@ -63,7 +63,7 @@ async function sendBrevoEmail(to, subject, htmlContent) {
 export async function sendVerificationEmail(to, token, fullName) {
   const appUrl = process.env.APP_URL || `http://localhost:${process.env.PORT || 3000}`;
   const link = `${appUrl}/auth/verify-email?token=${encodeURIComponent(token)}`;
-  
+
   const subject = '🔐 Xác thực email của bạn - WebCall';
   const htmlContent = `
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px; background: #fff8f3; border-radius: 16px; border: 1px solid #dfc0b7;">
