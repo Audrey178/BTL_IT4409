@@ -23,6 +23,7 @@ export function useRoomEvents(roomCode: string | null, onForceDisconnect?: () =>
     addParticipant,
     removeParticipant,
     updateParticipantMedia,
+    updateParticipantFilter,
     setScreenSharingUserId,
     clearParticipantScreenStream,
     setStatus,
@@ -30,6 +31,7 @@ export function useRoomEvents(roomCode: string | null, onForceDisconnect?: () =>
     setHostId,
     setIsHost,
     reset,
+    setSelectedFilter,
   } = useMeetingStore();
 
   useEffect(() => {
@@ -216,6 +218,16 @@ export function useRoomEvents(roomCode: string | null, onForceDisconnect?: () =>
       clearParticipantScreenStream(data.userId);
     };
 
+    // Sync selected video filter across participants
+    const handleFilterChange = (data: { userId: string; filter: string }) => {
+      if (data.userId === myUserId) {
+        setSelectedFilter(data.filter as any);
+        return;
+      }
+
+      updateParticipantFilter(data.userId, data.filter as any);
+    };
+
     socket.on(ROOM_EVENTS.REQUEST_APPROVAL, handleRequestApproval);
     socket.on(ROOM_EVENTS.USER_JOINED, handleUserJoined);
     socket.on(ROOM_EVENTS.USER_LEFT, handleUserLeft);
@@ -227,6 +239,7 @@ export function useRoomEvents(roomCode: string | null, onForceDisconnect?: () =>
     socket.on(MEDIA_EVENTS.TOGGLE, handleMediaToggle);
     socket.on(MEDIA_EVENTS.SCREEN_SHARE_START, handleScreenShareStart);
     socket.on(MEDIA_EVENTS.SCREEN_SHARE_STOP, handleScreenShareStop);
+    socket.on(ROOM_EVENTS.FILTER_CHANGE, handleFilterChange);
     socket.on('disconnect', handleSocketDisconnect);
 
     return () => {
@@ -241,6 +254,7 @@ export function useRoomEvents(roomCode: string | null, onForceDisconnect?: () =>
       socket.off(MEDIA_EVENTS.TOGGLE, handleMediaToggle);
       socket.off(MEDIA_EVENTS.SCREEN_SHARE_START, handleScreenShareStart);
       socket.off(MEDIA_EVENTS.SCREEN_SHARE_STOP, handleScreenShareStop);
+      socket.off(ROOM_EVENTS.FILTER_CHANGE, handleFilterChange);
       socket.off('disconnect', handleSocketDisconnect);
     };
   }, [
@@ -254,10 +268,12 @@ export function useRoomEvents(roomCode: string | null, onForceDisconnect?: () =>
     updateParticipantMedia,
     setScreenSharingUserId,
     clearParticipantScreenStream,
+    updateParticipantFilter,
     setStatus,
     setHostId,
     setIsHost,
     reset,
     navigate,
+    setSelectedFilter,
   ]);
 }

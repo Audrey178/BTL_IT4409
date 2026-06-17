@@ -11,6 +11,7 @@ interface MeetingState {
   messages: ChatMessage[];
   waitingList: WaitingUser[];
   screenSharingUserId: string | null;
+  selectedFilter: "original" | "warm" | "mono" | "cool" | "golden";
   isRecording: boolean;
   recorderName: string | null;
 
@@ -26,6 +27,7 @@ interface MeetingState {
   removeParticipant: (userId: string) => void;
   updateParticipantStream: (userId: string, stream: MediaStream) => void;
   updateParticipantMedia: (userId: string, patch: { isAudioMuted?: boolean; isVideoMuted?: boolean }) => void;
+  updateParticipantFilter: (userId: string, videoFilter: "original" | "warm" | "mono" | "cool" | "golden") => void;
   updateParticipantScreenStream: (userId: string, stream: MediaStream) => void;
   clearParticipantScreenStream: (userId: string) => void;
 
@@ -39,6 +41,7 @@ interface MeetingState {
   removeWaitingUser: (userId: string) => void;
 
   setScreenSharingUserId: (userId: string | null) => void;
+  setSelectedFilter: (key: "original" | "warm" | "mono" | "cool" | "golden") => void;
 
   reset: () => void;
 }
@@ -53,6 +56,7 @@ const initialState = {
   messages: [],
   waitingList: [],
   screenSharingUserId: null,
+  selectedFilter: 'original' as const,
   isRecording: false,
   recorderName: null,
 };
@@ -102,6 +106,12 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   updateParticipantMedia: (userId, patch) => set((state) => ({
     participants: state.participants.map(p =>
       p.id === userId ? { ...p, ...patch } : p
+    )
+  })),
+
+  updateParticipantFilter: (userId, videoFilter) => set((state) => ({
+    participants: state.participants.map(p =>
+      p.id === userId ? { ...p, videoFilter } : p
     )
   })),
 
@@ -170,6 +180,8 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   })),
 
   setScreenSharingUserId: (userId) => set({ screenSharingUserId: userId }),
+
+  setSelectedFilter: (key) => set({ selectedFilter: key }),
 
   reset: () => set(initialState),
 }));

@@ -33,9 +33,7 @@ export function VideoTile({
         videoRef.current.srcObject = stream ?? null;
       }
       
-      if (filterCss) {
-        videoRef.current.style.filter = filterCss;
-      }
+      videoRef.current.style.filter = filterCss || "none";
       
       if (isVideoOff || !stream) {
         videoRef.current.pause();

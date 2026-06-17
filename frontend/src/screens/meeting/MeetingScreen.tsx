@@ -11,7 +11,7 @@ import { useAuthStore } from "@/stores/useAuthStore";
 import { useVideoFilter } from "@/hooks/filter/useVideoFilter";
 import { useFilterStore } from "@/stores/filterStore";
 import { ROOM_EVENTS, MEDIA_EVENTS } from "@/socket/events";
-import { VIDEO_FILTERS } from "@/constants/videoFilters";
+import { VIDEO_FILTERS, VideoFilterKey } from "@/constants/videoFilters";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import {
@@ -39,6 +39,7 @@ export function MeetingScreen() {
   const roomCode = id?.toUpperCase();
   const socket = useSocket();
   const authUser = useAuthStore((state) => state.user);
+  const myUserId = authUser?._id;
   const navigate = useNavigate();
 
   const {
@@ -87,7 +88,17 @@ export function MeetingScreen() {
   const [showStopRecordingDialog, setShowStopRecordingDialog] = useState(false);
   const [isEndingMeeting, setIsEndingMeeting] = useState(false);
   const [transferringHostId, setTransferringHostId] = useState<string | null>(null);
+
+  // Sync color filter across socket room when local colorFilter changes
+  useEffect(() => {
+    if (socket && roomCode && colorFilter) {
+      socket.emit(ROOM_EVENTS.FILTER_CHANGE, { roomCode, userId: myUserId, filter: colorFilter });
+    }
+  }, [socket, roomCode, myUserId, colorFilter]);
   const prevMessageCountRef = useRef(messageCount);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<BlobPart[]>([]);
+  const recordingStartedAtRef = useRef<number | null>(null);
 
   // Track unread messages when chat panel is closed
   useEffect(() => {
@@ -119,7 +130,6 @@ export function MeetingScreen() {
     setShowChat(next);
     if (next) setUnreadCount(0);
   }, [showChat]);
-  const myUserId = authUser?._id;
   const { reset } = useMeetingStore();
   const { cleanup: cleanupMedia } = useMediaStore();
 
@@ -198,6 +208,16 @@ export function MeetingScreen() {
 
   const meetingStatus = useMeetingStore((s) => s.status);
 
+
+
+  // Grid layout logic: show up to 4 tiles. 1 -> full, 2 -> halves, 3-4 -> 2x2
+  const totalParticipants = 1 + participants.length; // include local
+  const tilesToShow = Math.min(4, totalParticipants);
+  const gridClass = tilesToShow === 1
+    ? "grid-cols-1 grid-rows-1"
+    : tilesToShow === 2
+      ? "grid-cols-2 grid-rows-1"
+      : "grid-cols-2 grid-rows-2";
   useEffect(() => {
     // Only redirect if we were previously in-room and hostId became null
     // (e.g. store was reset). Don't redirect on initial mount when store hasn't hydrated.
@@ -410,6 +430,7 @@ export function MeetingScreen() {
                   showTransferAction={isHost}
                   isTransferPending={transferringHostId === p.id}
                   onTransferHost={() => handleTransferHost(p.id, p.fullName)}
+                  filterCss={p.videoFilter ? VIDEO_FILTERS[p.videoFilter as VideoFilterKey]?.css : undefined}
                 />
               ))}
             </div>
@@ -438,6 +459,7 @@ export function MeetingScreen() {
                 showTransferAction={isHost}
                 isTransferPending={transferringHostId === p.id}
                 onTransferHost={() => handleTransferHost(p.id, p.fullName)}
+                filterCss={p.videoFilter ? VIDEO_FILTERS[p.videoFilter as VideoFilterKey]?.css : undefined}
               />
             ))}
           </div>
@@ -567,3 +589,4 @@ export function MeetingScreen() {
     </div>
   );
 }
+

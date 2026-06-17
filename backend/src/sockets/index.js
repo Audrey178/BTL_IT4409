@@ -41,10 +41,10 @@ import {
   handleChatTypingStop,
 } from './chat.handler.js';
 import { handleMediaToggle, handleScreenShareStart, handleScreenShareStop } from './media.handler.js';
+import { handleFilterChange } from './filter.handler.js';
 import { markUserOnline, markUserOffline, handlePresenceSubscribe, handlePresenceUnsubscribe } from './presence.handler.js';
 import recordingService from '../services/recording.service.js';
 import { handleWebRTCOffer, handleWebRTCAnswer, handleICECandidate } from './webrtc.handler.js';
-
 
 /**
  * Khởi tạo tất cả Socket.IO event handlers
@@ -240,6 +240,14 @@ export const initializeSocket = (io, redisClient) => {
      */
     socket.on(SOCKET_EVENTS.MEDIA_SCREEN_SHARE_STOP, (data) => {
       handleScreenShareStop(socket, data);
+    });
+
+    /**
+     * Sự kiện: Filter change (apply filter globally)
+     * Dữ liệu: { roomCode, userId, filter }
+     */
+    socket.on(SOCKET_EVENTS.ROOM_FILTER_CHANGE, (data) => {
+      handleFilterChange(socket, data);
     });
 
     /**
