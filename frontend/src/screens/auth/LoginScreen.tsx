@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { useNavigate, useSearchParams } from "react-router";
 import { useAuthStore } from "@/stores/useAuthStore";
 import z from "zod";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { authService } from "@/services/authService";
 import { toast } from "sonner";
 
@@ -19,7 +19,7 @@ const signInSchema = z.object({
 type SignInFormValue = z.infer<typeof signInSchema>;
 
 export function LoginScreen() {
-  const { signIn } = useAuthStore();
+  const { signIn, signInWithGoogle } = useAuthStore();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const registered = searchParams.get("registered") === "true";
@@ -40,6 +40,52 @@ export function LoginScreen() {
 
   const [isHide, setIsHide] = useState(true);
   const [resending, setResending] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash) {
+      const params = new URLSearchParams(hash.substring(1));
+      const idToken = params.get("id_token");
+      if (idToken) {
+        // Clear hash to clean up the URL
+        window.location.hash = "";
+        
+        setIsGoogleLoading(true);
+        signInWithGoogle(idToken)
+          .then((res) => {
+            if (res.success) {
+              const signedInUser = useAuthStore.getState().user;
+              navigate(signedInUser?.role === "admin" ? "/admin" : "/");
+            }
+          })
+          .finally(() => {
+            setIsGoogleLoading(false);
+          });
+      }
+    }
+  }, [signInWithGoogle, navigate]);
+
+  const handleGoogleLogin = () => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      toast.error("Vui lòng cấu hình VITE_GOOGLE_CLIENT_ID trong file .env!");
+      return;
+    }
+    
+    const redirectUri = window.location.origin + window.location.pathname;
+    const scope = "openid email profile";
+    const nonce = Math.random().toString(36).substring(2);
+    
+    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+      `client_id=${encodeURIComponent(clientId)}&` +
+      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+      `response_type=id_token&` +
+      `scope=${encodeURIComponent(scope)}&` +
+      `nonce=${encodeURIComponent(nonce)}`;
+      
+    window.location.href = googleAuthUrl;
+  };
 
   const handleResend = async (emailToResend?: string) => {
     const email = emailToResend || getValues("email");
@@ -202,12 +248,15 @@ export function LoginScreen() {
         </p>
         <div className="flex gap-4 w-full">
           <Button
+            type="button"
             variant="outline"
-            className="flex-1 h-12 rounded-full border-outline-variant/40 flex items-center justify-center gap-2 hover:bg-surface-container-low transition-colors group"
+            onClick={handleGoogleLogin}
+            disabled={isGoogleLoading || isSubmitting}
+            className="flex-1 h-12 rounded-full border-outline-variant/40 flex items-center justify-center gap-2 hover:bg-surface-container-low transition-colors group disabled:opacity-50"
           >
             <div className="w-5 h-5 bg-on-surface-variant group-hover:bg-primary rounded-full transition-colors" />
             <span className="text-sm font-semibold text-on-surface">
-              Google
+              {isGoogleLoading ? "Connecting..." : "Google"}
             </span>
           </Button>
           <Button

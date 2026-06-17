@@ -11,6 +11,7 @@ export interface AuthState {
 
   signUp: (fullname: string, email: string, password: string) => Promise<{ success: boolean; error?: any }>;
   signIn: (email: string, password: string) => Promise<{ success: boolean; error?: any }>;
+  signInWithGoogle: (id_token: string) => Promise<{ success: boolean; error?: any }>;
   logout: () => Promise<void>;
   fetchProfile: () => Promise<void>;
   updateProfile: (data: Partial<User>) => Promise<void>;
