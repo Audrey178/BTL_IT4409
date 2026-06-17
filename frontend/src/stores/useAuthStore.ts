@@ -66,6 +66,32 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
+      signInWithGoogle: async (id_token: string) => {
+        try {
+          set({ loading: true });
+          const response = await authService.googleAuth(id_token);
+
+          if (response.success && response.accessToken) {
+            set({
+              accessToken: response.accessToken,
+              refreshToken: response.refreshToken,
+              user: response.user
+            });
+            toast.success("Đăng nhập bằng Google thành công!");
+            return { success: true };
+          } else {
+            toast.error(response.message || "Đăng nhập Google thất bại");
+            return { success: false, error: response };
+          }
+        } catch (error: any) {
+          console.error(error);
+          toast.error(error.response?.data?.message || "Đăng nhập Google thất bại!");
+          return { success: false, error: error.response?.data };
+        } finally {
+          set({ loading: false });
+        }
+      },
+
       logout: async () => {
         try {
           set({ loading: true });

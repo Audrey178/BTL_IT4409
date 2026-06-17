@@ -91,4 +91,13 @@ export const authService = {
     const res = await api.get(`/auth/users/search?email=${encodeURIComponent(email)}`);
     return res.data;
   },
+  googleAuth: async (id_token: string) => {
+    const res = await api.post("/auth/google", { id_token });
+    return {
+      ...res.data,
+      user: res.data.user ? normalizeUser(res.data.user) : null,
+      accessToken: res.data.accessToken ?? res.data.access_token ?? null,
+      refreshToken: res.data.refreshToken ?? res.data.refresh_token ?? null,
+    };
+  },
 };
