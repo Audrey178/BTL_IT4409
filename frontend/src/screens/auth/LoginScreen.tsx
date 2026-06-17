@@ -2,7 +2,7 @@ import { AuthLayout } from "@/components/auth/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Eye, Apple, EyeOff, Mail } from "lucide-react";
+import { Eye, EyeOff, Mail } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { useNavigate, useSearchParams } from "react-router";
 import { useAuthStore } from "@/stores/useAuthStore";
@@ -258,16 +258,6 @@ export function LoginScreen() {
             <span className="text-sm font-semibold text-on-surface">
               {isGoogleLoading ? "Connecting..." : "Google"}
             </span>
-          </Button>
-          <Button
-            variant="outline"
-            className="flex-1 h-12 rounded-full border-outline-variant/40 flex items-center justify-center gap-2 hover:bg-surface-container-low transition-colors group"
-          >
-            <Apple
-              size={20}
-              className="text-on-surface-variant group-hover:text-primary transition-colors"
-            />
-            <span className="text-sm font-semibold text-on-surface">Apple</span>
           </Button>
         </div>
       </div>
