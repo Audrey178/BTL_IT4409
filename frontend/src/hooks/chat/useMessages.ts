@@ -143,7 +143,7 @@ export function useMessages(conversationId: string | null) {
     const contentStr = typeof payload === 'string'
       ? payload.trim()
       : payload.type === 'file'
-        ? (payload.file?.filename || payload.file?.url || '')
+        ? (payload.content || payload.file?.filename || payload.file?.url || '')
         : (payload.content || '');
 
     const optimistic: ChatMessage = {
@@ -206,8 +206,8 @@ export function useMessages(conversationId: string | null) {
       if (payload.type === 'file' && payload.file) {
         // include file metadata as attachment
         sendPayload.attachment = payload.file;
-        // file messages do not carry captions in this flow
-        sendPayload.content = payload.file.filename || payload.file.url || '';
+        // include file caption if present, otherwise fall back to filename/url
+        sendPayload.content = payload.content || payload.file.filename || payload.file.url || '';
       } else if (payload.type === 'sticker') {
         sendPayload.content = payload.stickerId || '';
       } else if (payload.type === 'emoji') {
