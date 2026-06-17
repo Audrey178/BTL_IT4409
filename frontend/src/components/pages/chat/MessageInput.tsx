@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { Paperclip, Reply, Send, Smile, SquarePen, X } from "lucide-react";
+import { File, Paperclip, Reply, Send, Smile, SquarePen, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { ComposerState } from "@/hooks/chat/useMessages";
@@ -65,6 +65,10 @@ export function MessageInput({
     if (pendingAttachment && !disabled) {
       const clientId = pendingAttachment.clientId || `local-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
       setPendingAttachment((p) => (p ? { ...p, uploading: true, clientId } : p));
+      
+      const caption = value.trim();
+      setValue("");
+      onTypingChange(false);
 
       try {
         const form = new FormData();
@@ -75,9 +79,11 @@ export function MessageInput({
           // nothing to do, uploadChatFile expects a File in formdata; best-effort: assume pendingAttachment.file has storedFilename/url already
         }
         const res = await chatService.uploadChatFile(form);
-        await onSend({ type: 'file', file: res.file, clientId } as any);
+        await onSend({ type: 'file', file: res.file, content: caption, clientId } as any);
       } catch (err: any) {
         console.error('Upload/send failed', err);
+        // Restore input value so user doesn't lose text
+        setValue(caption);
         setPendingAttachment((current) => current ? ({ ...current, uploading: false, error: 'Lỗi khi tải lên' }) : null);
       } finally {
         setPendingAttachment(null);
@@ -120,109 +126,125 @@ export function MessageInput({
             </button>
           </div>
         ) : null}
-        <div className="flex gap-3 bg-surface-container-low p-2 rounded-3xl border border-outline-variant/20 shadow-editorial focus-within:ring-2 focus-within:ring-primary/10 transition-all items-center">
-        <div className="flex-1 flex items-center gap-2 pl-2">
-          <div className="relative">
-          <button
-            type="button"
-            disabled={disabled}
-            className="p-2 rounded-lg hover:bg-surface-container-highest text-on-surface-variant flex-shrink-0 disabled:opacity-40"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Paperclip className="text-xl size-5" />
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (!f) return;
-                const previewUrl = URL.createObjectURL(f);
-                setPendingAttachment({
-                  filename: f.name,
-                  size: f.size,
-                  mimeType: f.type || 'application/octet-stream',
-                  previewUrl,
-                  uploading: false,
-                  error: null,
-                  caption: '',
-                  // store the raw File so we can upload on Send
-                  // @ts-ignore
-                  rawFile: f,
-                } as any);
-                if (fileInputRef.current) fileInputRef.current.value = '';
-              }}
-            />
-          </button>
-          <button
-            type="button"
-            disabled={disabled}
-            className="p-2 rounded-lg hover:bg-surface-container-highest text-on-surface-variant flex-shrink-0 disabled:opacity-40"
-            onClick={() => setShowEmojiPicker((s) => !s)}
-          >
-            <Smile className="text-xl size-5" />
-          </button>
-          {showEmojiPicker && (
-            <div className="absolute bottom-12 left-0 z-50">
-              <EmojiPicker onSelect={async (emo) => { await onSend({ type: 'emoji', emoji: emo, content: emo }); setShowEmojiPicker(false); }} />
+        {pendingAttachment ? (
+          <div className="mb-3 rounded-2xl border border-outline-variant/25 bg-surface-container-low/90 backdrop-blur-md p-3 flex items-center gap-4 animate-in fade-in slide-in-from-bottom-2 duration-200 shadow-sm max-w-xl">
+            <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-surface-container-highest flex-shrink-0 flex items-center justify-center border border-outline-variant/30">
+              {pendingAttachment.mimeType?.startsWith?.('image/') ? (
+                <img src={pendingAttachment.previewUrl} alt={pendingAttachment.filename} className="w-full h-full object-cover" />
+              ) : (
+                <File className="size-6 text-primary" />
+              )}
+              {pendingAttachment.uploading && (
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
             </div>
-          )}
+            <div className="flex-1 min-w-0">
+              <div className="truncate text-sm font-semibold text-on-surface">{pendingAttachment.filename}</div>
+              <div className="text-xs text-on-surface-variant/80 mt-0.5">{(pendingAttachment.size / 1024).toFixed(1)} KB</div>
+              {pendingAttachment.error ? (
+                <div className="text-xs text-error font-medium mt-0.5">{pendingAttachment.error}</div>
+              ) : pendingAttachment.uploading ? (
+                <div className="text-xs text-primary font-medium mt-0.5 animate-pulse">Đang tải lên...</div>
+              ) : null}
+            </div>
+            <button 
+              type="button" 
+              onClick={() => setPendingAttachment(null)} 
+              className="p-1.5 rounded-full hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface transition-colors shrink-0"
+              disabled={pendingAttachment.uploading}
+            >
+              <X className="size-4" />
+            </button>
           </div>
-          {pendingAttachment ? (
-            <div className="w-full mb-2 flex items-center gap-3 bg-surface-container-high rounded-lg p-2 border border-outline-variant">
-              <div className="w-28 h-16 rounded overflow-hidden bg-gray-50 flex-shrink-0">
-                {pendingAttachment.mimeType?.startsWith?.('image/') ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={pendingAttachment.previewUrl} alt={pendingAttachment.filename} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="flex items-center justify-center h-full text-sm text-on-surface-variant p-2">{pendingAttachment.filename}</div>
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="truncate text-sm font-medium">{pendingAttachment.filename}</div>
-                <div className="text-xs text-on-surface-variant">{(pendingAttachment.size / 1024).toFixed(1)} KB</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setPendingAttachment(null)} className="rounded px-2 py-1 text-sm text-on-surface-variant hover:bg-surface-container-high">Hủy</button>
-              </div>
+        ) : null}
+        <div className="flex gap-3 bg-surface-container-low p-2 rounded-3xl border border-outline-variant/20 shadow-editorial focus-within:ring-2 focus-within:ring-primary/10 transition-all items-center">
+          <div className="flex-1 flex items-center gap-2 pl-2">
+            <div className="relative flex items-center gap-1">
+              <button
+                type="button"
+                disabled={disabled}
+                className="p-2.5 rounded-xl hover:bg-surface-container-highest text-on-surface-variant hover:text-primary transition-all flex-shrink-0 disabled:opacity-40"
+                onClick={() => fileInputRef.current?.click()}
+                title="Đính kèm tệp"
+              >
+                <Paperclip className="size-5 transition-transform active:scale-95" />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    const previewUrl = URL.createObjectURL(f);
+                    setPendingAttachment({
+                      filename: f.name,
+                      size: f.size,
+                      mimeType: f.type || 'application/octet-stream',
+                      previewUrl,
+                      uploading: false,
+                      error: null,
+                      caption: '',
+                      // store the raw File so we can upload on Send
+                      // @ts-ignore
+                      rawFile: f,
+                    } as any);
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                  }}
+                />
+              </button>
+              <button
+                type="button"
+                disabled={disabled}
+                className="p-2.5 rounded-xl hover:bg-surface-container-highest text-on-surface-variant hover:text-primary transition-all flex-shrink-0 disabled:opacity-40"
+                onClick={() => setShowEmojiPicker((s) => !s)}
+                title="Chọn biểu cảm"
+              >
+                <Smile className="size-5 transition-transform active:scale-95" />
+              </button>
+              {showEmojiPicker && (
+                <div className="absolute bottom-14 left-0 z-50">
+                  <EmojiPicker onSelect={async (emo) => { await onSend({ type: 'emoji', emoji: emo, content: emo }); setShowEmojiPicker(false); }} />
+                </div>
+              )}
             </div>
-          ) : null}
-          <Textarea
-            rows={1}
-            value={value}
-            onChange={(event) => setValue(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
+            <Textarea
+              rows={1}
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  handleSend().catch((error) => {
+                    console.error("Failed to send message", error);
+                  });
+                }
+              }}
+              disabled={disabled}
+              placeholder={
+                disabled
+                  ? "Chọn một cuộc trò chuyện"
+                  : composerState.mode === "edit"
+                    ? "Cập nhật tin nhắn..."
+                    : "Chia sẻ suy nghĩ..."
+              }
+              className="flex-1 bg-transparent border-none focus:ring-0 py-3 px-2 font-body-base text-on-surface resize-none max-h-32 placeholder:text-on-surface-variant/50 min-h-0"
+            />
+            <Button
+              size="icon"
+              disabled={disabled || (!value.trim() && !pendingAttachment)}
+              onClick={() => {
                 handleSend().catch((error) => {
                   console.error("Failed to send message", error);
                 });
-              }
-            }}
-            disabled={disabled}
-            placeholder={
-              disabled
-                ? "Chọn một cuộc trò chuyện"
-                : composerState.mode === "edit"
-                  ? "Cập nhật tin nhắn..."
-                  : "Chia sẻ suy nghĩ..."
-            }
-            className="flex-1 bg-transparent border-none focus:ring-0 py-3 px-2 font-body-base text-on-surface resize-none max-h-32 placeholder:text-on-surface-variant/50 min-h-0"
-          />
-          <Button
-            size="icon"
-            disabled={disabled || (!value.trim() && !pendingAttachment)}
-            onClick={() => {
-              handleSend().catch((error) => {
-                console.error("Failed to send message", error);
-              });
-            }}
-            className="w-10 h-10 flex items-center justify-center bg-primary text-white rounded-full shadow-lg shadow-primary/20 transition-transform active:scale-95 flex-shrink-0 mr-1 disabled:opacity-40"
-          >
-            <Send className="size-4" />
-          </Button>
+              }}
+              className="w-10 h-10 flex items-center justify-center bg-primary hover:bg-primary/90 text-white rounded-full shadow-lg shadow-primary/20 transition-transform active:scale-95 flex-shrink-0 mr-1 disabled:opacity-40"
+            >
+              <Send className="size-4" />
+            </Button>
+          </div>
         </div>
-      </div>
       </div>
     </footer>
   );

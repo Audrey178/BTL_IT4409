@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import { Forward, Reply, SmilePlus, SquarePen, Trash2 } from "lucide-react";
+import { File, Download, Forward, Reply, SmilePlus, SquarePen, Trash2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -61,6 +61,7 @@ export function MessageThread({
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const renderMessageBody = (message: ChatMessage) => {
+    const isOutgoing = message.senderId === currentUserId;
     const attachment = (message as ChatMessage & { attachment?: any }).attachment;
     const parsedAttachment = (() => {
       if (attachment && typeof attachment === "object" && attachment.url) {
@@ -83,28 +84,78 @@ export function MessageThread({
 
     if (message.type === "file" || parsedAttachment) {
       const fileUrl = parsedAttachment?.url || (typeof message.content === "string" && /^https?:\/\//i.test(message.content) ? message.content : null);
-      const fileName = parsedAttachment?.filename || parsedAttachment?.name || parsedAttachment?.storedFilename || message.content;
+      const fileName = parsedAttachment?.filename || parsedAttachment?.name || parsedAttachment?.storedFilename || "Tệp đính kèm";
       const isImage = Boolean(
         parsedAttachment?.mime_type?.startsWith("image/") ||
         (fileUrl && /\.(png|jpe?g|gif|webp|bmp|svg)(\?.*)?$/i.test(String(fileUrl)))
       );
 
       if (fileUrl) {
+        const hasCaption = typeof message.content === "string" && 
+          message.content.trim() !== "" && 
+          message.content !== parsedAttachment?.filename && 
+          message.content !== parsedAttachment?.storedFilename && 
+          message.content !== fileUrl;
+
         return (
           <div className="flex flex-col gap-2">
             {isImage ? (
-              <a href={fileUrl} target="_blank" rel="noreferrer">
-                <img src={fileUrl} alt={fileName as string} className="max-h-56 rounded-2xl object-cover border border-outline-variant/10" />
+              <a 
+                href={fileUrl} 
+                target="_blank" 
+                rel="noreferrer" 
+                className="block overflow-hidden rounded-2xl max-w-sm border border-outline-variant/10 shadow-sm hover:opacity-95 transition-opacity duration-150"
+              >
+                <img src={fileUrl} alt={fileName as string} className="max-h-64 w-auto object-cover" />
               </a>
-            ) : null}
-            <a href={fileUrl} target="_blank" rel="noreferrer" className="underline break-all font-medium">
-              {fileName}
-            </a>
+            ) : (
+              <a 
+                href={fileUrl} 
+                target="_blank" 
+                rel="noreferrer" 
+                className={cn(
+                  "flex items-center gap-3 p-3.5 rounded-2xl border transition-all max-w-md shadow-sm group",
+                  isOutgoing 
+                    ? "border-white/20 bg-white/10 hover:bg-white/15 text-white" 
+                    : "border-outline-variant/30 bg-surface-container-high hover:bg-surface-container-highest text-on-surface hover:text-primary"
+                )}
+              >
+                <div className={cn(
+                  "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-colors",
+                  isOutgoing ? "bg-white/15 text-white" : "bg-primary/10 text-primary"
+                )}>
+                  <File className="size-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold break-all">
+                    {fileName}
+                  </p>
+                  <p className={cn(
+                    "text-xs mt-0.5",
+                    isOutgoing ? "text-white/70" : "text-on-surface-variant/80"
+                  )}>
+                    {parsedAttachment?.size ? `${(parsedAttachment.size / 1024).toFixed(1)} KB` : 'Xem tệp đính kèm'}
+                  </p>
+                </div>
+                <div className={cn(
+                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all opacity-0 group-hover:opacity-100",
+                  isOutgoing ? "bg-white/10 text-white" : "bg-surface-container-low text-on-surface-variant hover:text-primary"
+                )}>
+                  <Download className="size-4" />
+                </div>
+              </a>
+            )}
+            
+            {hasCaption && (
+              <p className="text-body-base whitespace-pre-wrap break-words mt-1 max-w-md">
+                {message.content}
+              </p>
+            )}
           </div>
         );
       }
 
-      return <span className="italic">Tệp đính kèm</span>;
+      return <span className="italic text-xs opacity-70">Tệp đính kèm không khả dụng</span>;
     }
 
     if (message.type === "emoji") {
