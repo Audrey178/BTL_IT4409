@@ -1,8 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { getSocket } from "@/socket/socket";
 import { CHAT_EVENTS } from "@/socket/events";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useMessageStore } from "@/stores/messageStore";
+import { chatService } from "@/services/chatService";
 import { toast } from "sonner";
 
 export function useGlobalChatListener() {
@@ -14,6 +15,59 @@ export function useGlobalChatListener() {
   const setTyping = useMessageStore((s) => s.setTyping);
   const markMessageDeleted = useMessageStore((s) => s.markMessageDeleted);
   const removeConversation = useMessageStore((s) => s.removeConversation);
+  const setConversations = useMessageStore((s) => s.setConversations);
+  const conversations = useMessageStore((s) => s.conversations);
+  const upsertConversation = useMessageStore((s) => s.upsertConversation);
+
+  const subscribedRef = useRef<Set<string>>(new Set());
+
+  // Load conversations list globally on login / startup
+  useEffect(() => {
+    if (!authUser?._id) return;
+
+    const loadConversations = async () => {
+      try {
+        const result = await chatService.getConversations();
+        setConversations(result.conversations);
+      } catch (e) {
+        console.error("Failed to load global conversations list", e);
+      }
+    };
+
+    loadConversations();
+  }, [authUser?._id, setConversations]);
+
+  // Auto-subscribe to socket channels for all conversations
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket || !authUser?._id) return;
+
+    const handleConnect = () => {
+      // Clear tracking set on reconnect so we re-subscribe to all rooms
+      subscribedRef.current.clear();
+      subscribeNewConversations();
+    };
+
+    const subscribeNewConversations = () => {
+      for (const c of conversations) {
+        if (!c.conversationId) continue;
+        if (!subscribedRef.current.has(c.conversationId)) {
+          socket.emit(CHAT_EVENTS.SUBSCRIBE, { conversationId: c.conversationId });
+          subscribedRef.current.add(c.conversationId);
+        }
+      }
+    };
+
+    if (socket.connected) {
+      subscribeNewConversations();
+    }
+
+    socket.on('connect', handleConnect);
+
+    return () => {
+      socket.off('connect', handleConnect);
+    };
+  }, [conversations, authUser?._id]);
 
   useEffect(() => {
     const socket = getSocket();
@@ -200,8 +254,11 @@ export function useGlobalChatListener() {
     trySubscribeAll();
 
     socket.on(CHAT_EVENTS.CONVERSATION_UPDATED, (conversation: any) => {
+      if (!conversation) return;
+      upsertConversation(conversation);
+
       if (
-        conversation?.conversationId &&
+        conversation.conversationId &&
         !subscribed.has(conversation.conversationId)
       ) {
         try {
@@ -229,7 +286,7 @@ export function useGlobalChatListener() {
       socket.off(CHAT_EVENTS.CONVERSATION_UPDATED as any, () => {});
       unsubConvos();
     };
-  }, [authUser?._id, upsertMessage, incrementUnread, activeConversationId]);
+  }, [authUser?._id, upsertMessage, incrementUnread, activeConversationId, upsertConversation]);
 }
 
 export default useGlobalChatListener;

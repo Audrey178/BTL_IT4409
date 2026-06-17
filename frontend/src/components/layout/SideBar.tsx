@@ -16,6 +16,7 @@ import NavItem from "./NavItem";
 import { Button } from "@base-ui/react/button";
 import { useNavigate, useLocation } from "react-router";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { useMessageStore } from "@/stores/messageStore";
 
 interface SideBarProps {
   onNewMeeting?: () => void;
@@ -26,6 +27,8 @@ const SideBar = ({ onNewMeeting }: SideBarProps) => {
   const location = useLocation();
   const { user, logout } = useAuthStore();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const conversations = useMessageStore((state) => state.conversations);
+  const hasUnread = conversations.some((c) => c.unreadCount > 0);
 
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
@@ -72,6 +75,7 @@ const SideBar = ({ onNewMeeting }: SideBarProps) => {
           label="Tin nhắn"
           onClick={() => handleNav("/messages")}
           active={isActive("/messages")}
+          badge={hasUnread}
         />
         <NavItem
           icon={<Archive size={20} />}
