@@ -1,20 +1,22 @@
 import express from 'express';
 import authRoutes from './auth.route.js';
 import roomRoutes from './room.route.js';
-import attendanceRoutes from './attendance.route.js';
 import historyRoutes from './history.route.js';
 import livekitRoutes from './livekit.route.js';
 import recordingRoutes from './recording.route.js';
+import chatRoutes from './chat.route.js';
+import notificationRoutes from './notification.route.js';
 
 const router = express.Router();
 
 // API v1 routes
 router.use('/auth', authRoutes);
 router.use('/rooms', roomRoutes);
-router.use('/attendance', attendanceRoutes);
 router.use('/history', historyRoutes);
 router.use('/livekit', livekitRoutes);
 router.use('/recordings', recordingRoutes);
+router.use('/chat', chatRoutes);
+router.use('/notifications', notificationRoutes);
 
 /**
  * @swagger

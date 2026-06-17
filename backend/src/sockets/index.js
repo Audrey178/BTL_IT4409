@@ -24,11 +24,27 @@
 import { SOCKET_EVENTS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
 import { getRedisClient } from '../config/redis.js';
-import { handleRoomJoin, handleApproveUser, handleRejectUser, handleUserLeft, handleEndMeeting } from './room.handler.js';
-// WebRTC signaling removed — now handled by LiveKit Cloud SFU
-import { handleChatSend, handleChatHistory } from './chat.handler.js';
+import { handleRoomJoin, handleApproveUser, handleRejectUser, handleUserLeft, handleEndMeeting, handleDeclineInvite } from './room.handler.js';
+import {
+  handleChatSubscribe,
+  handleChatUnsubscribe,
+  handleChatSend,
+  handleChatHistory,
+  handleChatRead,
+  handleChatReceipt,
+  handleChatEdit,
+  handleChatDelete,
+  handleChatForward,
+  handleChatReactionAdd,
+  handleChatReactionRemove,
+  handleChatTyping,
+  handleChatTypingStop,
+} from './chat.handler.js';
 import { handleMediaToggle, handleScreenShareStart, handleScreenShareStop } from './media.handler.js';
 import { handleFilterChange } from './filter.handler.js';
+import { markUserOnline, markUserOffline, handlePresenceSubscribe, handlePresenceUnsubscribe } from './presence.handler.js';
+import recordingService from '../services/recording.service.js';
+import { handleWebRTCOffer, handleWebRTCAnswer, handleICECandidate } from './webrtc.handler.js';
 
 /**
  * Khởi tạo tất cả Socket.IO event handlers
@@ -42,9 +58,16 @@ export const initializeSocket = (io, redisClient) => {
 
   io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
     // Lưu userId vào socket.data để các handler truy cập
-    const userId = socket.handshake.query.userId || socket.id;
+    const userId = socket.userId || socket.handshake.query.userId || socket.id;
     socket.data.userId = userId;
     logger.info(`✅ Kết nối mới: Socket ${socket.id} | Người dùng: ${userId}`);
+    markUserOnline(io, socket);
+
+    // Đánh dấu người dùng online trong Redis khi kết nối
+    if (socket.userId) {
+      redisClient.set(`user:${socket.userId}:socket`, socket.id)
+        .catch((err) => logger.error(`Lỗi khi lưu socket ID cho user ${socket.userId}:`, err));
+    }
 
     // =========================================================================
     // QUẢN LÝ PHÒNG HỌP
@@ -55,7 +78,7 @@ export const initializeSocket = (io, redisClient) => {
      * Dữ liệu: { userId, roomCode }
      */
     socket.on(SOCKET_EVENTS.ROOM_JOIN, (data) => {
-      handleRoomJoin(socket, data);
+      handleRoomJoin(io, socket, data);
     });
 
     /**
@@ -72,7 +95,7 @@ export const initializeSocket = (io, redisClient) => {
      * Dữ liệu: { roomCode, memberId }
      */
     socket.on(SOCKET_EVENTS.ROOM_REJECT_USER, (data) => {
-      handleRejectUser(socket, data);
+      handleRejectUser(io, socket, data);
     });
 
     /**
@@ -91,20 +114,48 @@ export const initializeSocket = (io, redisClient) => {
       handleEndMeeting(io, socket, data);
     });
 
+    /**
+     * Sự kiện: Người dùng từ chối lời mời
+     * Dữ liệu: { roomCode, hostId, userName }
+     */
+    socket.on(SOCKET_EVENTS.ROOM_DECLINE_INVITE, (data) => {
+      handleDeclineInvite(io, socket, data);
+    });
+
     // =========================================================================
-    // WEBRTC SIGNALING — Removed (handled by LiveKit Cloud SFU)
+    // WEBRTC SIGNALING
     // =========================================================================
+
+    socket.on(SOCKET_EVENTS.WEBRTC_OFFER, (data) => {
+      handleWebRTCOffer(socket, data);
+    });
+
+    socket.on(SOCKET_EVENTS.WEBRTC_ANSWER, (data) => {
+      handleWebRTCAnswer(socket, data);
+    });
+
+    socket.on(SOCKET_EVENTS.WEBRTC_ICE_CANDIDATE, (data) => {
+      handleICECandidate(socket, data);
+    });
 
     // =========================================================================
     // CHAT REALTIME
     // =========================================================================
+
+    socket.on(SOCKET_EVENTS.CHAT_SUBSCRIBE, (data) => {
+      handleChatSubscribe(socket, data);
+    });
+
+    socket.on(SOCKET_EVENTS.CHAT_UNSUBSCRIBE, (data) => {
+      handleChatUnsubscribe(socket, data);
+    });
 
     /**
      * Sự kiện: Gửi tin nhắn
      * Dữ liệu: { roomCode, content, type, senderName, senderAvatar }
      */
     socket.on(SOCKET_EVENTS.CHAT_SEND, (data) => {
-      handleChatSend(socket, data);
+      handleChatSend(io, socket, data);
     });
 
     /**
@@ -113,6 +164,50 @@ export const initializeSocket = (io, redisClient) => {
      */
     socket.on(SOCKET_EVENTS.CHAT_HISTORY, (data) => {
       handleChatHistory(socket, data);
+    });
+
+    socket.on(SOCKET_EVENTS.CHAT_READ, (data) => {
+      handleChatRead(io, socket, data);
+    });
+
+    socket.on(SOCKET_EVENTS.CHAT_RECEIPT, (data, ack) => {
+      handleChatReceipt(io, socket, data, ack);
+    });
+
+    socket.on(SOCKET_EVENTS.CHAT_EDIT, (data, ack) => {
+      handleChatEdit(io, socket, data, ack);
+    });
+
+    socket.on(SOCKET_EVENTS.CHAT_DELETE, (data, ack) => {
+      handleChatDelete(io, socket, data, ack);
+    });
+
+    socket.on(SOCKET_EVENTS.CHAT_FORWARD, (data, ack) => {
+      handleChatForward(io, socket, data, ack);
+    });
+
+    socket.on(SOCKET_EVENTS.CHAT_REACTION_ADD, (data, ack) => {
+      handleChatReactionAdd(io, socket, data, ack);
+    });
+
+    socket.on(SOCKET_EVENTS.CHAT_REACTION_REMOVE, (data, ack) => {
+      handleChatReactionRemove(io, socket, data, ack);
+    });
+
+    socket.on(SOCKET_EVENTS.CHAT_TYPING, (data) => {
+      handleChatTyping(socket, data);
+    });
+
+    socket.on(SOCKET_EVENTS.CHAT_TYPING_STOP, (data) => {
+      handleChatTypingStop(socket, data);
+    });
+
+    socket.on(SOCKET_EVENTS.PRESENCE_SUBSCRIBE, (data) => {
+      handlePresenceSubscribe(socket, data);
+    });
+
+    socket.on(SOCKET_EVENTS.PRESENCE_UNSUBSCRIBE, (data) => {
+      handlePresenceUnsubscribe(socket, data);
     });
 
     // =========================================================================
@@ -161,7 +256,16 @@ export const initializeSocket = (io, redisClient) => {
      */
     socket.on(SOCKET_EVENTS.DISCONNECT, async () => {
       try {
+        await markUserOffline(io, socket);
         const redis = getRedisClient();
+
+        // Đánh dấu offline bằng cách xóa mapping user -> socket
+        if (socket.userId) {
+          const currentSocketId = await redis.get(`user:${socket.userId}:socket`);
+          if (currentSocketId === socket.id) {
+            await redis.del(`user:${socket.userId}:socket`);
+          }
+        }
 
         // Xóa mapping socket -> user
         const socketData = await redis.get(`socket:${socket.id}`);
@@ -179,10 +283,22 @@ export const initializeSocket = (io, redisClient) => {
           try {
             await Promise.all([
               redis.del(`socket:${socket.id}`),
-              redis.del(`user:${disconnectedUserId}:socket`),
               redis.sRem(`room:${roomCode}:members`, disconnectedUserId),
             ]);
             logger.info(`Người dùng ${disconnectedUserId} đã rời khỏi phòng ${roomCode}`);
+
+            const remainingCount = await redis.sCard(`room:${roomCode}:members`);
+            if (remainingCount === 0) {
+              const recordingEgressId = await redis.get(`room:${roomCode}:egress_id`);
+              if (recordingEgressId) {
+                try {
+                  await recordingService.stopLiveKitRecording(roomCode, disconnectedUserId);
+                  logger.info(`⏹️ Tự động dừng ghi hình do phòng họp không còn ai (disconnect) ${roomCode}`);
+                } catch (recError) {
+                  logger.error(`❌ Lỗi khi tự động dừng ghi hình:`, recError);
+                }
+              }
+            }
           } catch (cleanupError) {
             logger.error(`Xóa dữ liệu không thành công cho người dùng ${disconnectedUserId}:`, cleanupError.message);
             // Don't re-throw - disconnect already happened

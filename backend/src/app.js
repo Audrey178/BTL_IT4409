@@ -10,6 +10,12 @@ import logger, { httpLogger } from './utils/logger.js';
 
 const app = express();
 
+const parseCorsOrigins = () =>
+  (process.env.CORS_ORIGIN || 'http://localhost:3000')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
 // Trust proxy
 app.set('trust proxy', 1);
 
@@ -19,8 +25,16 @@ app.use(helmet({
 }));
 
 // CORS Configuration
+const allowedOrigins = parseCorsOrigins();
 const corsOptions = {
-  origin: (process.env.CORS_ORIGIN || 'http://localhost:3000').split(','),
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error(`CORS blocked for origin: ${origin}`), false);
+  },
   credentials: true,
   optionsSuccessStatus: 200,
 };

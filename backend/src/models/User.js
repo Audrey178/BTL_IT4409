@@ -52,6 +52,28 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    email_verified: {
+      type: Boolean,
+      default: false,
+    },
+    verify_token: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    verify_token_expires: {
+      type: Date,
+      default: null,
+    },
+    reset_password_token: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    reset_password_expires: {
+      type: Date,
+      default: null,
+    },
     face_embeddings: [
       {
         descriptor: [Number], // Array of face vector features
@@ -66,6 +88,23 @@ const userSchema = new mongoose.Schema(
       enum: ['user', 'admin'],
       default: 'user',
     },
+    fcm_tokens: [
+      {
+        token: {
+          type: String,
+          required: true,
+        },
+        platform: {
+          type: String,
+          enum: ['web', 'android', 'ios', 'unknown'],
+          default: 'unknown',
+        },
+        last_seen_at: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
     created_at: {
       type: Date,
       default: Date.now,

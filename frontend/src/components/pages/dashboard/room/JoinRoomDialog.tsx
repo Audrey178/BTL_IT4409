@@ -45,7 +45,7 @@ export function JoinRoomDialog({ open, onOpenChange }: JoinRoomDialogProps) {
 
   const handleJoin = async () => {
     if (!isValidCode) {
-      setError('Please enter a valid room code (format: xxx-xxx-xxx)');
+      setError('Vui lòng nhập mã Meeting hợp lệ (định dạng: xxx-xxx-xxx)');
       return;
     }
 
@@ -62,11 +62,11 @@ export function JoinRoomDialog({ open, onOpenChange }: JoinRoomDialogProps) {
     } catch (err: unknown) {
       const error = err as { response?: { status?: number; data?: { message?: string } } };
       if (error.response?.status === 404) {
-        setError('Room not found. Please check the code and try again.');
+        setError('Không tìm thấy phòng. Vui lòng kiểm tra lại mã.');
       } else if (error.response?.status === 409) {
-        setError('This meeting has already ended.');
+        setError('Meeting này đã kết thúc.');
       } else {
-        setError(error.response?.data?.message || 'Failed to find room');
+        setError(error.response?.data?.message || 'Lỗi khi tìm phòng');
       }
     } finally {
       setLoading(false);
@@ -94,11 +94,8 @@ export function JoinRoomDialog({ open, onOpenChange }: JoinRoomDialogProps) {
         <div className="bg-gradient-to-br from-primary-container to-primary p-8 text-white">
           <DialogHeader>
             <DialogTitle className="text-2xl font-extrabold tracking-tight text-white">
-              Join Meeting
+              Tham gia cuộc họp
             </DialogTitle>
-            <DialogDescription className="text-white/70 text-sm mt-1">
-              Enter the meeting code shared with you
-            </DialogDescription>
           </DialogHeader>
         </div>
 
@@ -109,7 +106,7 @@ export function JoinRoomDialog({ open, onOpenChange }: JoinRoomDialogProps) {
               htmlFor="join-room-code"
               className="text-xs font-bold uppercase tracking-widest text-on-surface-variant"
             >
-              Meeting Code
+              Mã Meeting
             </Label>
             <Input
               id="join-room-code"
@@ -142,12 +139,8 @@ export function JoinRoomDialog({ open, onOpenChange }: JoinRoomDialogProps) {
             ) : (
               <LogIn className="mr-2" size={20} />
             )}
-            {loading ? 'Finding room...' : 'Join Meeting'}
+            {loading ? 'Đang tìm phòng...' : 'Tham gia Meeting'}
           </Button>
-
-          <p className="text-center text-[10px] font-bold tracking-widest uppercase text-on-surface-variant/40">
-            Ask the host for the meeting code
-          </p>
         </div>
       </DialogContent>
     </Dialog>

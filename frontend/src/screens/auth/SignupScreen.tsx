@@ -9,11 +9,17 @@ import { useNavigate } from "react-router";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useState } from "react";
 
-const signUpSchema = z.object({
-  fullname: z.string().min(1, "FullName must be have!"),
-  email: z.email("Email is not valid!"),
-  password: z.string().min(8, "Password have least 8 characters."),
-});
+const signUpSchema = z
+  .object({
+    fullname: z.string().min(1, "Vui lòng nhập Họ tên!"),
+    email: z.string().email("Email không hợp lệ!"),
+    password: z.string().min(8, "Mật khẩu phải có ít nhất 8 ký tự."),
+    confirmPassword: z.string().min(8, "Vui lòng xác nhận mật khẩu."),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    path: ["confirmPassword"],
+    message: "Mật khẩu xác nhận không trùng khớp!",
+  });
 
 type SignUpFormValue = z.infer<typeof signUpSchema>;
 
@@ -32,7 +38,7 @@ export function SignupScreen() {
     const { fullname, email, password } = data;
     const { success, error } = await signUp(fullname, email, password);
     if (success) {
-      navigate("/signin");
+      navigate(`/signin?registered=true&email=${encodeURIComponent(email)}`);
     } else {
       if (error?.errors && Array.isArray(error.errors)) {
         error.errors.forEach((err: any) => {
@@ -47,8 +53,8 @@ export function SignupScreen() {
   };
   return (
     <AuthLayout
-      title="Gather your people."
-      description="Create an account to start hosting warm, meaningful conversations in your own digital studio."
+      title="Kết nối mọi người"
+      description="Tạo tài khoản để bắt đầu các cuộc họp."
     >
       <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
         {errors.root?.serverError && (
@@ -61,12 +67,12 @@ export function SignupScreen() {
             htmlFor="fullname"
             className="block text-sm font-semibold text-on-surface-variant px-1"
           >
-            Full Name
+            Họ tên
           </label>
           <Input
             id="fullname"
             className="h-14 rounded-xl border-none bg-surface-container-highest text-on-surface placeholder:text-outline focus-visible:ring-2 focus-visible:ring-primary/20"
-            placeholder="John Doe"
+            placeholder="Nhập tên của bạn"
             {...register("fullname")}
           />
 
@@ -86,7 +92,7 @@ export function SignupScreen() {
           <Input
             id="email"
             className="h-14 rounded-xl border-none bg-surface-container-highest text-on-surface placeholder:text-outline focus-visible:ring-2 focus-visible:ring-primary/20"
-            placeholder="hello@digitalhearth.com"
+            placeholder="Nhập email của bạn"
             type="email"
             {...register("email")}
           />
@@ -100,7 +106,7 @@ export function SignupScreen() {
             htmlFor="password"
             className="block text-sm font-semibold text-on-surface-variant px-1"
           >
-            Password
+            Mật khẩu
           </label>
           <div className="relative">
             <Input
@@ -125,25 +131,43 @@ export function SignupScreen() {
             <p className="text-xs text-red-500">{errors.password.message}</p>
           )}
         </div>
+        <div className="space-y-2">
+          <label
+            htmlFor="confirmPassword"
+            className="block text-sm font-semibold text-on-surface-variant px-1"
+          >
+            Xác nhận mật khẩu
+          </label>
+          <Input
+            id="confirmPassword"
+            className="h-14 rounded-xl border-none bg-surface-container-highest text-on-surface placeholder:text-outline focus-visible:ring-2 focus-visible:ring-primary/20"
+            placeholder="••••••••"
+            type={isHide ? "password" : "text"}
+            {...register("confirmPassword")}
+          />
+          {errors.confirmPassword && (
+            <p className="text-xs text-red-500">{errors.confirmPassword.message}</p>
+          )}
+        </div>
         <Button
           disabled={isSubmitting}
           type="submit"
           className="w-full h-14 bg-gradient-to-r from-primary to-primary-container text-white font-bold text-lg rounded-full shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
         >
-          {isSubmitting ? "Signing up..." : "Sign Up"}
+          {isSubmitting ? "Đang đăng ký..." : "Đăng ký"}
         </Button>
       </form>
 
       <div className="mt-8 pt-8 border-t border-outline-variant/20 flex flex-col items-center gap-4">
         <p className="text-sm text-on-surface-variant">
-          Already have an account?
+          Đã có tài khoản?
           <button
             onClick={() => {
               navigate("/signin");
             }}
             className="text-primary font-bold hover:underline ml-1"
           >
-            Sign In
+            Đăng nhập
           </button>
         </p>
         <div className="flex gap-4 w-full">

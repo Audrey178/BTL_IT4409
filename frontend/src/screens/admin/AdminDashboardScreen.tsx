@@ -1,17 +1,17 @@
-import React from "react";
 import { motion } from "motion/react";
 import {
   ShieldCheck,
   Users,
   CalendarDays,
   Database,
-  Activity,
   Search,
   MoreVertical,
   Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { StatusCard } from "@/components/pages/admin/StatusCard";
+import { ActivityRow } from "@/components/pages/admin/ActivityRow";
 
 const userRows = [
   { name: "Elena Vance", email: "elena@digitalhearth.com", role: "Admin", status: "Active" },
@@ -155,32 +155,6 @@ export function AdminDashboardScreen() {
           </motion.section>
         </div>
       </div>
-    </div>
-  );
-}
-
-function StatusCard({ icon, title, value, variant }: any) {
-  return (
-    <div className={`rounded-[2rem] p-6 border border-outline-variant/10 bg-surface-container-highest shadow-sm ${variant}`}>
-      <div className="flex items-center justify-between mb-6 text-on-surface-variant">
-        <span className="text-sm font-semibold">{title}</span>
-        <div className="w-10 h-10 rounded-2xl bg-white/80 flex items-center justify-center text-current">
-          {icon}
-        </div>
-      </div>
-      <p className="text-3xl font-bold text-on-surface">{value}</p>
-    </div>
-  );
-}
-
-function ActivityRow({ action, detail }: { action: string; detail: string }) {
-  return (
-    <div className="flex items-start justify-between gap-4 rounded-3xl bg-surface-container-lowest p-4 border border-outline-variant/10">
-      <div>
-        <p className="font-semibold text-on-surface">{action}</p>
-        <p className="text-sm text-on-surface-variant mt-1">{detail}</p>
-      </div>
-      <Activity size={20} className="text-primary" />
     </div>
   );
 }

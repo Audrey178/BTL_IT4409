@@ -47,8 +47,8 @@ export const authService = {
     };
   },
 
-  logout: async () => {
-    const res = await api.post("/auth/logout");
+  logout: async (refreshToken?: string | null) => {
+    const res = await api.post("/auth/logout", refreshToken ? { refresh_token: refreshToken } : {});
     return res.data;
   },
 
@@ -64,6 +64,31 @@ export const authService = {
 
   updateMe: async (data: Record<string, any>) => {
     const res = await api.put("/auth/me", data);
+    return res.data;
+  },
+
+  verifyEmail: async (token: string) => {
+    const res = await api.get(`/auth/verify-email?token=${encodeURIComponent(token)}`);
+    return res.data;
+  },
+
+  resendVerification: async (email: string) => {
+    const res = await api.post("/auth/resend-verification", { email });
+    return res.data;
+  },
+
+  forgotPassword: async (email: string) => {
+    const res = await api.post("/auth/forgot-password", { email });
+    return res.data;
+  },
+
+  resetPassword: async (token: string, password: string) => {
+    const res = await api.post("/auth/reset-password", { token, password });
+    return res.data;
+  },
+
+  searchUsers: async (email: string): Promise<{ success: boolean; users: Array<{ _id: string; full_name: string; email: string; avatar: string | null }> }> => {
+    const res = await api.get(`/auth/users/search?email=${encodeURIComponent(email)}`);
     return res.data;
   },
 };

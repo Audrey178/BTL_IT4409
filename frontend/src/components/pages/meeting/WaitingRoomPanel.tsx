@@ -59,11 +59,8 @@ export function WaitingRoomPanel({ roomCode, waitingList, removeWaitingUser }: {
     setProcessingIds((prev) => new Set(prev).add(userId));
 
     try {
-      // Emit socket event
+      // Socket handler updates DB + notifies the rejected user
       socket.emit(ROOM_EVENTS.REJECT_USER, { roomCode, memberId });
-
-      // REST API backup
-      await roomService.rejectUser(roomCode, userId);
 
       removeWaitingUser(userId);
       toast.info('User rejected');

@@ -2,16 +2,18 @@ import { AuthLayout } from "@/components/auth/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Eye, Apple, EyeOff } from "lucide-react";
+import { Eye, Apple, EyeOff, Mail } from "lucide-react";
 import { useForm } from "react-hook-form";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { useAuthStore } from "@/stores/useAuthStore";
 import z from "zod";
 import { useState } from "react";
+import { authService } from "@/services/authService";
+import { toast } from "sonner";
 
 const signInSchema = z.object({
-  email: z.email("Email is not valid!"),
-  password: z.string().min(8, "Password have least 8 characters."),
+  email: z.email("Email không hợp lệ!"),
+  password: z.string().min(8, "Mật khẩu phải có ít nhất 8 ký tự."),
 });
 
 type SignInFormValue = z.infer<typeof signInSchema>;
@@ -19,13 +21,43 @@ type SignInFormValue = z.infer<typeof signInSchema>;
 export function LoginScreen() {
   const { signIn } = useAuthStore();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const registered = searchParams.get("registered") === "true";
+  const registeredEmail = searchParams.get("email") || "";
+
   const {
     register,
     handleSubmit,
     setError,
+    getValues,
     formState: { errors, isSubmitting },
-  } = useForm<SignInFormValue>({ resolver: zodResolver(signInSchema) });
+  } = useForm<SignInFormValue>({
+    resolver: zodResolver(signInSchema),
+    defaultValues: {
+      email: registeredEmail,
+    },
+  });
+
   const [isHide, setIsHide] = useState(true);
+  const [resending, setResending] = useState(false);
+
+  const handleResend = async (emailToResend?: string) => {
+    const email = emailToResend || getValues("email");
+    if (!email) {
+      toast.error("Please enter your email address first.");
+      return;
+    }
+
+    try {
+      setResending(true);
+      await authService.resendVerification(email);
+      toast.success("Verification email resent! Please check your inbox.");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to resend verification email.");
+    } finally {
+      setResending(false);
+    }
+  };
 
   const onSubmit = async (data: SignInFormValue) => {
     const { email, password } = data;
@@ -47,13 +79,43 @@ export function LoginScreen() {
 
   return (
     <AuthLayout
-      title="Welcome back."
-      description="Sign in to continue your conversations and manage your digital hearth."
+      title="Chào mừng trở lại."
+      description="Đăng nhập để tiếp tục trò chuyện và quản lý các cuộc họp của bạn."
     >
+      {registered && (
+        <div className="mb-6 p-5 rounded-2xl bg-primary/5 border border-primary/20 flex flex-col gap-3 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <Mail size={24} />
+          </div>
+          <h3 className="text-lg font-bold text-on-surface">Verify your email</h3>
+          <p className="text-sm text-on-surface-variant leading-relaxed">
+            We've sent a verification link to <span className="font-semibold text-primary">{registeredEmail}</span>. Please verify your email before signing in.
+          </p>
+          <button
+            type="button"
+            onClick={() => handleResend(registeredEmail)}
+            disabled={resending}
+            className="mt-1 text-sm font-bold text-primary hover:underline disabled:opacity-50 flex items-center justify-center gap-1 mx-auto"
+          >
+            {resending ? "Resending..." : "Resend verification email"}
+          </button>
+        </div>
+      )}
+
       <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
         {errors.root?.serverError && (
-          <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-sm text-center">
-            {errors.root.serverError.message}
+          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-sm text-center flex flex-col items-center gap-2">
+            <span>{errors.root.serverError.message}</span>
+            {errors.root.serverError.message === "Email not verified" && (
+              <button
+                type="button"
+                onClick={() => handleResend()}
+                disabled={resending}
+                className="text-xs font-bold text-primary hover:underline disabled:opacity-50 flex items-center gap-1 mt-1"
+              >
+                {resending ? "Resending..." : "Resend verification email"}
+              </button>
+            )}
           </div>
         )}
         <div className="space-y-2">
@@ -66,7 +128,7 @@ export function LoginScreen() {
           <Input
             id="email"
             className="h-14 rounded-xl border-none bg-surface-container-highest text-on-surface placeholder:text-outline focus-visible:ring-2 focus-visible:ring-primary/20"
-            placeholder="hello@digitalhearth.com"
+            placeholder="Nhập địa chỉ email"
             type="email"
             {...register("email")}
           />
@@ -82,13 +144,14 @@ export function LoginScreen() {
               htmlFor="password"
               className="block text-sm font-semibold text-on-surface-variant"
             >
-              Password
+              Mật khẩu
             </label>
             <button
               type="button"
+              onClick={() => navigate("/forgot-password")}
               className="text-xs font-bold text-primary hover:underline"
             >
-              Forgot password?
+              Quên mật khẩu?
             </button>
           </div>
           <div className="relative">
@@ -120,20 +183,20 @@ export function LoginScreen() {
           type="submit"
           className="w-full h-14 bg-gradient-to-r from-primary to-primary-container text-white font-bold text-lg rounded-full shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
         >
-          {isSubmitting ? "Signing in..." : "Sign In"}
+          {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
         </Button>
       </form>
 
       <div className="mt-8 pt-8 border-t border-outline-variant/20 flex flex-col items-center gap-4">
         <p className="text-sm text-on-surface-variant">
-          Don't have an account?
+          Chưa có tài khoản?
           <button
             onClick={() => {
               navigate("/signup");
             }}
             className="text-primary font-bold hover:underline ml-1"
           >
-            Sign Up
+            Đăng ký
           </button>
         </p>
         <div className="flex gap-4 w-full">

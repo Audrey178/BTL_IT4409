@@ -62,6 +62,12 @@ const roomSchema = new mongoose.Schema(
         default: 100,
       },
     },
+    notification_state: {
+      reminder_5m_sent_at: {
+        type: Date,
+        default: null,
+      },
+    },
     started_at: {
       type: Date,
       default: null,

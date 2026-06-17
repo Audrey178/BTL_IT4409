@@ -1,181 +1,386 @@
-/**
- * ============================================================================
- * MEETING PROJECT - BACKEND - XỬ LÝ SỰ KIỆN CHAT REALTIME
- * ============================================================================
- * 
- * Module này xử lý logic Chat realtime:
- * - Nhận tin nhắn từ client
- * - Lưu vào MongoDB
- * - Phát broadcast tới tất cả trong phòng
- * - Quản lý lịch sử chat
- * 
- * Kiến trúc tin nhắn:
- * - Text: Tin nhắn văn bản thông thường
- * - System: Thông báo hệ thống (ai vào, ra, bị kick)
- * - File: Tin nhắn có file đính kèm
- * 
- * Tác giả: Meeting Team
- * Ngày tạo: 2026-04-08
- */
-
-import { Message, Room } from '../models/index.js';
-import { MESSAGE_TYPE, SOCKET_EVENTS } from '../utils/constants.js';
+import chatService from '../services/chat.service.js';
+import { User, Room } from '../models/index.js';
+import { SOCKET_EVENTS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
 
-/**
- * Xử lý gửi tin nhắn
- * 
- * Quy trình:
- * 1. Validate dữ liệu từ client
- * 2. Lưu tin nhắn vào MongoDB
- * 3. Phát broadcast tới tất cả trong phòng
- * 
- * @param {Object} socket - Socket.IO socket instance
- * @param {Object} data - { roomCode, content, type, senderName, senderAvatar }
- * @returns {Promise<void>}
- */
-export const handleChatSend = async (socket, data) => {
-  try {
-    const { roomCode, content, type = MESSAGE_TYPE.TEXT } = data;
-    // Use JWT-authenticated userId from socket instead of client-provided values
-    const userId = socket.userId;
-    
-    // Fetch actual user data from database to prevent spoofing
-    const { User } = await import('../models/index.js');
-    const user = await User.findById(userId).lean();
-    if (!user) {
-      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Không tìm thấy người dùng' });
-      return;
-    }
-    
-    const senderName = user.full_name;
-    const senderAvatar = user.avatar || null;
-
-    const { Room, RoomMember } = await import('../models/index.js');
-    const room = await Room.findOne({ room_code: roomCode }).lean();
-    if (!room) {
-      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Phòng không tồn tại' });
-      return;
-    }
-
-    if (room.settings?.allow_chat === false) {
-      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Chat is disabled for this room' });
-      return;
-    }
-
-    const isMember = await RoomMember.exists({
-      room_id: room._id,
-      user_id: userId,
-      status: 'joined',
+const normalizeRoomCode = (roomCode) => (roomCode ? roomCode.toUpperCase() : '');
+const getConversationChannel = (conversationId) => `conversation:${conversationId}`;
+const ackSuccess = (ack, data) => {
+  if (typeof ack === 'function') {
+    ack({ ok: true, ...data });
+  }
+};
+const ackFailure = (ack, error, extra = {}) => {
+  if (typeof ack === 'function') {
+    ack({
+      ok: false,
+      error: {
+        message: error.message || 'Request failed',
+        statusCode: error.statusCode || 500,
+      },
+      ...extra,
     });
-    if (!isMember) {
-      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Unauthorized to send message to this room' });
-      return;
-    }
-
-    if (!content || content.trim().length === 0) {
-      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Nội dung tin nhắn không được trống' });
-      return;
-    }
-
-    // Lưu tin nhắn vào MongoDB
-    const message = new Message({
-      room_id: room._id, // Đã convert roomCode -> room ObjectId
-      sender_id: userId,
-      sender_name: senderName,
-      sender_avatar: senderAvatar,
-      type,
-      content: content.substring(0, 5000), // Giới hạn độ dài
-      timestamp: new Date(),
-    });
-
-    await message.save();
-
-    logger.debug(`💬 Tin nhắn lưu: ${userId} -> ${roomCode}`);
-
-    // Phát tin nhắn tới tất cả trong phòng
-    socket.to(roomCode).emit(SOCKET_EVENTS.CHAT_RECEIVE, {
-      messageId: message._id,
-      senderId: userId,
-      senderName,
-      senderAvatar,
-      content,
-      type,
-      timestamp: message.timestamp,
-    });
-
-    // Gửi lại cho người gửi để confirm
-    socket.emit(SOCKET_EVENTS.CHAT_RECEIVE, {
-      messageId: message._id,
-      senderId: userId,
-      senderName,
-      senderAvatar,
-      content,
-      type,
-      timestamp: message.timestamp,
-      isOwn: true,
-    });
-  } catch (error) {
-    logger.error('❌ Lỗi trong handleChatSend:', error);
-    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Lỗi khi gửi tin nhắn' });
   }
 };
 
-/**
- * Xử lý yêu cầu lấy lịch sử chat
- * 
- * Trả về tin nhắn theo trang (pagination)
- * 
- * @param {Object} socket - Socket.IO socket instance
- * @param {Object} data - { roomCode, page = 1, limit = 50 }
- * @returns {Promise<void>}
- */
-export const handleChatHistory = async (socket, data) => {
+export const handleChatSubscribe = async (socket, data = {}) => {
   try {
-    const { roomCode } = data;
+    const roomCode = normalizeRoomCode(data.roomCode);
+    const conversationId = data.conversationId || null;
+
+    if (conversationId) {
+      await chatService.getAccessibleConversation(conversationId, socket.userId);
+      socket.join(getConversationChannel(conversationId));
+      const deliveryUpdate = await chatService.markConversationMessagesDelivered(conversationId, socket.userId);
+      socket.emit(SOCKET_EVENTS.CHAT_DELIVERED, {
+        conversationId,
+        messageIds: deliveryUpdate.updatedMessageIds,
+        userId: socket.userId,
+      });
+
+      return;
+    }
+
+    if (!roomCode) {
+      socket.emit(SOCKET_EVENTS.ERROR, { message: 'roomCode or conversationId is required' });
+      return;
+    }
+
+    await chatService.getAccessibleRoom(roomCode, socket.userId, { requireJoined: false });
+    socket.join(roomCode);
+    const deliveryUpdate = await chatService.markRoomMessagesDelivered(roomCode, socket.userId);
+    socket.emit(SOCKET_EVENTS.CHAT_DELIVERED, {
+      roomCode,
+      messageIds: deliveryUpdate.updatedMessageIds,
+      userId: socket.userId,
+    });
+  } catch (error) {
+    logger.error('handleChatSubscribe error:', error);
+    socket.emit(SOCKET_EVENTS.ERROR, { message: error.message || 'Failed to subscribe to chat' });
+  }
+};
+
+export const handleChatUnsubscribe = (socket, data = {}) => {
+  if (data.conversationId) {
+    socket.leave(getConversationChannel(data.conversationId));
+    return;
+  }
+
+  const roomCode = normalizeRoomCode(data.roomCode);
+  if (roomCode) {
+    socket.leave(roomCode);
+  }
+};
+
+export const handleChatSend = async (io, socket, data = {}) => {
+  try {
+    const roomCode = normalizeRoomCode(data.roomCode);
+    const conversationId = data.conversationId || null;
+    const user = await User.findById(socket.userId).select('_id full_name avatar').lean();
+    if (!user) {
+      socket.emit(SOCKET_EVENTS.ERROR, { message: 'User not found' });
+      return;
+    }
+
+    if (conversationId) {
+      const result = await chatService.sendConversationMessage(conversationId, user, data);
+      // Ensure emitted message contains clientId for clients to match optimistic messages
+      try {
+        const cid = data.clientId || data.client_id || result.message.clientId || null;
+        result.message.clientId = cid;
+        // Also include legacy snake_case for clients that expect it
+        result.message.client_id = cid;
+      } catch (e) {
+        // ignore client_id assignment errors
+      }
+      io.to(getConversationChannel(conversationId)).emit(SOCKET_EVENTS.CHAT_RECEIVE, result.message);
+      return;
+    }
+
+    const result = await chatService.sendRoomMessage(roomCode, user, data);
+    try {
+      const cid = data.clientId || data.client_id || result.message.clientId || null;
+      result.message.clientId = cid;
+      result.message.client_id = cid;
+    } catch (e) {
+      // ignore client_id assignment errors
+    }
+    io.to(roomCode).emit(SOCKET_EVENTS.CHAT_RECEIVE, result.message);
+  } catch (error) {
+    logger.error('handleChatSend error:', error);
+    socket.emit(SOCKET_EVENTS.ERROR, { message: error.message || 'Failed to send message' });
+  }
+};
+
+export const handleChatHistory = async (socket, data = {}) => {
+  try {
     const page = Math.max(1, parseInt(data.page, 10) || 1);
     const limit = Math.min(Math.max(1, parseInt(data.limit, 10) || 50), 100);
-    const { Room, RoomMember } = await import('../models/index.js');
-    const room = await Room.findOne({ room_code: roomCode }).lean();
-    if (!room) {
-      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Phòng không tồn tại' });
+
+    if (data.conversationId) {
+      const result = await chatService.getConversationMessages(data.conversationId, socket.userId, { page, limit });
+      socket.emit(SOCKET_EVENTS.CHAT_HISTORY, {
+        conversationId: data.conversationId,
+        messages: result.messages,
+        page,
+        hasMore: result.pagination.page < result.pagination.pages,
+      });
       return;
     }
 
-    const isHost = room.host_id.toString() === socket.userId?.toString();
-    const isMember = await RoomMember.exists({
-      room_id: room._id,
-      user_id: socket.userId,
-      status: { $in: ['joined', 'left'] },
-    });
-    if (!isHost && !isMember) {
-      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Unauthorized to view chat history' });
-      return;
-    }
-
-    const skip = (page - 1) * limit;
-
-    // Lấy tin nhắn từ MongoDB
-    const messages = await Message.find({ room_id: room._id })
-      .sort({ timestamp: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean();
-
-    // Đảo ngược để gửi theo thứ tự thời gian
-    const orderedMessages = messages.reverse();
-
+    const roomCode = normalizeRoomCode(data.roomCode);
+    const result = await chatService.getRoomMessages(roomCode, socket.userId, { page, limit });
     socket.emit(SOCKET_EVENTS.CHAT_HISTORY, {
-      messages: orderedMessages,
+      roomCode,
+      messages: result.messages,
       page,
-      hasMore: messages.length === limit,
+      hasMore: result.pagination.page < result.pagination.pages,
     });
-
-    logger.debug(`📖 Lịch sử chat gửi: ${roomCode} page ${page}`);
   } catch (error) {
-    logger.error('❌ Lỗi trong handleChatHistory:', error);
-    socket.emit(SOCKET_EVENTS.ERROR, { message: 'Lỗi khi lấy lịch sử chat' });
+    logger.error('handleChatHistory error:', error);
+    socket.emit(SOCKET_EVENTS.ERROR, { message: error.message || 'Failed to fetch chat history' });
   }
 };
 
-export default { handleChatSend, handleChatHistory };
+export const handleChatRead = async (io, socket, data = {}) => {
+  try {
+    const messageIds = Array.isArray(data.messageIds) ? data.messageIds : [];
+
+    if (data.conversationId) {
+      const result = await chatService.markConversationMessagesRead(data.conversationId, socket.userId, messageIds);
+      for (const message of result.messages) {
+        io.to(getConversationChannel(data.conversationId)).emit(SOCKET_EVENTS.CHAT_READ, {
+          conversationId: data.conversationId,
+          message,
+          userId: socket.userId,
+        });
+      }
+      return;
+    }
+
+    const roomCode = normalizeRoomCode(data.roomCode);
+    const result = await chatService.markRoomMessagesRead(roomCode, socket.userId, messageIds);
+    for (const message of result.messages) {
+      io.to(roomCode).emit(SOCKET_EVENTS.CHAT_READ, {
+        roomCode,
+        message,
+        userId: socket.userId,
+      });
+    }
+  } catch (error) {
+    logger.error('handleChatRead error:', error);
+    socket.emit(SOCKET_EVENTS.ERROR, { message: error.message || 'Failed to mark messages as read' });
+  }
+};
+
+export const handleChatReceipt = async (io, socket, data = {}, ack) => {
+  try {
+    const payload = {
+      scopeType: data.conversationId ? 'conversation' : 'room',
+      scopeId: data.conversationId || normalizeRoomCode(data.roomCode),
+      messageIds: Array.isArray(data.messageIds) ? data.messageIds : [],
+      status: data.status,
+      clientMutationId: data.clientMutationId || null,
+    };
+    const result = await chatService.updateReceiptState(socket.userId, payload);
+    const channel = data.conversationId ? getConversationChannel(data.conversationId) : normalizeRoomCode(data.roomCode);
+
+    for (const message of result.messages || []) {
+      io.to(channel).emit(SOCKET_EVENTS.CHAT_RECEIPT_UPDATED, {
+        messageId: message.messageId,
+        conversationId: message.conversationId || null,
+        roomId: message.room_id || null,
+        userId: socket.userId,
+        status: message.status,
+        message,
+      });
+    }
+
+    ackSuccess(ack, { data: result, clientMutationId: payload.clientMutationId });
+  } catch (error) {
+    logger.error('handleChatReceipt error:', error);
+    socket.emit(SOCKET_EVENTS.ERROR, { message: error.message || 'Failed to update receipts' });
+    ackFailure(ack, error, { clientMutationId: data.clientMutationId || null });
+  }
+};
+
+export const handleChatEdit = async (io, socket, data = {}, ack) => {
+  try {
+    const result = await chatService.updateMessage(data.messageId, socket.userId, data);
+    const channel = result.message.conversationId
+      ? getConversationChannel(result.message.conversationId)
+      : normalizeRoomCode(data.roomCode);
+
+    if (channel) {
+      io.to(channel).emit(SOCKET_EVENTS.CHAT_MESSAGE_UPDATED, {
+        messageId: result.message.messageId,
+        version: result.message.version,
+        message: result.message,
+      });
+    }
+
+    ackSuccess(ack, { data: result, clientMutationId: data.clientMutationId || null });
+  } catch (error) {
+    logger.error('handleChatEdit error:', error);
+    socket.emit(SOCKET_EVENTS.ERROR, { message: error.message || 'Failed to edit message' });
+    ackFailure(ack, error, { clientMutationId: data.clientMutationId || null });
+  }
+};
+
+export const handleChatDelete = async (io, socket, data = {}, ack) => {
+  try {
+    const result = await chatService.deleteMessage(data.messageId, socket.userId, data);
+    if (data.mode === 'for_me') {
+      io.to(`user:${socket.userId}`).emit(SOCKET_EVENTS.CHAT_MESSAGE_HIDDEN, {
+        messageId: result.messageId,
+        hiddenAt: result.hiddenAt,
+      });
+    } else {
+      const channel = result.message.conversationId
+        ? getConversationChannel(result.message.conversationId)
+        : normalizeRoomCode(data.roomCode);
+      if (channel) {
+        io.to(channel).emit(SOCKET_EVENTS.CHAT_MESSAGE_DELETED, {
+          messageId: result.message.messageId,
+          version: result.message.version,
+          deletedAt: result.message.deletedForEveryoneAt,
+          deletedBy: result.message.deletedBy,
+          message: result.message,
+        });
+      }
+    }
+
+    ackSuccess(ack, { data: result, clientMutationId: data.clientMutationId || null });
+  } catch (error) {
+    logger.error('handleChatDelete error:', error);
+    socket.emit(SOCKET_EVENTS.ERROR, { message: error.message || 'Failed to delete message' });
+    ackFailure(ack, error, { clientMutationId: data.clientMutationId || null });
+  }
+};
+
+export const handleChatForward = async (io, socket, data = {}, ack) => {
+  try {
+    const user = await User.findById(socket.userId).select('_id full_name avatar').lean();
+    if (!user) {
+      throw Object.assign(new Error('User not found'), { statusCode: 404 });
+    }
+
+    const result = await chatService.forwardMessage(data.messageId, user, data);
+    const channel = result.message.conversationId
+      ? getConversationChannel(result.message.conversationId)
+      : normalizeRoomCode(data.targetId);
+    if (channel) {
+      io.to(channel).emit(SOCKET_EVENTS.CHAT_RECEIVE, result.message);
+    }
+
+    ackSuccess(ack, { data: result, clientMutationId: data.clientMutationId || null });
+  } catch (error) {
+    logger.error('handleChatForward error:', error);
+    socket.emit(SOCKET_EVENTS.ERROR, { message: error.message || 'Failed to forward message' });
+    ackFailure(ack, error, { clientMutationId: data.clientMutationId || null });
+  }
+};
+
+export const handleChatReactionAdd = async (io, socket, data = {}, ack) => {
+  try {
+    const result = await chatService.addReaction(data.messageId, socket.userId, data.emoji, data.clientMutationId || null);
+    const channel = result.message.conversationId
+      ? getConversationChannel(result.message.conversationId)
+      : normalizeRoomCode(data.roomCode);
+    if (channel) {
+      io.to(channel).emit(SOCKET_EVENTS.CHAT_REACTION_UPDATED, {
+        messageId: result.message.messageId,
+        emoji: result.emoji,
+        action: 'added',
+        userId: socket.userId,
+        reactionCounts: result.message.reactionCounts,
+        message: result.message,
+      });
+    }
+
+    ackSuccess(ack, { data: result, clientMutationId: data.clientMutationId || null });
+  } catch (error) {
+    logger.error('handleChatReactionAdd error:', error);
+    socket.emit(SOCKET_EVENTS.ERROR, { message: error.message || 'Failed to add reaction' });
+    ackFailure(ack, error, { clientMutationId: data.clientMutationId || null });
+  }
+};
+
+export const handleChatReactionRemove = async (io, socket, data = {}, ack) => {
+  try {
+    const result = await chatService.removeReaction(data.messageId, socket.userId, data.emoji);
+    const channel = result.message.conversationId
+      ? getConversationChannel(result.message.conversationId)
+      : normalizeRoomCode(data.roomCode);
+    if (channel) {
+      io.to(channel).emit(SOCKET_EVENTS.CHAT_REACTION_UPDATED, {
+        messageId: result.message.messageId,
+        emoji: result.emoji,
+        action: 'removed',
+        userId: socket.userId,
+        reactionCounts: result.message.reactionCounts,
+        message: result.message,
+      });
+    }
+
+    ackSuccess(ack, { data: result, clientMutationId: data.clientMutationId || null });
+  } catch (error) {
+    logger.error('handleChatReactionRemove error:', error);
+    socket.emit(SOCKET_EVENTS.ERROR, { message: error.message || 'Failed to remove reaction' });
+    ackFailure(ack, error, { clientMutationId: data.clientMutationId || null });
+  }
+};
+
+export const handleChatTyping = (socket, data = {}) => {
+  if (data.conversationId) {
+    socket.to(getConversationChannel(data.conversationId)).emit(SOCKET_EVENTS.CHAT_TYPING, {
+      conversationId: data.conversationId,
+      userId: socket.userId,
+      userName: data.userName || 'Someone',
+    });
+    return;
+  }
+
+  const roomCode = normalizeRoomCode(data.roomCode);
+  if (roomCode) {
+    socket.to(roomCode).emit(SOCKET_EVENTS.CHAT_TYPING, {
+      roomCode,
+      userId: socket.userId,
+      userName: data.userName || 'Someone',
+    });
+  }
+};
+
+export const handleChatTypingStop = (socket, data = {}) => {
+  if (data.conversationId) {
+    socket.to(getConversationChannel(data.conversationId)).emit(SOCKET_EVENTS.CHAT_TYPING_STOP, {
+      conversationId: data.conversationId,
+      userId: socket.userId,
+    });
+    return;
+  }
+
+  const roomCode = normalizeRoomCode(data.roomCode);
+  if (roomCode) {
+    socket.to(roomCode).emit(SOCKET_EVENTS.CHAT_TYPING_STOP, {
+      roomCode,
+      userId: socket.userId,
+    });
+  }
+};
+
+export default {
+  handleChatSubscribe,
+  handleChatUnsubscribe,
+  handleChatSend,
+  handleChatHistory,
+  handleChatRead,
+  handleChatReceipt,
+  handleChatEdit,
+  handleChatDelete,
+  handleChatForward,
+  handleChatReactionAdd,
+  handleChatReactionRemove,
+  handleChatTyping,
+  handleChatTypingStop,
+};

@@ -5,11 +5,18 @@ import app from './app.js';
 import { connectMongoDB, disconnectMongoDB } from './config/mongodb.js';
 import { connectRedis, disconnectRedis, getRedisClient } from './config/redis.js';
 import { initializeSocket } from './sockets/index.js';
+import notificationService from './services/notification.service.js';
 import { verifyAccessToken } from './utils/jwt.js';
 import logger from './utils/logger.js';
 
+const parseCorsOrigins = () =>
+  (process.env.CORS_ORIGIN || 'http://localhost:3000')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
 const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || 'localhost';
+const HOST = process.env.HOST || '0.0.0.0';
 
 // Create HTTP server
 const httpServer = http.createServer(app);
@@ -17,7 +24,7 @@ const httpServer = http.createServer(app);
 // Socket.IO Configuration with JWT Authentication Middleware
 const io = new SocketIOServer(httpServer, {
   cors: {
-    origin: (process.env.CORS_ORIGIN || 'http://localhost:3000').split(','),
+    origin: parseCorsOrigins(),
     credentials: true,
   },
   transports: ['websocket', 'polling'],
@@ -29,17 +36,17 @@ const io = new SocketIOServer(httpServer, {
 // Verify JWT token before accepting socket connection
 io.use(async (socket, next) => {
   const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.replace('Bearer ', '');
-  
+
   if (!token) {
     return next(new Error('Authentication error: No token provided'));
   }
-  
+
   try {
     const decoded = verifyAccessToken(token);
     if (!decoded || !decoded.userId) {
       return next(new Error('Authentication error: Invalid token'));
     }
-    
+
     try {
       const redis = getRedisClient();
       const isBlacklisted = await redis.get(`token:blacklist:access:${token}`);
@@ -53,7 +60,7 @@ io.use(async (socket, next) => {
     // Attach authenticated user data to socket object
     socket.userId = decoded.userId;
     socket.email = decoded.email;
-    
+
     next();
   } catch (error) {
     logger.error('Socket authentication error:', error.message);
@@ -75,6 +82,7 @@ const gracefulShutdown = async () => {
     }
     await disconnectMongoDB();
     await disconnectRedis();
+    notificationService.stopMeetingReminderScheduler();
     logger.info('✓ All connections closed');
     process.exit(0);
   } catch (error) {
@@ -99,6 +107,7 @@ const startServer = async () => {
     // Initialize Socket.IO
     logger.info('🔄 Initializing Socket.IO...');
     initializeSocket(io, redisClient);
+    notificationService.startMeetingReminderScheduler();
 
     // Start HTTP server
     server = httpServer.listen(PORT, HOST, () => {

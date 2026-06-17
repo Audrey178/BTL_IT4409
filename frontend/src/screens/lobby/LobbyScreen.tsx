@@ -2,13 +2,14 @@ import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { useMedia } from "@/hooks/useMedia";
+import { useMedia } from "@/hooks/camera/useMedia";
 import { useMediaStore } from "@/stores/mediaStore";
 import { useMeetingStore } from "@/stores/meetingStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useSocket } from "@/hooks/useSocket";
 import { ROOM_EVENTS } from "@/socket/events";
 import { roomService } from "@/services/roomService";
+import { VIDEO_FILTERS, type VideoFilterKey } from "@/constants/videoFilters";
 import type { Room } from "@/types";
 import {
   Mic,
@@ -16,9 +17,6 @@ import {
   Video,
   VideoOff,
   Settings,
-  ChevronLeft,
-  Bell,
-  HelpCircle,
   Loader2,
   Copy,
   Check,
@@ -28,26 +26,14 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { WaitingScreen } from "@/components/pages/lobby/WaitingScreen";
 import { TopNav } from "@/components/layout/TopNav";
-
-type VideoFilterKey = "original" | "warm" | "mono" | "cool" | "golden";
-
-const VIDEO_FILTERS: Record<
-  VideoFilterKey,
-  { label: string; css: string; accent: string }
-> = {
-  original: { label: "Original", css: "none", accent: "bg-surface-container-highest" },
-  warm: { label: "Warm", css: "sepia(0.25) saturate(1.35) contrast(1.04) brightness(1.02)", accent: "bg-orange-200" },
-  mono: { label: "Mono", css: "grayscale(1) contrast(1.05)", accent: "bg-stone-300" },
-  cool: { label: "Cool", css: "saturate(1.15) hue-rotate(20deg) contrast(1.05)", accent: "bg-blue-100" },
-  golden: { label: "Golden", css: "sepia(0.18) saturate(1.55) brightness(1.08) contrast(1.03)", accent: "bg-rose-100" },
-};
+import { LobbyControl } from "@/components/pages/lobby/LobbyControl";
 
 export function LobbyScreen() {
   const [searchParams] = useSearchParams();
   const roomCode = searchParams.get("code")?.toUpperCase() || null;
 
   const { requestMedia } = useMedia();
-  const { localStream, isAudioMuted, isVideoMuted, toggleAudio, toggleVideo } =
+  const { localStream, isAudioMuted, isVideoMuted, setIsAudioMuted, setIsVideoMuted } =
     useMediaStore();
   const { setRoomCode, setHostId, setIsHost, setStatus, status, setMemberId, addParticipant } =
     useMeetingStore();
@@ -69,7 +55,7 @@ export function LobbyScreen() {
       if (f && (f === 'original' || f === 'warm' || f === 'mono' || f === 'cool' || f === 'golden')) {
         return f as VideoFilterKey;
       }
-    } catch {}
+    } catch { }
     const saved = sessionStorage.getItem('selectedFilter');
     if (saved && (saved === 'original' || saved === 'warm' || saved === 'mono' || saved === 'cool' || saved === 'golden')) {
       return saved as VideoFilterKey;
@@ -105,11 +91,11 @@ export function LobbyScreen() {
           response?: { status?: number; data?: { message?: string } };
         };
         if (error.response?.status === 404) {
-          toast.error("Room not found");
+          toast.error("Không tìm thấy phòng");
         } else if (error.response?.status === 409) {
-          toast.error("This meeting has ended");
+          toast.error("Meeting này đã kết thúc");
         } else {
-          toast.error("Failed to load room info");
+          toast.error("Lỗi khi tải thông tin phòng");
         }
         navigate("/", { replace: true });
       } finally {
@@ -128,7 +114,7 @@ export function LobbyScreen() {
   ]);
 
   useEffect(() => {
-    if(videoRef.current) {
+    if (videoRef.current) {
       videoRef.current.style.filter = VIDEO_FILTERS[selectedFilter].css;
     }
 
@@ -138,11 +124,11 @@ export function LobbyScreen() {
         const url = new URL(window.location.href);
         url.searchParams.set('filter', selectedFilter);
         window.history.pushState({ path: url.href }, '', url.href);
-        if(videoRef.current) {
+        if (videoRef.current) {
           videoRef.current.style.filter = VIDEO_FILTERS[selectedFilter].css;
         }
-      } catch(e) {
-        console.error(e);   
+      } catch (e) {
+        console.error(e);
       }
     }
 
@@ -212,24 +198,35 @@ export function LobbyScreen() {
     const handleUserRejected = () => {
       setStatus("idle");
       setJoining(false);
-      toast.error("Your request to join was denied by the host");
+      toast.error("Yêu cầu tham gia của bạn đã bị Host từ chối");
+      navigate("/", { replace: true });
+    };
+
+    const handleUserKicked = () => {
+      setStatus("idle");
+      setJoining(false);
+      toast.error("Bạn đã bị xóa khỏi Meeting");
       navigate("/", { replace: true });
     };
 
     const handleError = (data: { message?: string }) => {
-      toast.error(data.message || "An error occurred");
+      toast.error(data.message || "Đã xảy ra lỗi");
       setJoining(false);
     };
 
     socket.on(ROOM_EVENTS.PENDING, handlePending);
     socket.on(ROOM_EVENTS.USER_JOINED, handleUserJoined);
     socket.on(ROOM_EVENTS.USER_REJECTED, handleUserRejected);
+    socket.on(ROOM_EVENTS.USER_KICKED, handleUserKicked);
+    socket.on(ROOM_EVENTS.FORCE_DISCONNECT, handleUserKicked);
     socket.on(ROOM_EVENTS.ERROR, handleError);
 
     return () => {
       socket.off(ROOM_EVENTS.PENDING, handlePending);
       socket.off(ROOM_EVENTS.USER_JOINED, handleUserJoined);
       socket.off(ROOM_EVENTS.USER_REJECTED, handleUserRejected);
+      socket.off(ROOM_EVENTS.USER_KICKED, handleUserKicked);
+      socket.off(ROOM_EVENTS.FORCE_DISCONNECT, handleUserKicked);
       socket.off(ROOM_EVENTS.ERROR, handleError);
     };
   }, [socket, roomCode, authUser, navigate, setStatus, addParticipant]);
@@ -266,7 +263,7 @@ export function LobbyScreen() {
       const error = err as {
         response?: { data?: { message?: string } };
       };
-      toast.error(error.response?.data?.message || "Failed to join meeting");
+      toast.error(error.response?.data?.message || "Lỗi khi tham gia Meeting");
       setJoining(false);
     }
   };
@@ -275,7 +272,7 @@ export function LobbyScreen() {
     if (roomCode) {
       await navigator.clipboard.writeText(roomCode);
       setCopied(true);
-      toast.success("Room code copied!");
+      toast.success("Đã sao chép Meeting ID!");
       setTimeout(() => setCopied(false), 2000);
     }
   };
@@ -292,7 +289,7 @@ export function LobbyScreen() {
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="animate-spin text-primary" size={40} />
           <p className="text-on-surface-variant font-bold text-sm">
-            Loading room...
+            Đang tải phòng...
           </p>
         </div>
       </div>
@@ -305,16 +302,16 @@ export function LobbyScreen() {
       <TopNav />
 
       <main className="flex-grow flex items-center justify-center p-8 lg:p-12">
-        <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
+        <div className="w-full max-w-6xl flex flex-col-reverse lg:grid lg:grid-cols-12 gap-8 lg:gap-16 lg:items-center">
           {/* Left: Content */}
           <div className="lg:col-span-5 space-y-8">
             <div className="space-y-4">
               <span className="text-primary font-bold tracking-widest text-xs uppercase">
-                Online Meeting Lobby
+                Phòng chờ
               </span>
               <h1 className="text-5xl md:text-6xl font-extrabold tracking-tighter text-on-surface leading-[1.1]">
-                Step into the <br />
-                <span className="text-primary">Studio.</span>
+                Bắt đầu<br />
+                <span className="text-primary">cuộc họp</span>
               </h1>
               {roomInfo && (
                 <div className="space-y-2">
@@ -333,13 +330,13 @@ export function LobbyScreen() {
             <div className="bg-surface-container-low p-8 rounded-3xl space-y-6 editorial-shadow border border-outline-variant/10">
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-on-surface-variant uppercase tracking-wider">
-                  Display Name
+                  Tên hiển thị
                 </label>
                 <Input
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   className="h-14 bg-surface-container-highest border-none rounded-2xl px-6 text-on-surface placeholder:text-on-surface-variant/50 focus-visible:ring-2 focus-visible:ring-primary"
-                  placeholder="How should we call you?"
+                  placeholder="Chúng tôi nên gọi bạn là gì?"
                 />
               </div>
               <div className="pt-4">
@@ -351,10 +348,10 @@ export function LobbyScreen() {
                   {joining ? (
                     <>
                       <Loader2 className="animate-spin mr-2" size={22} />
-                      Joining...
+                      Đang tham gia...
                     </>
                   ) : (
-                    "Join Meeting"
+                    "Tham gia Meeting"
                   )}
                 </Button>
 
@@ -377,7 +374,7 @@ export function LobbyScreen() {
                 {/* Approval badge */}
                 {roomInfo?.settings?.require_approval && (
                   <p className="text-center text-[10px] text-primary/60 font-bold tracking-widest uppercase mt-3">
-                    ⏳ This room requires host approval
+                    ⏳ Phòng này yêu cầu Host phê duyệt
                   </p>
                 )}
               </div>
@@ -402,7 +399,7 @@ export function LobbyScreen() {
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center bg-stone-900 text-stone-500">
                   <VideoOff size={64} className="mb-4 opacity-50" />
-                  <span>Camera is off</span>
+                  <span>Camera đang tắt</span>
                 </div>
               )}
 
@@ -410,69 +407,38 @@ export function LobbyScreen() {
               <div className="absolute top-6 left-6 bg-surface-bright/80 backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-2 border border-outline-variant/20">
                 <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                 <span className="text-xs font-bold text-on-surface tracking-tight uppercase">
-                  Live Preview
+                  Xem trước camera
                 </span>
               </div>
 
 
-              {/* Filter selector (pre-join) */}
-              <div className="absolute top-6 right-6 bg-surface-bright/80 backdrop-blur-md px-3 py-2 rounded-full flex items-center gap-2 border border-outline-variant/20">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/80 mr-2">Filter</label>
-                <select
-                  value={selectedFilter}
-                  onChange={(e) => setSelectedFilter(e.target.value as VideoFilterKey)}
-                  className="h-8 text-sm bg-white/90 rounded-md px-2 border border-outline-variant"
-                >
-                  {Object.keys(VIDEO_FILTERS).map((k) => (
-                    <option key={k} value={k}>{VIDEO_FILTERS[k as VideoFilterKey].label}</option>
-                  ))}
-                </select>
-              </div>
 
               {/* Controls */}
               <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6 px-8 py-4 bg-surface-bright/90 backdrop-blur-xl rounded-full border border-outline-variant/20 shadow-2xl">
                 <LobbyControl
                   icon={isAudioMuted ? <MicOff size={24} /> : <Mic size={24} />}
-                  label={isAudioMuted ? "Unmute" : "Mute"}
+                  label={isAudioMuted ? "Bật mic" : "Tắt mic"}
                   active={!isAudioMuted}
-                  onClick={toggleAudio}
+                  onClick={() => {
+                    localStream?.getAudioTracks().forEach(t => { t.enabled = !t.enabled; });
+                    setIsAudioMuted(!isAudioMuted);
+                  }}
                 />
                 <LobbyControl
                   icon={isVideoMuted ? <VideoOff size={24} /> : <Video size={24} />}
-                  label={isVideoMuted ? "Start Video" : "Stop Video"}
+                  label={isVideoMuted ? "Bật Camera" : "Tắt Camera"}
                   active={!isVideoMuted}
-                  onClick={toggleVideo}
+                  onClick={() => {
+                    localStream?.getVideoTracks().forEach(t => { t.enabled = !t.enabled; });
+                    setIsVideoMuted(!isVideoMuted);
+                  }}
                 />
                 <div className="w-px h-10 bg-outline-variant/30 mx-2" />
                 <LobbyControl
                   icon={<Settings size={24} />}
-                  label="Setup"
+                  label="Cài đặt"
                   onClick={() => { }}
                 />
-              </div>
-            </motion.div>
-
-            {/* Floating Participants */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.5 }}
-              className="absolute -bottom-6 -right-6 bg-white p-4 rounded-2xl shadow-xl border border-outline-variant/10 hidden md:block"
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex -space-x-2">
-                  {[1, 2].map((i) => (
-                    <Avatar key={i} className="w-8 h-8 border-2 border-white">
-                      <AvatarImage
-                        src={`https://i.pravatar.cc/100?u=${i + 10}`}
-                      />
-                      <AvatarFallback>U</AvatarFallback>
-                    </Avatar>
-                  ))}
-                </div>
-                <p className="text-xs font-bold text-on-surface-variant">
-                  Others are in the room
-                </p>
               </div>
             </motion.div>
           </div>
@@ -482,52 +448,11 @@ export function LobbyScreen() {
       <footer className="w-full py-8 border-t border-outline-variant/10 bg-surface-container-low/30">
         <div className="max-w-screen-2xl mx-auto px-8 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-[10px] font-bold tracking-widest uppercase opacity-50 text-on-surface-variant">
-            © 2024 Digital Hearth. Designed for human connection.
+            © WebCall.
           </p>
-          <div className="flex gap-8 text-[10px] font-bold tracking-widest uppercase opacity-50 text-on-surface-variant">
-            <button className="hover:text-primary transition-colors">
-              Privacy Policy
-            </button>
-            <button className="hover:text-primary transition-colors">
-              Terms of Service
-            </button>
-            <button className="hover:text-primary transition-colors">
-              Security
-            </button>
-            <button className="hover:text-primary transition-colors">
-              Status
-            </button>
-          </div>
+
         </div>
       </footer>
     </div>
-  );
-}
-
-function LobbyControl({
-  icon,
-  label,
-  active = false,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  active?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <button onClick={onClick} className="flex flex-col items-center gap-1.5 group">
-      <div
-        className={`w-14 h-14 rounded-full flex items-center justify-center transition-all active:scale-90 ${active
-          ? "bg-primary text-white shadow-lg shadow-primary/20"
-          : "bg-surface-container-highest text-on-surface-variant hover:bg-surface-variant"
-          }`}
-      >
-        {icon}
-      </div>
-      <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">
-        {label}
-      </span>
-    </button>
   );
 }
