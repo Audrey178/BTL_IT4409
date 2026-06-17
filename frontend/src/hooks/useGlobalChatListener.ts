@@ -106,7 +106,10 @@ export function useGlobalChatListener() {
           authUser?._id &&
           message.senderId !== authUser._id
         ) {
-          if (conversationId !== activeConversationId) {
+          const isOnMessagesPage = window.location.pathname.startsWith("/messages");
+          const isCurrentConversation = conversationId === activeConversationId;
+
+          if (!isOnMessagesPage || !isCurrentConversation) {
             const preview =
               message.type === "file"
                 ? message.attachment?.filename ||
