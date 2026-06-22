@@ -1,8 +1,12 @@
+import fs from 'fs';
+import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
 import chatService from '../services/chat.service.js';
 import { SOCKET_EVENTS, HTTP_STATUS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
 import { Room } from '../models/index.js';
-import { buildUploadUrl } from '../middlewares/upload.js';
+import { buildUploadUrl, chatDir } from '../middlewares/upload.js';
+import { uploadFileToS3 } from '../utils/helpers.js';
 
 const getScopeChannel = async (message) => {
   if (message?.conversationId) {
@@ -198,14 +202,45 @@ class ChatController {
         return res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'No file uploaded' });
       }
 
-      const url = buildUploadUrl(req, req.file);
-      const fileMeta = {
-        url,
-        filename: req.file.originalname,
-        storedFilename: req.file.filename,
-        mime_type: req.file.mimetype,
-        size: req.file.size,
-      };
+      const hasS3 = process.env.S3_BUCKET && process.env.S3_ACCESS_KEY && process.env.S3_SECRET_KEY;
+      let fileMeta;
+
+      if (hasS3) {
+        logger.info(`Uploading file ${req.file.originalname} to AWS S3...`);
+        const s3Result = await uploadFileToS3(req.file.buffer, req.file.originalname, req.file.mimetype);
+        fileMeta = {
+          url: s3Result.url,
+          filename: req.file.originalname,
+          storedFilename: s3Result.storedFilename,
+          mime_type: req.file.mimetype,
+          size: req.file.size,
+        };
+      } else {
+        logger.info(`S3 not configured. Writing file ${req.file.originalname} to local storage fallback...`);
+        const ext = path.extname(req.file.originalname) || '';
+        const storedFilename = `${Date.now()}-${uuidv4()}${ext}`;
+        const localFilePath = path.join(chatDir, storedFilename);
+
+        // Save memory buffer to disk
+        await fs.promises.writeFile(localFilePath, req.file.buffer);
+
+        const mockFile = {
+          path: localFilePath,
+          originalname: req.file.originalname,
+          filename: storedFilename,
+          mimetype: req.file.mimetype,
+          size: req.file.size,
+        };
+
+        const url = buildUploadUrl(req, mockFile);
+        fileMeta = {
+          url,
+          filename: req.file.originalname,
+          storedFilename,
+          mime_type: req.file.mimetype,
+          size: req.file.size,
+        };
+      }
 
       res.status(HTTP_STATUS.OK).json({ success: true, file: fileMeta });
     } catch (error) {

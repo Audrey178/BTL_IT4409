@@ -4,10 +4,10 @@ import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import { HTTP_STATUS } from '../utils/constants.js';
 
-const uploadRoot = path.resolve(process.cwd(), process.env.UPLOAD_DIR || 'uploads');
+export const uploadRoot = path.resolve(process.cwd(), process.env.UPLOAD_DIR || 'uploads');
 const recordingDir = path.join(uploadRoot, 'recordings');
 const thumbnailDir = path.join(uploadRoot, 'thumbnails');
-const chatDir = path.join(uploadRoot, 'chat');
+export const chatDir = path.join(uploadRoot, 'chat');
 
 for (const dir of [recordingDir, thumbnailDir]) {
   fs.mkdirSync(dir, { recursive: true });
@@ -64,13 +64,7 @@ export const uploadRecording = multer({
 ]);
 
 // Generic chat attachment uploader (images, audio, video, documents)
-const chatStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, chatDir),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname) || '';
-    cb(null, `${Date.now()}-${uuidv4()}${ext}`);
-  },
-});
+const chatStorage = multer.memoryStorage();
 
 const chatFileFilter = (req, file, cb) => {
   // Allow common attachment types, including browser/OS fallback octet-stream
