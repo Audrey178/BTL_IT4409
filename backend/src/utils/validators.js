@@ -302,7 +302,7 @@ export const paginationValidation = {
 
   chatHistory: Joi.object({
     page: Joi.number().integer().min(1).default(1).optional(),
-    limit: Joi.number().integer().min(1).max(100).default(50).optional(),
+    limit: Joi.number().integer().min(1).max(1000).default(50).optional(),
   }),
 
   roomHistory: Joi.object({

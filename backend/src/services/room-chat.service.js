@@ -46,7 +46,7 @@ export class RoomChatService extends BaseChatService {
     try {
       const { page = 1, limit = 50 } = pagination;
       const skip = (page - 1) * limit;
-      const room = await this.getAccessibleRoom(roomCode, userId);
+      const room = await this.getAccessibleRoom(roomCode, userId, { requireJoined: false });
 
       const messages = await Message.find({ room_id: room._id })
         .sort({ timestamp: -1 })

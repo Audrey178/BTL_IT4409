@@ -361,11 +361,17 @@ export const handleUserLeft = async (socket, data) => {
       return;
     }
 
-    const member = await RoomMember.findOneAndUpdate(
-      { room_id: room._id, user_id: userId },
-      { status: USER_STATUS.LEFT, left_at: new Date() },
-      { new: true }
-    ).populate('user_id', 'full_name email avatar');
+    let member = await RoomMember.findOne({ room_id: room._id, user_id: userId });
+    if (member) {
+      member.status = USER_STATUS.LEFT;
+      const leftAt = new Date();
+      member.left_at = leftAt;
+      if (member.joined_at) {
+        member.duration = Math.max(0, Math.round((leftAt.getTime() - new Date(member.joined_at).getTime()) / 1000));
+      }
+      await member.save();
+      member = await RoomMember.populate(member, { path: 'user_id', select: 'full_name email avatar' });
+    }
 
     if (!member) return;
 

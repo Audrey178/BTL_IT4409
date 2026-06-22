@@ -496,11 +496,17 @@ class RoomService {
 
       await room.save();
 
-      // Mark all members as left
-      await RoomMember.updateMany(
-        { room_id: room._id, status: USER_STATUS.JOINED },
-        { status: USER_STATUS.LEFT, left_at: new Date() }
-      );
+      // Mark all members as left and compute duration
+      const activeMembers = await RoomMember.find({ room_id: room._id, status: USER_STATUS.JOINED });
+      const now = new Date();
+      await Promise.all(activeMembers.map(m => {
+        m.status = USER_STATUS.LEFT;
+        m.left_at = now;
+        if (m.joined_at) {
+          m.duration = Math.max(0, Math.round((now.getTime() - new Date(m.joined_at).getTime()) / 1000));
+        }
+        return m.save();
+      }));
 
       await deleteRedisKey(`room:${normalizedCode}:members`);
       await deleteRedisKey(`room:${normalizedCode}:host`);
@@ -604,6 +610,53 @@ class RoomService {
       };
     } catch (error) {
       logger.error('Get room participants error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all members who joined the room (including those who left after room ended)
+   * Used for recording playback to show historical participants
+   * @param {String} roomCode
+   * @returns {Object} { success, participants }
+   */
+  async getRoomMembersHistory(roomCode) {
+    try {
+      const normalizedCode = roomCode ? roomCode.toUpperCase() : '';
+      const room = await Room.findOne({ room_code: normalizedCode });
+      if (!room) {
+        const error = new Error(ERROR_MESSAGES.ROOM_NOT_FOUND);
+        error.statusCode = HTTP_STATUS.NOT_FOUND;
+        throw error;
+      }
+
+      const members = await RoomMember.find({
+        room_id: room._id,
+        status: { $in: [USER_STATUS.JOINED, USER_STATUS.LEFT] },
+      }).populate('user_id', 'full_name avatar email');
+
+      return {
+        success: true,
+        participants: members.map(m => {
+          let duration = m.duration || 0;
+          if (!duration && m.joined_at) {
+            const endTime = m.left_at || room.ended_at || new Date();
+            duration = Math.max(0, Math.round((new Date(endTime).getTime() - new Date(m.joined_at).getTime()) / 1000));
+          }
+          return {
+            id: m.user_id?._id?.toString() || m.user_id?.toString(),
+            fullName: m.user_id?.full_name || null,
+            avatar: m.user_id?.avatar || null,
+            email: m.user_id?.email || null,
+            status: m.status,
+            joinedAt: m.joined_at,
+            leftAt: m.left_at,
+            duration,
+          };
+        }),
+      };
+    } catch (error) {
+      logger.error('Get room members history error:', error);
       throw error;
     }
   }

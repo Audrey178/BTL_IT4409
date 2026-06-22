@@ -271,6 +271,26 @@ router.get('/:roomCode/participants', roomController.getRoomParticipants.bind(ro
 
 /**
  * @swagger
+ * /rooms/{roomCode}/members-history:
+ *   get:
+ *     summary: Get room members history (including left members, for recording playback)
+ *     tags: [Rooms]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: roomCode
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Members history list
+ */
+router.get('/:roomCode/members-history', roomController.getRoomMembersHistory.bind(roomController));
+
+/**
+ * @swagger
  * /rooms/{roomCode}/invite:
  *   post:
  *     summary: Invite a user to the room by ID (host only)

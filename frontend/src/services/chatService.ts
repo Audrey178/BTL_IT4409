@@ -335,6 +335,7 @@ export const chatService = {
       limit: options?.limit || 50,
     };
     const res = await api.get(`/chat/rooms/${roomCode}/messages`, { params });
+    console.log("res", res.data);
     return res.data;
   },
 

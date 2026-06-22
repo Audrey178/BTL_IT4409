@@ -281,6 +281,23 @@ class RoomController {
     }
   }
 
+  /**
+   * GET /api/v1/rooms/:roomCode/members-history - Lịch sử tham gia (bao gồm đã rời)
+   */
+  async getRoomMembersHistory(req, res) {
+    try {
+      const { roomCode } = req.params;
+      const result = await roomService.getRoomMembersHistory(roomCode);
+      res.status(HTTP_STATUS.OK).json(result);
+    } catch (error) {
+      logger.error('Get room members history error:', error);
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+
   async inviteUser(req, res) {
     try {
       const { roomCode } = req.params;

@@ -123,3 +123,28 @@ export const recordingService = {
     return res.data;
   },
 };
+
+export interface RoomParticipant {
+  id: string;
+  fullName: string | null;
+  avatar: string | null;
+  email: string | null;
+  status: "joined" | "left";
+  joinedAt: string | null;
+  leftAt: string | null;
+  duration: number;
+}
+
+export interface RoomMembersHistoryResponse {
+  success: boolean;
+  participants: RoomParticipant[];
+}
+
+export const roomMembersService = {
+  getRoomMembersHistory: async (
+    roomCode: string
+  ): Promise<RoomMembersHistoryResponse> => {
+    const res = await api.get(`/rooms/${roomCode}/members-history`);
+    return res.data;
+  },
+};
